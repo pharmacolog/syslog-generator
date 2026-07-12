@@ -1,1 +1,4 @@
-{"caption": "Example nginx_schema.json", "description": "Sample nginx_schema.json for syslog-generator v4.0"}
+{
+  "caption": "Example nginx_schema.json",
+  "description": "Sample nginx_schema.json for syslog-generator v8.6"
+}

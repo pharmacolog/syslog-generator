@@ -237,4 +237,175 @@ mod tests {
         // app_name пустой → NILVALUE.
         assert!(out.contains(" has_space - - - "));
     }
+
+    /// N8 (v8.6.1): round-trip парсер RFC 5424. Берём вывод `build_rfc5424`,
+    /// парсим обратно через `parse_rfc5424_for_test`, проверяем что поля
+    /// совпадают с исходными. Парсер намеренно минимальный — для целей
+    /// тестирования, не предназначен для общего использования.
+    #[test]
+    fn rfc5424_round_trip() {
+        let header = Header {
+            facility: 1,
+            severity: 4,
+            hostname: "host-a".into(),
+            app_name: "app-b".into(),
+            procid: "1234".into(),
+            msgid: "MSGID-X".into(),
+            structured_data: "-".into(),
+            bom: false,
+        };
+        let msg = b"hello world \x80\x81";
+        let encoded = build_rfc5424(&header, msg);
+        let parsed = parse_rfc5424_for_test(&encoded).expect("должно парситься");
+
+        // PRI: facility*8 + severity = 1*8+4 = 12.
+        assert_eq!(parsed.pri, 12);
+        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.hostname, "host-a");
+        assert_eq!(parsed.app_name, "app-b");
+        assert_eq!(parsed.procid, "1234");
+        assert_eq!(parsed.msgid, "MSGID-X");
+        assert_eq!(parsed.structured_data, "-");
+        // MSG — последний "поле", после SD. Бинарные байты сохраняются as-is.
+        assert_eq!(parsed.msg, b"hello world \x80\x81");
+    }
+
+    /// N8: round-trip с NILVALUE-полями и BOM.
+    #[test]
+    fn rfc5424_round_trip_nilvalues_and_bom() {
+        let header = Header {
+            facility: 16,
+            severity: 6,
+            hostname: "-".into(), // NILVALUE
+            app_name: "-".into(),
+            procid: "-".into(),
+            msgid: "-".into(),
+            structured_data: "-".into(),
+            bom: true,
+        };
+        let msg = b"with BOM";
+        let encoded = build_rfc5424(&header, msg);
+        let parsed = parse_rfc5424_for_test(&encoded).expect("должно парситься");
+        assert_eq!(parsed.pri, 16 * 8 + 6);
+        assert_eq!(parsed.hostname, "-");
+        assert_eq!(parsed.app_name, "-");
+        assert_eq!(parsed.msg, b"with BOM");
+    }
+
+    /// N8: round-trip с непустой structured_data.
+    #[test]
+    fn rfc5424_round_trip_structured_data() {
+        let header = Header {
+            facility: 10,
+            severity: 4,
+            hostname: "fw-1".into(),
+            app_name: "firewall".into(),
+            procid: "9999".into(),
+            msgid: "TRAFFIC".into(),
+            structured_data:
+                "[example@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]".into(),
+            bom: false,
+        };
+        let msg = b"connection established";
+        let encoded = build_rfc5424(&header, msg);
+        let parsed = parse_rfc5424_for_test(&encoded).expect("должно парситься");
+        assert_eq!(
+            parsed.structured_data,
+            "[example@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"]"
+        );
+        assert_eq!(parsed.msg, b"connection established");
+    }
+}
+
+/// Распарсенное RFC 5424 сообщение. Используется только в round-trip тестах.
+#[cfg(test)]
+#[derive(Debug, PartialEq)]
+struct Rfc5424Parsed {
+    pri: u8,
+    version: u8,
+    /// TIMESTAMP оставлен как &str из исходного байтов — мы только проверяем
+    /// что парсер не паникует, формат timestamp не валидируем (наша реализация
+    /// использует системное время в формате RFC3339, но это не часть контракта парсинга).
+    _timestamp: String,
+    hostname: String,
+    app_name: String,
+    procid: String,
+    msgid: String,
+    structured_data: String,
+    msg: Vec<u8>,
+}
+
+/// Минимальный парсер RFC 5424 для round-trip тестов. Ожидает формат
+/// `<PRI>VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP MSGID SP SD SP BOM? MSG`.
+/// SP — пробел (ASCII 0x20). TIMESTAMP/HOSTNAME/.../SD могут быть NILVALUE (-).
+/// MSG — всё после SD и пробела, опционально с BOM (UTF-8 BOM: EF BB BF).
+///
+/// Работает с `&[u8]` напрямую (без UTF-8 декодирования), потому что MSG может
+/// содержать бинарные данные (например, syslog-сообщения с не-UTF-8 payload).
+///
+/// Не публичный API — доступен только через `#[cfg(test)]` crate-wide.
+#[cfg(test)]
+fn parse_rfc5424_for_test(bytes: &[u8]) -> Option<Rfc5424Parsed> {
+    // 1. <PRI>: первый байт '<' и найти '>'.
+    let bytes = bytes.strip_prefix(b"<")?;
+    let gt = bytes.iter().position(|&b| b == b'>')?;
+    let pri: u8 = std::str::from_utf8(&bytes[..gt]).ok()?.parse().ok()?;
+    let rest = &bytes[gt + 1..];
+
+    // 2. VERSION + 6 HEADER-полей. После — `SD SP BOM? MSG`.
+    //
+    // Работаем с байтами через splitn(7, b' ') — аналогично Python split(maxsplit=6).
+    let mut parts = rest.splitn(7, |&b| b == b' ');
+    // parts.next() возвращает &[u8]. До 6 итераций для 6 фиксированных полей;
+    // 7-я — остаток `SD SP BOM? MSG`.
+    let version_str = std::str::from_utf8(parts.next()?).ok()?;
+    let version: u8 = version_str.parse().ok()?;
+    if version != 1 {
+        return None;
+    }
+    let _timestamp = std::str::from_utf8(parts.next()?).ok()?.to_string();
+    let hostname = std::str::from_utf8(parts.next()?).ok()?.to_string();
+    let app_name = std::str::from_utf8(parts.next()?).ok()?.to_string();
+    let procid = std::str::from_utf8(parts.next()?).ok()?.to_string();
+    let msgid = std::str::from_utf8(parts.next()?).ok()?.to_string();
+    // 7-й фрагмент — остаток `SD SP BOM? MSG`.
+    let rest = parts.next()?;
+
+    // 3. SD: первый байт rest определяет тип.
+    let (structured_data, after_sd) = match rest.first() {
+        Some(b'[') => {
+            // SD — это всё до первого `]` (без вложенных скобок в нашем простом парсере).
+            let after_bracket = &rest[1..];
+            let end = after_bracket.iter().position(|&b| b == b']')?;
+            // `after_bracket[..end]` — без закрывающего `]`, добавляем его через format.
+            let sd = format!("[{}]", std::str::from_utf8(&after_bracket[..end]).ok()?);
+            (sd, &after_bracket[end + 1..])
+        }
+        Some(b'-') => {
+            // NILVALUE; после "-" может быть SP + MSG или сразу конец строки.
+            ("-".to_string(), &rest[1..])
+        }
+        _ => return None,
+    };
+
+    // 4. После SD и SP — опционально BOM, потом MSG до конца строки.
+    let after_sd_sp = after_sd.strip_prefix(b" ")?;
+    // BOM — UTF-8: EF BB BF.
+    let msg = if after_sd_sp.starts_with(BOM) {
+        after_sd_sp[BOM.len()..].to_vec()
+    } else {
+        after_sd_sp.to_vec()
+    };
+
+    Some(Rfc5424Parsed {
+        pri,
+        version,
+        _timestamp,
+        hostname,
+        app_name,
+        procid,
+        msgid,
+        structured_data,
+        msg,
+    })
 }

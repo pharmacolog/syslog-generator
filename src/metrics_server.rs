@@ -78,7 +78,11 @@ async fn handle_conn(mut stream: TcpStream, metrics: Metrics) {
     };
     let response = match parse_request_line(&buf[..n]) {
         Some((method, path)) => route(&method, &path, &metrics),
-        None => build_http_response("400 Bad Request", "text/plain; charset=utf-8", "400 Bad Request\n"),
+        None => build_http_response(
+            "400 Bad Request",
+            "text/plain; charset=utf-8",
+            "400 Bad Request\n",
+        ),
     };
     let _ = stream.write_all(response.as_bytes()).await;
     let _ = stream.flush().await;
@@ -92,7 +96,10 @@ pub async fn serve(addr: &str, metrics: Metrics, shutdown: CancellationToken) ->
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("F12: не удалось привязать HTTP /metrics к {addr}"))?;
-    let local = listener.local_addr().map(|a| a.to_string()).unwrap_or_else(|_| addr.to_string());
+    let local = listener
+        .local_addr()
+        .map(|a| a.to_string())
+        .unwrap_or_else(|_| addr.to_string());
     eprintln!("F12: HTTP /metrics слушает на http://{local}/metrics");
     loop {
         tokio::select! {
@@ -158,7 +165,10 @@ mod tests {
         let metrics = create_metrics().expect("create_metrics ok in test");
         // CounterVec без наблюдённых меток не экспортируется, поэтому
         // сначала инкрементируем одну серию.
-        metrics.messages_total.with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"]).inc();
+        metrics
+            .messages_total
+            .with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"])
+            .inc();
         let resp = route("GET", "/metrics", &metrics);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("text/plain; version=0.0.4"));
@@ -202,7 +212,10 @@ mod tests {
     async fn test_serve_real_get_metrics() {
         let metrics = create_metrics().expect("create_metrics ok in test");
         // Увеличим счётчик, чтобы вывод был непустым.
-        metrics.messages_total.with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"]).inc();
+        metrics
+            .messages_total
+            .with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"])
+            .inc();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let shutdown = CancellationToken::new();
@@ -223,7 +236,10 @@ mod tests {
         });
 
         let mut client = TcpStream::connect(&addr).await.unwrap();
-        client.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+        client
+            .write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await
+            .unwrap();
         let mut resp = Vec::new();
         client.read_to_end(&mut resp).await.unwrap();
         let text = String::from_utf8_lossy(&resp);
@@ -254,7 +270,10 @@ mod tests {
             }
         });
         let mut client = TcpStream::connect(&addr).await.unwrap();
-        client.write_all(b"GET /nope HTTP/1.1\r\n\r\n").await.unwrap();
+        client
+            .write_all(b"GET /nope HTTP/1.1\r\n\r\n")
+            .await
+            .unwrap();
         let mut resp = Vec::new();
         client.read_to_end(&mut resp).await.unwrap();
         let text = String::from_utf8_lossy(&resp);

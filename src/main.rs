@@ -51,7 +51,11 @@ async fn run() -> Result<ExitCode> {
         return Ok(ExitCode::FAILURE);
     }
     if args.validate {
-        println!("профиль валиден: {} фаз(ы), {} цел(ей)", profile.phases.len(), profile.targets.len());
+        println!(
+            "профиль валиден: {} фаз(ы), {} цел(ей)",
+            profile.phases.len(),
+            profile.targets.len()
+        );
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -68,6 +72,8 @@ async fn run() -> Result<ExitCode> {
     // (благодаря `From<MetricsError>` для anyhow::Error) и приводит к
     // ExitCode::FAILURE с внятным сообщением.
     let metrics = create_metrics().context("инициализация Prometheus-метрик")?;
-    run_profile(&profile, metrics).await.context("выполнение профиля")?;
+    run_profile(&profile, metrics)
+        .await
+        .context("выполнение профиля")?;
     Ok(ExitCode::SUCCESS)
 }

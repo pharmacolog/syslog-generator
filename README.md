@@ -1,12 +1,25 @@
 
 # syslog-generator
 
-Версия `v8.3.1` — compile-verified релиз. Модульная архитектура с реальным multi-target
+[![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-v8.4.0-blue)]()
+[![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
+
+Версия `v8.4.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
-(`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`).
+(`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
+GitHub Actions на ubuntu-latest + macos-latest.
+
+**v8.4.0 (N9):** CI-пайплайн на GitHub Actions (`.github/workflows/ci.yml`).
+Все PR и push в `main`/`dev` проходят через `fmt --check` →
+`clippy --all-targets -- -D warnings` → `build --release` →
+`test` → `bench --no-run`. Матрица ubuntu-latest + macos-latest
+покрывает оба бэкенда native-tls (openssl-sys / Security.framework).
+Актуализирован `.gitignore` (тестовые логи, TLS-PEM, zip-архивы,
+IDE/editor). Применён `cargo fmt --all` для соответствия CI-гейту.
 
 **v8.3.1:** patch-релиз — починка 3 упавших TLS-интеграционных тестов
 (`test_mixed_multi_target_*_end_to_end`), которые падали из-за несовместимости

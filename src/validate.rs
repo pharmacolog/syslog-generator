@@ -56,11 +56,23 @@ pub enum ValidationError {
         allowed: String,
     },
 
-    #[error("target[{index}] (address={address:?}): connections должно быть >= 1 (задано {value})")]
-    ZeroConnections { index: usize, address: String, value: usize },
+    #[error(
+        "target[{index}] (address={address:?}): connections должно быть >= 1 (задано {value})"
+    )]
+    ZeroConnections {
+        index: usize,
+        address: String,
+        value: usize,
+    },
 
-    #[error("target[{index}] (address={address:?}): tls_ca_file {path:?} не существует или недоступен")]
-    TlsCaFileNotFound { index: usize, address: String, path: String },
+    #[error(
+        "target[{index}] (address={address:?}): tls_ca_file {path:?} не существует или недоступен"
+    )]
+    TlsCaFileNotFound {
+        index: usize,
+        address: String,
+        path: String,
+    },
 
     #[error("недопустимый distribution {value:?}; допустимо: {allowed}")]
     InvalidDistribution { value: String, allowed: String },
@@ -96,17 +108,39 @@ pub enum ValidationError {
         templates_len: usize,
     },
 
-    #[error("phase[{index}] ({name:?}): template_weights содержит отрицательный или NaN вес ({value})")]
-    InvalidTemplateWeight { index: usize, name: String, value: f64 },
+    #[error(
+        "phase[{index}] ({name:?}): template_weights содержит отрицательный или NaN вес ({value})"
+    )]
+    InvalidTemplateWeight {
+        index: usize,
+        name: String,
+        value: f64,
+    },
 
-    #[error("phase[{index}] ({name:?}): syslog.facility={value} вне диапазона 0..=23 (RFC 5424 §6.2.1)")]
-    InvalidFacility { index: usize, name: String, value: u8 },
+    #[error(
+        "phase[{index}] ({name:?}): syslog.facility={value} вне диапазона 0..=23 (RFC 5424 §6.2.1)"
+    )]
+    InvalidFacility {
+        index: usize,
+        name: String,
+        value: u8,
+    },
 
-    #[error("phase[{index}] ({name:?}): syslog.severity={value} вне диапазона 0..=7 (RFC 5424 §6.2.1)")]
-    InvalidSeverity { index: usize, name: String, value: u8 },
+    #[error(
+        "phase[{index}] ({name:?}): syslog.severity={value} вне диапазона 0..=7 (RFC 5424 §6.2.1)"
+    )]
+    InvalidSeverity {
+        index: usize,
+        name: String,
+        value: u8,
+    },
 
     #[error("phase[{index}] ({name:?}): pad_to_bytes={value} — паддинг до 0 байт бессмыслен (используйте None для отключения)")]
-    ZeroPadding { index: usize, name: String, value: usize },
+    ZeroPadding {
+        index: usize,
+        name: String,
+        value: usize,
+    },
 
     #[error("phase[{index}] ({name:?}): load_shape.{field}={value} должно быть >= 0")]
     NegativeLoadShapeRate {
@@ -216,7 +250,10 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
     let name = p.name.clone();
 
     if p.name.trim().is_empty() {
-        errors.push(ValidationError::EmptyPhaseName { index, name: name.clone() });
+        errors.push(ValidationError::EmptyPhaseName {
+            index,
+            name: name.clone(),
+        });
     }
 
     // format
@@ -232,12 +269,18 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
 
     // источник контента: должен быть хотя бы один из templates / templates_file / schema_file
     if p.templates.is_empty() && p.templates_file.is_none() && p.schema_file.is_none() {
-        errors.push(ValidationError::NoContentSource { index, name: name.clone() });
+        errors.push(ValidationError::NoContentSource {
+            index,
+            name: name.clone(),
+        });
     }
 
     // бесконечная фаза без ограничений остановки
     if p.duration_secs == 0 && p.total_messages.is_none() {
-        errors.push(ValidationError::UnboundedPhase { index, name: name.clone() });
+        errors.push(ValidationError::UnboundedPhase {
+            index,
+            name: name.clone(),
+        });
     }
 
     // template_weights
@@ -263,7 +306,11 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
 
     // pad_to_bytes: 0 бессмыслен
     if let Some(0) = p.pad_to_bytes {
-        errors.push(ValidationError::ZeroPadding { index, name: name.clone(), value: 0 });
+        errors.push(ValidationError::ZeroPadding {
+            index,
+            name: name.clone(),
+            value: 0,
+        });
     }
 
     // syslog facility/severity — только для форматов, где заголовок используется
@@ -279,10 +326,18 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
 
 fn validate_syslog(index: usize, name: &str, s: &SyslogConfig, errors: &mut Vec<ValidationError>) {
     if s.facility > 23 {
-        errors.push(ValidationError::InvalidFacility { index, name: name.to_string(), value: s.facility });
+        errors.push(ValidationError::InvalidFacility {
+            index,
+            name: name.to_string(),
+            value: s.facility,
+        });
     }
     if s.severity > 7 {
-        errors.push(ValidationError::InvalidSeverity { index, name: name.to_string(), value: s.severity });
+        errors.push(ValidationError::InvalidSeverity {
+            index,
+            name: name.to_string(),
+            value: s.severity,
+        });
     }
 }
 
@@ -297,18 +352,30 @@ fn push_neg(errors: &mut Vec<ValidationError>, index: usize, name: &str, field: 
     }
 }
 
-fn validate_load_shape(index: usize, name: &str, ls: &LoadShape, errors: &mut Vec<ValidationError>) {
+fn validate_load_shape(
+    index: usize,
+    name: &str,
+    ls: &LoadShape,
+    errors: &mut Vec<ValidationError>,
+) {
     match ls {
         LoadShape::Constant { rate } => {
             if let Some(r) = rate {
                 push_neg(errors, index, name, "rate", *r);
             }
         }
-        LoadShape::Linear { start_rate, end_rate } => {
+        LoadShape::Linear {
+            start_rate,
+            end_rate,
+        } => {
             push_neg(errors, index, name, "start_rate", *start_rate);
             push_neg(errors, index, name, "end_rate", *end_rate);
         }
-        LoadShape::Sine { min_rate, max_rate, period_secs } => {
+        LoadShape::Sine {
+            min_rate,
+            max_rate,
+            period_secs,
+        } => {
             push_neg(errors, index, name, "min_rate", *min_rate);
             push_neg(errors, index, name, "max_rate", *max_rate);
             if period_secs.is_nan() || *period_secs <= 0.0 {
@@ -320,7 +387,12 @@ fn validate_load_shape(index: usize, name: &str, ls: &LoadShape, errors: &mut Ve
                 });
             }
         }
-        LoadShape::Burst { base_rate, burst_rate, every_secs, burst_secs } => {
+        LoadShape::Burst {
+            base_rate,
+            burst_rate,
+            every_secs,
+            burst_secs,
+        } => {
             push_neg(errors, index, name, "base_rate", *base_rate);
             push_neg(errors, index, name, "burst_rate", *burst_rate);
             if every_secs.is_nan() || *every_secs <= 0.0 {
@@ -395,7 +467,9 @@ mod tests {
         let mut p = valid_profile();
         p.targets[0].transport = "sctp".to_string();
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidTransport { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidTransport { .. })));
     }
 
     #[test]
@@ -403,7 +477,9 @@ mod tests {
         let mut p = valid_profile();
         p.phases[0].format = Some("xml".to_string());
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidFormat { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidFormat { .. })));
     }
 
     #[test]
@@ -411,7 +487,9 @@ mod tests {
         let mut p = valid_profile();
         p.distribution = "hash".to_string();
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidDistribution { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidDistribution { .. })));
     }
 
     #[test]
@@ -419,7 +497,9 @@ mod tests {
         let mut p = valid_profile();
         p.phases[0].templates.clear();
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::NoContentSource { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::NoContentSource { .. })));
     }
 
     #[test]
@@ -428,7 +508,9 @@ mod tests {
         p.phases[0].duration_secs = 0;
         p.phases[0].total_messages = None;
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::UnboundedPhase { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::UnboundedPhase { .. })));
     }
 
     #[test]
@@ -437,7 +519,9 @@ mod tests {
         p.phases[0].duration_secs = 0;
         p.phases[0].total_messages = Some(100);
         let errs = validate_profile(&p);
-        assert!(!errs.iter().any(|e| matches!(e, ValidationError::UnboundedPhase { .. })));
+        assert!(!errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::UnboundedPhase { .. })));
     }
 
     #[test]
@@ -446,8 +530,12 @@ mod tests {
         p.phases[0].syslog.severity = 9;
         p.phases[0].syslog.facility = 30;
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidSeverity { .. })));
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::InvalidFacility { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidSeverity { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidFacility { .. })));
     }
 
     #[test]
@@ -456,7 +544,9 @@ mod tests {
         p.phases[0].format = Some("raw".to_string());
         p.phases[0].syslog.severity = 9;
         let errs = validate_profile(&p);
-        assert!(!errs.iter().any(|e| matches!(e, ValidationError::InvalidSeverity { .. })));
+        assert!(!errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidSeverity { .. })));
     }
 
     #[test]
@@ -465,7 +555,9 @@ mod tests {
         p.phases[0].templates = vec!["a".to_string(), "b".to_string()];
         p.phases[0].template_weights = Some(vec![1.0]);
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::TemplateWeightsMismatch { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::TemplateWeightsMismatch { .. })));
     }
 
     #[test]
@@ -473,7 +565,9 @@ mod tests {
         let mut p = valid_profile();
         p.targets[0].connections = 0;
         let errs = validate_profile(&p);
-        assert!(errs.iter().any(|e| matches!(e, ValidationError::ZeroConnections { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::ZeroConnections { .. })));
     }
 
     #[test]

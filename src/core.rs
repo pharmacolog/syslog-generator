@@ -1,4 +1,13 @@
-
+use crate::config::{Phase, Profile, TargetConfig};
+use crate::metrics::Metrics;
+use crate::protobuf::serialize_protobuf_like;
+use crate::schema::Schema;
+use crate::sender::{
+    target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing,
+};
+use crate::shutdown::{graceful_drain_wait, shutdown_listener};
+use crate::syslog::{build_rfc3164, build_rfc5424, Header};
+use crate::template::render_template;
 use anyhow::Result;
 use governor::{Quota, RateLimiter};
 use std::collections::HashMap;
@@ -8,29 +17,31 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
-use crate::config::{Phase, Profile, TargetConfig};
-use crate::metrics::Metrics;
-use crate::protobuf::serialize_protobuf_like;
-use crate::schema::Schema;
-use crate::sender::{target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing};
-use crate::shutdown::{graceful_drain_wait, shutdown_listener};
-use crate::syslog::{build_rfc3164, build_rfc5424, Header};
-use crate::template::render_template;
 
 pub fn create_dispatcher(targets: &[TargetConfig], distribution: &str) -> Vec<usize> {
     match distribution {
         "weighted" => {
             let mut v = Vec::new();
             for (idx, t) in targets.iter().enumerate() {
-                for _ in 0..t.weight.max(1) { v.push(idx); }
+                for _ in 0..t.weight.max(1) {
+                    v.push(idx);
+                }
             }
-            if v.is_empty() { (0..targets.len()).collect() } else { v }
+            if v.is_empty() {
+                (0..targets.len()).collect()
+            } else {
+                v
+            }
         }
         _ => (0..targets.len()).collect(),
     }
 }
 
-pub fn default_values(phase: &Phase, seq: usize, rng: &mut rand::rngs::StdRng) -> HashMap<String, String> {
+pub fn default_values(
+    phase: &Phase,
+    seq: usize,
+    rng: &mut rand::rngs::StdRng,
+) -> HashMap<String, String> {
     let mut m = HashMap::new();
     m.insert("sequence".to_string(), seq.to_string());
     m.insert("real_app".to_string(), phase.name.clone());
@@ -38,11 +49,25 @@ pub fn default_values(phase: &Phase, seq: usize, rng: &mut rand::rngs::StdRng) -
     m.insert("hostname".to_string(), "localhost".to_string());
     m.insert("real_command".to_string(), "echo ok".to_string());
     // Реальное «now» в RFC3339 UTC (вместо захардкоженного времени).
-    m.insert("timestamp".to_string(), crate::payload::datetime_now_jitter(0, rng));
-    m.insert("pid".to_string(), crate::payload::int_in_range(1, 65535, rng).to_string());
+    m.insert(
+        "timestamp".to_string(),
+        crate::payload::datetime_now_jitter(0, rng),
+    );
+    m.insert(
+        "pid".to_string(),
+        crate::payload::int_in_range(1, 65535, rng).to_string(),
+    );
     // Вариативный faker-набор по умолчанию (F5): токены {{faker.*}}.
     for kind in [
-        "ipv4", "ipv6", "mac", "uuid", "hostname", "username", "user_agent", "url", "http_status",
+        "ipv4",
+        "ipv6",
+        "mac",
+        "uuid",
+        "hostname",
+        "username",
+        "user_agent",
+        "url",
+        "http_status",
     ] {
         m.insert(format!("faker.{kind}"), crate::payload::faker(kind, rng));
     }
@@ -106,7 +131,10 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
     let tpl = pick_template(&templates, phase.template_weights.as_deref(), &mut rng)
         .unwrap_or_else(|| "{{timestamp}} {{real_app}} seq={{sequence}}".to_string());
     if phase.format_type() == "protobuf" {
-        return Ok(serialize_protobuf_like(phase.protobuf_schema.as_ref(), &values));
+        return Ok(serialize_protobuf_like(
+            phase.protobuf_schema.as_ref(),
+            &values,
+        ));
     }
     let body = render_template(&tpl, &values);
     Ok(finish_body(phase, &values, body.into_bytes(), &mut rng))
@@ -114,7 +142,11 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
 
 /// F14: выбрать шаблон из списка. Пустой список → None. Один шаблон → он.
 /// Если `weights` заданы и длина совпадает — взвешенный выбор, иначе равновероятный.
-fn pick_template(templates: &[String], weights: Option<&[f64]>, rng: &mut rand::rngs::StdRng) -> Option<String> {
+fn pick_template(
+    templates: &[String],
+    weights: Option<&[f64]>,
+    rng: &mut rand::rngs::StdRng,
+) -> Option<String> {
     match templates.len() {
         0 => None,
         1 => Some(templates[0].clone()),
@@ -141,13 +173,18 @@ fn gen_schema_field(field: &crate::schema::SchemaField, rng: &mut rand::rngs::St
                     Some(w) if w.len() == vals.len() => crate::payload::weighted_index(w, rng),
                     _ => crate::payload::int_in_range(0, (vals.len() - 1) as i64, rng) as usize,
                 },
-                "zipf" => crate::payload::zipf_index(vals.len(), field.zipf_exponent.unwrap_or(1.0), rng),
+                "zipf" => {
+                    crate::payload::zipf_index(vals.len(), field.zipf_exponent.unwrap_or(1.0), rng)
+                }
                 // uniform и любое прочее — равновероятно.
                 _ => crate::payload::int_in_range(0, (vals.len() - 1) as i64, rng) as usize,
             };
             vals[idx].clone()
         }
-        "int" => crate::payload::int_in_range(field.min.unwrap_or(0), field.max.unwrap_or(i64::MAX), rng).to_string(),
+        "int" => {
+            crate::payload::int_in_range(field.min.unwrap_or(0), field.max.unwrap_or(i64::MAX), rng)
+                .to_string()
+        }
         "datetime" => crate::payload::datetime_now_jitter(field.jitter_secs.unwrap_or(0), rng),
         "string" => crate::payload::random_string(field.len.unwrap_or(8), rng),
         "faker" => crate::payload::faker(field.faker.as_deref().unwrap_or(""), rng),
@@ -183,7 +220,12 @@ fn resolve_correlated_field(
 }
 
 /// Обёртка syslog + F6-паддинг тела до целевого размера (если задан).
-fn finish_body(phase: &Phase, values: &HashMap<String, String>, body: Vec<u8>, rng: &mut rand::rngs::StdRng) -> Vec<u8> {
+fn finish_body(
+    phase: &Phase,
+    values: &HashMap<String, String>,
+    body: Vec<u8>,
+    rng: &mut rand::rngs::StdRng,
+) -> Vec<u8> {
     let body = match phase.pad_to_bytes {
         Some(n) if n > 0 => crate::payload::pad_to_size(body, n, rng),
         _ => body,
@@ -214,11 +256,19 @@ fn wrap_syslog(phase: &Phase, values: &HashMap<String, String>, body: Vec<u8>) -
     }
 }
 
-pub async fn run_phase_multi(phase: &Phase, targets: &[TargetConfig], distribution: &str, shutdown_cfg: &crate::config::ShutdownConfig, metrics: Metrics) -> Result<()> {
+pub async fn run_phase_multi(
+    phase: &Phase,
+    targets: &[TargetConfig],
+    distribution: &str,
+    shutdown_cfg: &crate::config::ShutdownConfig,
+    metrics: Metrics,
+) -> Result<()> {
     let shutdown = CancellationToken::new();
     let listener_token = shutdown.clone();
     let listener_metrics = metrics.clone();
-    tokio::spawn(async move { shutdown_listener(listener_token, listener_metrics).await; });
+    tokio::spawn(async move {
+        shutdown_listener(listener_token, listener_metrics).await;
+    });
 
     let dispatch = create_dispatcher(targets, distribution);
     let mut txs = Vec::new();
@@ -246,7 +296,9 @@ pub async fn run_phase_multi(phase: &Phase, targets: &[TargetConfig], distributi
                 "tls" => {
                     // N4: SNI/проверка имени — из tls_domain или хост-части address.
                     let domain = target.tls_domain.clone().unwrap_or_else(|| {
-                        addr.rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_else(|| addr.clone())
+                        addr.rsplit_once(':')
+                            .map(|(h, _)| h.to_string())
+                            .unwrap_or_else(|| addr.clone())
                     });
                     // Читаем CA-файл заранее (валидация F13 уже проверила его наличие).
                     let ca_pem = match &target.tls_ca_file {
@@ -262,8 +314,14 @@ pub async fn run_phase_multi(phase: &Phase, targets: &[TargetConfig], distributi
                     if target.tls_insecure {
                         eprintln!("⚠ TLS ({addr}): tls_insecure=true — проверка сертификата ОТКЛЮЧЕНА (небезопасно)");
                     }
-                    let tls_params = crate::sender::TlsParams { domain, ca_pem, insecure: target.tls_insecure };
-                    tokio::spawn(target_sender_tls(addr, tls_params, phase_name, rx, m, sd, framing))
+                    let tls_params = crate::sender::TlsParams {
+                        domain,
+                        ca_pem,
+                        insecure: target.tls_insecure,
+                    };
+                    tokio::spawn(target_sender_tls(
+                        addr, tls_params, phase_name, rx, m, sd, framing,
+                    ))
                 }
                 _ => tokio::spawn(target_sender_file(addr, phase_name, rx, m, sd)),
             };
@@ -306,10 +364,22 @@ pub async fn run_phase_multi(phase: &Phase, targets: &[TargetConfig], distributi
     let started = Instant::now();
     let mut seq: usize = 0;
     loop {
-        if shutdown.is_cancelled() { break; }
-        if let Some(d) = deadline { if Instant::now() >= d { break; } }
-        if let Some(max) = max_messages { if seq as u64 >= max { break; } }
-        if !bounded && seq >= 1 { break; }
+        if shutdown.is_cancelled() {
+            break;
+        }
+        if let Some(d) = deadline {
+            if Instant::now() >= d {
+                break;
+            }
+        }
+        if let Some(max) = max_messages {
+            if seq as u64 >= max {
+                break;
+            }
+        }
+        if !bounded && seq >= 1 {
+            break;
+        }
 
         // Ограничение скорости.
         if let Some(shape) = &phase.load_shape {
@@ -334,20 +404,31 @@ pub async fn run_phase_multi(phase: &Phase, targets: &[TargetConfig], distributi
 
         seq += 1;
         let msg = generate_message(phase, seq)?;
-        metrics.messages_generated_total.with_label_values(&[&phase.name]).inc();
+        metrics
+            .messages_generated_total
+            .with_label_values(&[&phase.name])
+            .inc();
         if distribution == "broadcast" {
-            for tx in &txs { let _ = tx.send(msg.clone()).await; }
+            for tx in &txs {
+                let _ = tx.send(msg.clone()).await;
+            }
         } else if !dispatch.is_empty() {
             let idx = dispatch[(seq - 1) % dispatch.len()];
-            if let Some(tx) = txs.get(idx) { let _ = tx.send(msg).await; }
+            if let Some(tx) = txs.get(idx) {
+                let _ = tx.send(msg).await;
+            }
         }
     }
     let elapsed = started.elapsed();
     metrics.generate_duration.observe(elapsed.as_secs_f64());
     let secs = elapsed.as_secs_f64();
-    if secs > 0.0 { metrics.achieved_rate.set(seq as f64 / secs); }
+    if secs > 0.0 {
+        metrics.achieved_rate.set(seq as f64 / secs);
+    }
     drop(txs);
-    if shutdown_cfg.mode == "drain" { graceful_drain_wait(handles, shutdown_cfg.drain_timeout_secs, metrics.clone()).await?; }
+    if shutdown_cfg.mode == "drain" {
+        graceful_drain_wait(handles, shutdown_cfg.drain_timeout_secs, metrics.clone()).await?;
+    }
     Ok(())
 }
 
@@ -365,7 +446,14 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
     }
     let result: Result<()> = async {
         for phase in &profile.phases {
-            run_phase_multi(phase, &profile.targets, &profile.distribution, &profile.shutdown, metrics.clone()).await?;
+            run_phase_multi(
+                phase,
+                &profile.targets,
+                &profile.distribution,
+                &profile.shutdown,
+                metrics.clone(),
+            )
+            .await?;
         }
         Ok(())
     }

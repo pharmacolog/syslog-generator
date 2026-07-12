@@ -1,6 +1,58 @@
 
 # Changelog
 
+## v8.4.0 - 2026-07-12
+
+Продолжение вехи D («Промышленная готовность», P1). Закрыта задача
+**N9 — CI-пайплайн**: GitHub Actions workflow `.github/workflows/ci.yml`,
+который запускается на каждый push в `main`/`dev` и каждый PR в `main`,
+прогоняя `fmt --check` → `clippy -D warnings` → `build --release` →
+`test` → `bench --no-run` на матрице `ubuntu-latest` + `macos-latest`.
+
+### Added
+- **N9 — CI-пайплайн (`.github/workflows/ci.yml`).**
+  - Триггеры: `push` в `main`/`dev`, `pull_request` в `main`.
+  - Job `test` с матрицей `ubuntu-latest` + `macos-latest` — покрывает
+    оба бэкенда `native-tls` (openssl-sys на Linux, Security.framework
+    на macOS); это важно для безопасного TLS по умолчанию (N4) и для
+    тестов с `openssl_self_signed`.
+  - Стадии: `cargo fmt --all -- --check` → `cargo clippy --all-targets
+    -- -D warnings` → `cargo build --release --locked` → `cargo test
+    --no-run --locked` → `cargo test --locked` → `cargo bench --no-run
+    --locked`.
+  - Кэш cargo registry + build artifacts через `Swatinem/rust-cache@v2`
+    с общим ключом по OS (`cache-on-failure: true` — кэш сохраняется
+    даже при падении, чтобы следующий push мог переиспользовать слой).
+  - На Linux устанавливается `libssl-dev` для `openssl-sys` (нужен
+    `native-tls`); на macOS используется системный Security.framework.
+  - Best-effort job `msrv`: если в репозитории есть `rust-toolchain.toml`,
+    job читает `channel` оттуда и пробует собрать на этой версии rustc.
+    Падение не блокирует merge (`continue-on-error: true`).
+  - README.md получил три бейджа: CI status, version, Rust version.
+
+### Changed
+- `.gitignore` расширен для покрытия артефактов работы и тестов:
+  тестовые логи (`*.log`), TLS-PEM (`*.pem`, `ca-*.pem`, `tls-ca-*.pem`,
+  `/target/test-tls/`), zip-архивы релизов (`*.zip`), IDE/editor
+  (`.vscode/`, `.idea/`, `*.swp`, `.DS_Store`), прочий мусор (`*.tmp`,
+  `*.bak`). Это нужно, чтобы CI-артефакты и IDE-конфиги не попадали
+  в репозиторий.
+- Применён `cargo fmt --all` ко всему workspace — ранее код не
+  проходил `cargo fmt --all -- --check`, что блокировало бы CI-гейт.
+  Никаких семантических изменений, только переформатирование.
+
+### Notes
+- Тесты: **88 unit + 49 + 11 integration = 148**, все зелёные.
+- `cargo clippy --all-targets -- -D warnings` — чисто.
+- `cargo build --release --locked` — успех.
+- GitHub Actions имеет 6 часов на job, поэтому полный `cargo test`
+  не разбивается на отдельные стадии (в отличие от sandbox-среды из
+  CLAUDE_HANDOFF.md §2, где таймауты заставляли запускать бинарники
+  по отдельности).
+- Локальная проверка всех стадий перед коммитом прошла без ошибок.
+- Релиз не требует новых runtime-зависимостей. CI использует уже
+  имеющиеся крейты плюс GitHub Actions стандартные экшены.
+
 ## v8.3.1 - 2026-07-12
 
 Patch-релиз сразу после v8.3.0: починка 3 упавших TLS-интеграционных

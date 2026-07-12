@@ -37,9 +37,13 @@ fn run_bin(args: &[&str], stdin_bytes: Option<&[u8]>) -> (i32, String, String) {
         .spawn()
         .expect("не удалось запустить syslog-generator");
     if let (Some(stdin), Some(stdin_pipe)) = (stdin_bytes, child.stdin.as_mut()) {
-        stdin_pipe.write_all(stdin).expect("не удалось писать в stdin");
+        stdin_pipe
+            .write_all(stdin)
+            .expect("не удалось писать в stdin");
     }
-    let out = child.wait_with_output().expect("не удалось дождаться syslog-generator");
+    let out = child
+        .wait_with_output()
+        .expect("не удалось дождаться syslog-generator");
     (
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -71,7 +75,9 @@ fn n7_create_metrics_returns_ok() {
 #[test]
 fn n7_gather_metrics_returns_ok_after_inc() {
     let m = create_metrics().expect("create_metrics ok");
-    m.messages_total.with_label_values(&["tcp", "p", "t", "success"]).inc();
+    m.messages_total
+        .with_label_values(&["tcp", "p", "t", "success"])
+        .inc();
     let s = gather_metrics(&m).expect("gather_metrics ok");
     assert!(s.contains("syslog_messages_total"));
 }
@@ -98,7 +104,9 @@ async fn n7_run_profile_smoke_does_not_panic() {
         metrics_addr: None,
     };
     let _ = std::fs::remove_file("/tmp/n7_smoke.log");
-    run_profile(&p, m).await.expect("smoke-прогон не должен падать");
+    run_profile(&p, m)
+        .await
+        .expect("smoke-прогон не должен падать");
     let _ = std::fs::remove_file("/tmp/n7_smoke.log");
 }
 
@@ -109,7 +117,10 @@ async fn n7_run_profile_smoke_does_not_panic() {
 fn n7_version_returns_zero() {
     let (rc, out, _err) = run_bin(&["--version"], None);
     assert_eq!(rc, 0, "--version должен вернуть rc=0");
-    assert!(out.contains("8."), "ожидался номер версии в stdout, got: {out}");
+    assert!(
+        out.contains("8."),
+        "ожидался номер версии в stdout, got: {out}"
+    );
 }
 
 /// N7: `--print-config` для валидного быстрого режима (через --target + --message).
@@ -117,15 +128,21 @@ fn n7_version_returns_zero() {
 fn n7_print_config_quick_mode_returns_zero() {
     let (rc, out, _err) = run_bin(
         &[
-            "--target", "127.0.0.1:6514:tcp",
-            "--message", "hello",
-            "--total", "1",
+            "--target",
+            "127.0.0.1:6514:tcp",
+            "--message",
+            "hello",
+            "--total",
+            "1",
             "--print-config",
         ],
         None,
     );
     assert_eq!(rc, 0, "--print-config должен вернуть rc=0, stderr={_err}");
-    assert!(out.contains("\"targets\""), "ожидался JSON профиля в stdout, got: {out}");
+    assert!(
+        out.contains("\"targets\""),
+        "ожидался JSON профиля в stdout, got: {out}"
+    );
 }
 
 /// N7: `--validate` на валидном профиле → rc=0 + сообщение об успехе.
@@ -133,9 +150,12 @@ fn n7_print_config_quick_mode_returns_zero() {
 fn n7_validate_valid_profile_returns_zero() {
     let (rc, out, _err) = run_bin(
         &[
-            "--target", "127.0.0.1:6514:tcp",
-            "--message", "hello",
-            "--total", "1",
+            "--target",
+            "127.0.0.1:6514:tcp",
+            "--message",
+            "hello",
+            "--total",
+            "1",
             "--validate",
         ],
         None,
@@ -156,11 +176,27 @@ fn n7_validate_invalid_profile_returns_one() {
         "phases": []
     }"#;
     std::fs::write(&bad_profile_path, bad_profile).expect("write bad profile");
-    let (rc, _out, err) = run_bin(&["--profile", bad_profile_path.to_str().unwrap(), "--validate"], None);
+    let (rc, _out, err) = run_bin(
+        &[
+            "--profile",
+            bad_profile_path.to_str().unwrap(),
+            "--validate",
+        ],
+        None,
+    );
     let _ = std::fs::remove_file(&bad_profile_path);
-    assert_eq!(rc, 1, "--validate на невалидном профиле должен вернуть rc=1");
-    assert!(err.contains("невалиден") || err.contains("проблем"), "stderr: {err}");
-    assert!(err.contains("sctp") || err.contains("transport"), "stderr: {err}");
+    assert_eq!(
+        rc, 1,
+        "--validate на невалидном профиле должен вернуть rc=1"
+    );
+    assert!(
+        err.contains("невалиден") || err.contains("проблем"),
+        "stderr: {err}"
+    );
+    assert!(
+        err.contains("sctp") || err.contains("transport"),
+        "stderr: {err}"
+    );
 }
 
 /// N7: `--validate` на полностью битом JSON → rc=1 + сообщение о JSON-ошибке.
@@ -169,10 +205,16 @@ fn n7_validate_malformed_json_returns_one() {
     let bad_json_path = std::env::temp_dir().join("n7_malformed_profile.json");
     let bad_json = r#"{ "targets": [ ,,, ] }"#;
     std::fs::write(&bad_json_path, bad_json).expect("write malformed json");
-    let (rc, _out, err) = run_bin(&["--profile", bad_json_path.to_str().unwrap(), "--validate"], None);
+    let (rc, _out, err) = run_bin(
+        &["--profile", bad_json_path.to_str().unwrap(), "--validate"],
+        None,
+    );
     let _ = std::fs::remove_file(&bad_json_path);
     assert_eq!(rc, 1, "битый JSON должен вернуть rc=1");
-    assert!(err.contains("JSON") || err.contains("невалид"), "stderr: {err}");
+    assert!(
+        err.contains("JSON") || err.contains("невалид"),
+        "stderr: {err}"
+    );
 }
 
 /// N7: `--metrics-addr` на занятом порту → rc=0 + warn в stderr (recoverable,
@@ -184,17 +226,26 @@ fn n7_metrics_addr_busy_port_does_not_fail_run() {
     std::thread::sleep(Duration::from_millis(50));
     let (rc, _out, err) = run_bin(
         &[
-            "--target", "127.0.0.1:6514:tcp",
-            "--message", "hello",
-            "--total", "1",
-            "--metrics-addr", &busy,
+            "--target",
+            "127.0.0.1:6514:tcp",
+            "--message",
+            "hello",
+            "--total",
+            "1",
+            "--metrics-addr",
+            &busy,
         ],
         None,
     );
     // rc=0 — bind-fail не роняет генератор (recoverable).
-    assert_eq!(rc, 0, "bind-fail на /metrics НЕ должен ронять генератор, stderr={err}");
-    assert!(err.contains("F12") || err.contains("метрик") || err.contains("bind"),
-            "должен быть warn про bind-fail в stderr, got: {err}");
+    assert_eq!(
+        rc, 0,
+        "bind-fail на /metrics НЕ должен ронять генератор, stderr={err}"
+    );
+    assert!(
+        err.contains("F12") || err.contains("метрик") || err.contains("bind"),
+        "должен быть warn про bind-fail в stderr, got: {err}"
+    );
 }
 
 /// N7: `--validate` без аргументов и без stdin → rc=1 + подсказка.
@@ -202,8 +253,10 @@ fn n7_metrics_addr_busy_port_does_not_fail_run() {
 fn n7_no_args_returns_one_with_hint() {
     let (rc, _out, err) = run_bin(&[], None);
     assert_eq!(rc, 1, "без аргументов ожидается rc=1");
-    assert!(err.contains("нечего запускать") || err.contains("--help"),
-            "stderr должен содержать подсказку, got: {err}");
+    assert!(
+        err.contains("нечего запускать") || err.contains("--help"),
+        "stderr должен содержать подсказку, got: {err}"
+    );
 }
 
 /// N7: несуществующий файл профиля → rc=1 + сообщение ConfigError::Io.
@@ -211,6 +264,8 @@ fn n7_no_args_returns_one_with_hint() {
 fn n7_missing_profile_file_returns_one() {
     let (rc, _out, err) = run_bin(&["--profile", "/tmp/n7_definitely_missing_zzz.json"], None);
     assert_eq!(rc, 1, "несуществующий файл → rc=1");
-    assert!(err.contains("не удалось прочитать профиль") || err.contains("os error"),
-            "stderr должен содержать описание IO-ошибки, got: {err}");
+    assert!(
+        err.contains("не удалось прочитать профиль") || err.contains("os error"),
+        "stderr должен содержать описание IO-ошибки, got: {err}"
+    );
 }

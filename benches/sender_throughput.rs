@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::runtime::Runtime;
-use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
 
 fn make_profile(target: TargetConfig, mps: u64, name: &str) -> Profile {
     Profile {
@@ -51,7 +51,12 @@ fn bench_tcp_sender_throughput(c: &mut Criterion) {
                     count,
                     "tcp_bench",
                 );
-                run_profile(&profile, create_metrics().expect("create_metrics ok in bench")).await.unwrap();
+                run_profile(
+                    &profile,
+                    create_metrics().expect("create_metrics ok in bench"),
+                )
+                .await
+                .unwrap();
                 let _ = server.await;
             });
         });
@@ -77,12 +82,21 @@ fn bench_udp_sender_throughput(c: &mut Criterion) {
                     count,
                     "udp_bench",
                 );
-                run_profile(&profile, create_metrics().expect("create_metrics ok in bench")).await.unwrap();
+                run_profile(
+                    &profile,
+                    create_metrics().expect("create_metrics ok in bench"),
+                )
+                .await
+                .unwrap();
             });
         });
     }
     group.finish();
 }
 
-criterion_group!(benches, bench_tcp_sender_throughput, bench_udp_sender_throughput);
+criterion_group!(
+    benches,
+    bench_tcp_sender_throughput,
+    bench_udp_sender_throughput
+);
 criterion_main!(benches);

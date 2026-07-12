@@ -114,7 +114,10 @@ fn encode_field(buf: &mut Vec<u8>, field_number: u64, ty: PbType, value: &str) {
             write_varint(buf, zigzag(v));
         }
         PbType::Bool => {
-            let v = matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+            let v = matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes"
+            );
             write_varint(buf, v as u64);
         }
         PbType::Double => {
@@ -161,9 +164,24 @@ fn parse_field_spec(idx_default: u64, raw: &str) -> (u64, PbType, String) {
 fn is_known_type(s: &str) -> bool {
     matches!(
         s.to_ascii_lowercase().as_str(),
-        "int" | "int64" | "int32" | "uint" | "uint64" | "uint32"
-            | "sint" | "sint64" | "sint32" | "bool" | "boolean"
-            | "double" | "f64" | "float" | "f32" | "bytes" | "str" | "string"
+        "int"
+            | "int64"
+            | "int32"
+            | "uint"
+            | "uint64"
+            | "uint32"
+            | "sint"
+            | "sint64"
+            | "sint32"
+            | "bool"
+            | "boolean"
+            | "double"
+            | "f64"
+            | "float"
+            | "f32"
+            | "bytes"
+            | "str"
+            | "string"
     )
 }
 
@@ -283,21 +301,38 @@ mod tests {
 
     #[test]
     fn parse_spec_variants() {
-        assert_eq!(parse_field_spec(1, "hello"), (1, PbType::Str, "hello".to_string()));
-        assert_eq!(parse_field_spec(1, "3:hello"), (3, PbType::Str, "hello".to_string()));
-        assert_eq!(parse_field_spec(1, "3:int:42"), (3, PbType::Int, "42".to_string()));
+        assert_eq!(
+            parse_field_spec(1, "hello"),
+            (1, PbType::Str, "hello".to_string())
+        );
+        assert_eq!(
+            parse_field_spec(1, "3:hello"),
+            (3, PbType::Str, "hello".to_string())
+        );
+        assert_eq!(
+            parse_field_spec(1, "3:int:42"),
+            (3, PbType::Int, "42".to_string())
+        );
         // Двоеточие в шаблоне без номера/типа — весь текст остаётся шаблоном.
-        assert_eq!(parse_field_spec(2, "time:now"), (2, PbType::Str, "time:now".to_string()));
+        assert_eq!(
+            parse_field_spec(2, "time:now"),
+            (2, PbType::Str, "time:now".to_string())
+        );
     }
 
     #[test]
     fn full_message_is_decodable_order() {
         let mut m = ProtobufSchemaFieldMap::default();
-        m.fields.insert("b_num".to_string(), "2:int:150".to_string());
-        m.fields.insert("a_str".to_string(), "1:testing".to_string());
+        m.fields
+            .insert("b_num".to_string(), "2:int:150".to_string());
+        m.fields
+            .insert("a_str".to_string(), "1:testing".to_string());
         let out = serialize_protobuf(Some(&m), &vals());
         // Ожидаем field 1 (string testing), затем field 2 (int 150).
-        assert_eq!(out, vec![0x0A, 0x07, b't', b'e', b's', b't', b'i', b'n', b'g', 0x10, 0x96, 0x01]);
+        assert_eq!(
+            out,
+            vec![0x0A, 0x07, b't', b'e', b's', b't', b'i', b'n', b'g', 0x10, 0x96, 0x01]
+        );
     }
 
     #[test]

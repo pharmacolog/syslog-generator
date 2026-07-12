@@ -1,0 +1,117 @@
+# GitHub Actions: CI-пайплайн (N9, веха D).
+#
+# Цель: регрессионный гейт для каждого push в main/dev и каждого PR в main.
+# Включает все стадии из CLAUDE_HANDOFF.md §2 (Rust 1.97 stable, формат,
+# clippy, build, test, bench-компиляция), адаптированные под GitHub Actions
+# (полный `cargo test` тут не таймаутит — для этого есть 6 часов на job).
+#
+# Матрица: ubuntu-latest + macos-latest. Это покрывает два разных бэкенда
+# native-tls (openssl-sys на Linux, Security.framework на macOS), что важно
+# для безопасного TLS по умолчанию (N4) и для тестов с openssl_self_signed.
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  # -Dwarnings: предупреждения Rust == ошибки CI (для lib + bins).
+  # Покрывает warnings от rustc и от clippy, не подменяет clippy::-lints.
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # На macOS отказы TLS-тестов исторически воспроизводились реже,
+      # чем на Linux; пускаем обе платформы параллельно и суммируем.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Компоненты по умолчанию: rustc, cargo, rust-std.
+          # rustfmt нужен для `cargo fmt --check`, clippy — для `cargo clippy`.
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          # workspaces: syslog-generator (workspace root = syslog-generator).
+          # cache-on-failure: true — сохраняет кэш даже если job упал,
+          # чтобы следующий push мог переиспользовать слой.
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo
+
+      - name: Install OpenSSL dev headers (Linux only)
+        if: runner.os == 'Linux'
+        # native-tls на Linux линкуется с libssl через openssl-sys; без
+        # dev-заголовков сборка упадёт. На macOS используется Security.framework,
+        # поэтому apt-get там не нужен.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Check formatting (rustfmt)
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build release
+        run: cargo build --release --locked
+
+      - name: Compile tests
+        # `cargo test --no-run` — компиляция тестовых бинарников без запуска;
+        # полезно отдельно от шага "Run tests" чтобы быстрее получить ошибку
+        # компиляции, если она есть.
+        run: cargo test --no-run --locked
+
+      - name: Run tests
+        # Полный прогон — в GitHub Actions нет таймаута sandbox из
+        # CLAUDE_HANDOFF.md §2. Тесты используют уникальные порты
+        # (127.0.0.1:0), параллельность не приводит к конфликтам.
+        run: cargo test --locked
+
+      - name: Compile benches (Criterion)
+        # Только компиляция — запуск бенчей в CI не имеет смысла
+        # (результаты зависят от железа runner'а и не сравнимы).
+        run: cargo bench --no-run --locked
+
+  msrv:
+    # MSRV (Minimum Supported Rust Version). Этот job — best effort:
+    # падение здесь не блокирует merge, но сигнализирует о росте MSRV.
+    # Активируется только если в репозитории есть rust-toolchain.toml
+    # с полем `channel` — иначе шаг skipped.
+    name: MSRV check (best effort)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: hashFiles('rust-toolchain.toml') != ''
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read MSRV from rust-toolchain.toml
+        id: msrv
+        run: |
+          if [ -f rust-toolchain.toml ]; then
+            channel=$(grep -E '^channel' rust-toolchain.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+            echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install MSRV toolchain
+        if: steps.msrv.outputs.channel != ''
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.channel }}
+      - name: Build with MSRV
+        if: steps.msrv.outputs.channel != ''
+        run: cargo build --locked

@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -45,9 +44,15 @@ impl Default for TargetConfig {
         }
     }
 }
-fn default_connections() -> usize { 1 }
-fn default_weight() -> usize { 1 }
-fn default_framing() -> String { "non-transparent".to_string() }
+fn default_connections() -> usize {
+    1
+}
+fn default_weight() -> usize {
+    1
+}
+fn default_framing() -> String {
+    "non-transparent".to_string()
+}
 
 /// Параметры syslog-заголовка (RFC 5424 / RFC 3164). Все поля опциональные с
 /// разумными умолчаниями. Строковые поля проходят подстановку шаблона ({{...}}),
@@ -91,11 +96,21 @@ impl Default for SyslogConfig {
         }
     }
 }
-fn default_facility() -> u8 { 1 }
-fn default_severity() -> u8 { 6 }
-fn default_hostname() -> String { "{{hostname}}".to_string() }
-fn default_app_name() -> String { "syslog-generator".to_string() }
-fn default_nil() -> String { "-".to_string() }
+fn default_facility() -> u8 {
+    1
+}
+fn default_severity() -> u8 {
+    6
+}
+fn default_hostname() -> String {
+    "{{hostname}}".to_string()
+}
+fn default_app_name() -> String {
+    "syslog-generator".to_string()
+}
+fn default_nil() -> String {
+    "-".to_string()
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ShutdownConfig {
@@ -105,10 +120,19 @@ pub struct ShutdownConfig {
     pub drain_timeout_secs: u64,
 }
 impl Default for ShutdownConfig {
-    fn default() -> Self { Self { mode: default_shutdown_mode(), drain_timeout_secs: default_shutdown_drain_timeout_secs() } }
+    fn default() -> Self {
+        Self {
+            mode: default_shutdown_mode(),
+            drain_timeout_secs: default_shutdown_drain_timeout_secs(),
+        }
+    }
 }
-fn default_shutdown_mode() -> String { "drain".to_string() }
-fn default_shutdown_drain_timeout_secs() -> u64 { 15 }
+fn default_shutdown_mode() -> String {
+    "drain".to_string()
+}
+fn default_shutdown_drain_timeout_secs() -> u64 {
+    15
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ProtobufSchemaFieldMap {
@@ -152,8 +176,14 @@ pub struct Phase {
     #[serde(default)]
     pub pad_to_bytes: Option<usize>,
 }
-impl Phase { pub fn format_type(&self) -> &str { self.format.as_deref().unwrap_or("rfc5424") } }
-fn default_distribution() -> String { "round-robin".to_string() }
+impl Phase {
+    pub fn format_type(&self) -> &str {
+        self.format.as_deref().unwrap_or("rfc5424")
+    }
+}
+fn default_distribution() -> String {
+    "round-robin".to_string()
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {

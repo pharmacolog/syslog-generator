@@ -258,8 +258,14 @@ mod tests {
     fn apply_overrides_scalars_all_phases() {
         let mut p = Profile {
             phases: vec![
-                Phase { name: "a".into(), ..Default::default() },
-                Phase { name: "b".into(), ..Default::default() },
+                Phase {
+                    name: "a".into(),
+                    ..Default::default()
+                },
+                Phase {
+                    name: "b".into(),
+                    ..Default::default()
+                },
             ],
             ..Default::default()
         };
@@ -290,7 +296,10 @@ mod tests {
         };
         apply_overrides(&mut p, &o);
         assert_eq!(p.phases.len(), 1);
-        assert_eq!(p.phases[0].templates, vec!["hello {{sequence}}".to_string()]);
+        assert_eq!(
+            p.phases[0].templates,
+            vec!["hello {{sequence}}".to_string()]
+        );
     }
 
     #[test]

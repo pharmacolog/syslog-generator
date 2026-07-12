@@ -1,0 +1,39 @@
+# D3 (v8.5.0): пример с load_shape в YAML.
+# Демонстрирует что сложные структуры (load_shape.burst) тоже
+# сериализуются через serde_yaml без потерь.
+#
+# Запуск:
+#   cargo run --release -- --profile examples/load_shape_burst.yaml --validate --schema-strict
+
+targets:
+  - address: 127.0.0.1:514
+    transport: tcp
+    connections: 2
+    framing: octet-counting
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 10
+
+phases:
+  - name: yaml-spiky
+    format: rfc5424
+    duration_secs: 60
+    templates:
+      - "yaml-burst id={{sequence}} src={{faker.ipv4}}"
+    syslog:
+      facility: 10
+      severity: 4
+      hostname: fw-1
+      app_name: firewall
+      msgid: TRAFFIC
+    load_shape:
+      type: burst
+      base_rate: 100
+      burst_rate: 8000
+      every_secs: 10
+      burst_secs: 2
+
+metrics_addr: null

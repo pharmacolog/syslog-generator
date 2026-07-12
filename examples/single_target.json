@@ -18,7 +18,8 @@
       "messages_per_second": 5,
       "templates": [
         "{{timestamp}} {{real_app}} seq={{sequence}}"
-      ]
+      ],
+      "total_messages": 100
     }
   ]
 }

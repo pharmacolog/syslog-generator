@@ -99,7 +99,7 @@ impl MetricsError {
 
 /// Доменная ошибка: загрузка/парсинг профиля.
 ///
-/// Используется в `main.rs` при чтении файла и десериализации JSON.
+/// Используется в `main.rs` при чтении файла и десериализации JSON/YAML.
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("не удалось прочитать файл профиля {path:?}: {source}")]
@@ -115,8 +115,16 @@ pub enum ConfigError {
         #[source]
         source: serde_json::Error,
     },
-    // YAML-вариант добавлен будет в v8.5.0 (D3 — JSON Schema + YAML),
-    // когда подключим `serde_yaml` как зависимость.
+
+    #[error("невалидный YAML в файле профиля {path:?}: {source}")]
+    Yaml {
+        path: String,
+        #[source]
+        source: serde_yaml::Error,
+    },
+
+    #[error("неподдерживаемое расширение файла профиля {extension:?} (путь: {path:?}); ожидается .json, .yaml или .yml")]
+    UnsupportedFormat { path: String, extension: String },
 }
 
 impl ConfigError {
@@ -131,6 +139,20 @@ impl ConfigError {
         Self::Json {
             path: path.into(),
             source,
+        }
+    }
+
+    pub fn yaml(path: impl Into<String>, source: serde_yaml::Error) -> Self {
+        Self::Yaml {
+            path: path.into(),
+            source,
+        }
+    }
+
+    pub fn unsupported_format(path: impl Into<String>, extension: impl Into<String>) -> Self {
+        Self::UnsupportedFormat {
+            path: path.into(),
+            extension: extension.into(),
         }
     }
 }
@@ -251,6 +273,27 @@ mod tests {
         assert!(s.contains("JSON"), "got: {s}");
         // parsed нам нужен только чтобы компилятор не ругался на неиспользование.
         let _ = parsed;
+    }
+
+    /// D3 (v8.5.0): `ConfigError::yaml` корректно оборачивает serde_yaml::Error.
+    #[test]
+    fn config_error_yaml_wraps_source() {
+        // Заведомо невалидный YAML — дублирование ключа в мапе приводит к ошибке.
+        let yaml_err = serde_yaml::from_str::<serde_yaml::Value>("a: 1\na: 2\n").unwrap_err();
+        let e = ConfigError::yaml("profile.yaml", yaml_err);
+        let s = format!("{e}");
+        assert!(s.contains("profile.yaml"), "got: {s}");
+        assert!(s.contains("YAML"), "got: {s}");
+    }
+
+    /// D3 (v8.5.0): `ConfigError::unsupported_format` показывает расширение и путь.
+    #[test]
+    fn config_error_unsupported_format_shows_extension() {
+        let e = ConfigError::unsupported_format("/tmp/profile.toml", "toml");
+        let s = format!("{e}");
+        assert!(s.contains("toml"), "got: {s}");
+        assert!(s.contains("/tmp/profile.toml"), "got: {s}");
+        assert!(s.contains(".json") || s.contains(".yaml"), "got: {s}");
     }
 
     /// N7: `DrainError::timeout` содержит таймаут в сообщении.

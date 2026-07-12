@@ -1,0 +1,28 @@
+# D3 (v8.5.0): пример профиля в формате YAML.
+# Эквивалент examples/multi_target_roundrobin.json, но в YAML.
+#
+# Запуск:
+#   cargo run --release -- --profile examples/multi_target_roundrobin.yaml --total 6
+
+targets:
+  - address: ./yaml-rr-a.log
+    transport: file
+    weight: 1
+  - address: ./yaml-rr-b.log
+    transport: file
+    weight: 1
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 15
+
+phases:
+  - name: yaml-rr
+    messages_per_second: 6
+    total_messages: 6
+    templates:
+      - "yaml rr seq={{sequence}}"
+
+metrics_addr: null

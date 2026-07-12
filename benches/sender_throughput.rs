@@ -4,7 +4,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::runtime::Runtime;
 
-fn make_profile(target: TargetConfig, mps: u64, name: &str) -> Profile {
+fn make_profile(target: TargetConfig, mps: u64, name: &str, total_messages: u64) -> Profile {
     Profile {
         targets: vec![target],
         distribution: "round-robin".into(),
@@ -12,6 +12,7 @@ fn make_profile(target: TargetConfig, mps: u64, name: &str) -> Profile {
         phases: vec![Phase {
             name: name.into(),
             messages_per_second: mps,
+            total_messages: Some(total_messages),
             templates: vec!["seq={{sequence}}".to_string()],
             ..Default::default()
         }],
@@ -22,7 +23,6 @@ fn make_profile(target: TargetConfig, mps: u64, name: &str) -> Profile {
 fn bench_tcp_sender_throughput(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("tcp_sender_throughput");
-    // run_phase_multi caps generation at 100 messages per phase.
     for count in [10u64, 50, 100] {
         group.throughput(Throughput::Elements(count));
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
@@ -50,6 +50,7 @@ fn bench_tcp_sender_throughput(c: &mut Criterion) {
                     },
                     count,
                     "tcp_bench",
+                    count,
                 );
                 run_profile(
                     &profile,
@@ -81,6 +82,7 @@ fn bench_udp_sender_throughput(c: &mut Criterion) {
                     },
                     count,
                     "udp_bench",
+                    count,
                 );
                 run_profile(
                     &profile,

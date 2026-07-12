@@ -51,7 +51,7 @@ fn bench_tcp_sender_throughput(c: &mut Criterion) {
                     count,
                     "tcp_bench",
                 );
-                run_profile(&profile, create_metrics()).await.unwrap();
+                run_profile(&profile, create_metrics().expect("create_metrics ok in bench")).await.unwrap();
                 let _ = server.await;
             });
         });
@@ -77,7 +77,7 @@ fn bench_udp_sender_throughput(c: &mut Criterion) {
                     count,
                     "udp_bench",
                 );
-                run_profile(&profile, create_metrics()).await.unwrap();
+                run_profile(&profile, create_metrics().expect("create_metrics ok in bench")).await.unwrap();
             });
         });
     }

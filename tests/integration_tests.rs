@@ -12,10 +12,10 @@ async fn test_metrics_presence() {
     // assert that the full set of metrics is exported.
     let file_path = "metrics-presence.log";
     let _ = fs::remove_file(file_path);
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
 
     // Histograms and scalar counters are always exported, even at zero.
-    let empty = gather_metrics(&metrics);
+    let empty = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(empty.contains("syslog_shutdowns_total"));
     assert!(empty.contains("syslog_drain_duration_seconds"));
     assert!(empty.contains("syslog_generate_duration_seconds"));
@@ -28,7 +28,7 @@ async fn test_metrics_presence() {
     );
     run_profile(&profile, metrics.clone()).await.unwrap();
 
-    let s = gather_metrics(&metrics);
+    let s = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(s.contains("syslog_messages_total"));
     assert!(s.contains("syslog_bytes_total"));
     assert!(s.contains("syslog_messages_by_sink_total"));
@@ -166,7 +166,7 @@ async fn test_mixed_multi_target_broadcast_end_to_end() {
         TargetConfig { address: udp_addr, transport: "udp".into(), ..Default::default() },
         TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
     ], "broadcast", 1, "broadcast");
-    run_profile(&profile, create_metrics()).await.unwrap();
+    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -192,7 +192,7 @@ async fn test_mixed_multi_target_round_robin_end_to_end() {
         TargetConfig { address: udp_addr, transport: "udp".into(), ..Default::default() },
         TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
     ], "round-robin", 4, "rr");
-    run_profile(&profile, create_metrics()).await.unwrap();
+    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -218,7 +218,7 @@ async fn test_mixed_multi_target_weighted_end_to_end() {
         TargetConfig { address: udp_addr, transport: "udp".into(), weight: 2, ..Default::default() },
         TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
     ], "weighted", 5, "weighted");
-    run_profile(&profile, create_metrics()).await.unwrap();
+    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -243,12 +243,12 @@ async fn test_total_messages_removes_cap_above_100() {
         250,
         "cap",
     );
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let content = fs::read_to_string(file_path).unwrap();
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
     assert_eq!(lines, 250, "expected 250 messages, got {}", lines);
-    let out = gather_metrics(&metrics);
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(out.contains("syslog_messages_generated_total"));
     let _ = fs::remove_file(file_path);
 }
@@ -272,7 +272,7 @@ async fn test_rate_limiting_respects_target() {
         }],
         metrics_addr: None,
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let content = fs::read_to_string(file_path).unwrap();
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
@@ -303,7 +303,7 @@ async fn test_load_shape_linear_ramp_volume() {
         }],
         metrics_addr: None,
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let content = fs::read_to_string(file_path).unwrap();
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
@@ -334,7 +334,7 @@ async fn test_load_shape_burst_exceeds_base() {
         }],
         metrics_addr: None,
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let content = fs::read_to_string(file_path).unwrap();
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
@@ -403,12 +403,12 @@ async fn test_connection_pool_opens_multiple_connections() {
         }],
         metrics_addr: None,
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let (conns, msgs) = server.await.unwrap();
     assert_eq!(conns, 3, "expected 3 pooled connections, got {}", conns);
     assert_eq!(msgs.len(), 30, "expected 30 messages delivered, got {}", msgs.len());
-    let out = gather_metrics(&metrics);
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(out.contains("syslog_active_workers"));
     assert!(out.contains("syslog_active_workers 3"), "active_workers gauge should equal 3");
 }
@@ -534,7 +534,7 @@ async fn test_octet_counting_framing_over_tcp() {
         phases: vec![phase_with_format("rfc5424", syslog_generator::SyslogConfig::default(), "octet test")],
         metrics_addr: None,
     };
-    run_profile(&profile, create_metrics()).await.unwrap();
+    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
     let raw = server.await.unwrap();
     let s = String::from_utf8(raw).unwrap();
     // Формат: `<N> SP SYSLOG-MSG`, где первое поле — длина в октетах.
@@ -555,9 +555,9 @@ async fn test_negative_paths_connection_failures_record_errors() {
         TargetConfig { address: "127.0.0.1:9".into(), transport: "tcp".into(), ..Default::default() },
         TargetConfig { address: "127.0.0.1:9".into(), transport: "tls".into(), ..Default::default() },
     ], "broadcast", 1, "neg");
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     let _ = run_profile(&profile, metrics.clone()).await;
-    let out = gather_metrics(&metrics);
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(fs::read_to_string(file_path).unwrap().contains("neg 1"));
     assert!(out.contains("syslog_errors_total"));
     let _ = fs::remove_file(file_path);
@@ -849,9 +849,9 @@ async fn test_n3_metrics_size_and_latency_exported() {
             templates: vec!["payload {{sequence}}".into()], ..Default::default() }],
         ..Default::default()
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
-    let out = gather_metrics(&metrics);
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(out.contains("syslog_message_size_bytes"), "нет histogram размера сообщений");
     assert!(out.contains("syslog_send_duration_seconds"), "нет histogram латентности отправки");
     // Гистограммы дают _bucket/_sum/_count — основа для p50/p95/p99.
@@ -866,15 +866,15 @@ async fn test_n3_reconnect_metric_registered_and_scrapeable() {
     // не выводит его в текст, пока не наблюдалась хотя бы одна серия
     // (это корректное поведение). Проверяем, что метрика зарегистрирована
     // в реестре и корректно экспортируется после наблюдения серии.
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     // До наблюдения — серий нет.
-    let before = gather_metrics(&metrics);
+    let before = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(!before.lines().any(|l| l.starts_with("syslog_reconnects_total{")),
         "до наблюдения не должно быть серий reconnects");
     // Наблюдаем серию через публичное поле (так же, как в боевом
     // коде реконнекта через record_reconnect).
     metrics.reconnects_total.with_label_values(&["tcp", "127.0.0.1:514"]).inc();
-    let after = gather_metrics(&metrics);
+    let after = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(after.contains("syslog_reconnects_total"), "метрика reconnects не экспортируется");
     let series = after.lines().find(|l| l.starts_with("syslog_reconnects_total{"))
         .expect("ожидалась серия reconnects после инкремента");
@@ -887,7 +887,7 @@ async fn test_n3_reconnect_metric_registered_and_scrapeable() {
 async fn test_n3_dead_tcp_target_records_errors() {
     // Мёртвый TCP-таргет (никто не слушает): подключение провальное,
     // сообщения должны учтёны как ошибки отправки (очередь дренируется).
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     drop(listener); // порт свободен, никто не слушает
@@ -899,7 +899,7 @@ async fn test_n3_dead_tcp_target_records_errors() {
         ..Default::default()
     };
     run_profile(&profile, metrics.clone()).await.unwrap();
-    let out = gather_metrics(&metrics);
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(out.lines().any(|l| l.starts_with("syslog_errors_total{")),
         "ожидались ошибки отправки на мёртвый TCP-таргет");
 }
@@ -926,7 +926,7 @@ async fn test_f13_run_profile_rejects_invalid_profile() {
         }],
         metrics_addr: None,
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     let res = run_profile(&profile, metrics).await;
     assert!(res.is_err(), "невалидный профиль должен быть отклонён run_profile");
     let msg = format!("{}", res.unwrap_err());
@@ -995,7 +995,7 @@ async fn test_f11_apply_overrides_then_run_to_file() {
     // distribution должен быть непустым (Default::default даёт round-robin)
     assert_eq!(profile.distribution, "round-robin");
 
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics).await.unwrap();
 
     let content = fs::read_to_string(&out).unwrap();
@@ -1065,7 +1065,7 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
         }],
         ..Default::default()
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
 
     // Запускаем прогон в фоне; сервер /metrics живёт, пока идёт прогон.
     let run = tokio::spawn(async move { run_profile(&profile, metrics).await });
@@ -1118,7 +1118,7 @@ async fn test_f12_no_metrics_addr_no_server() {
         }],
         ..Default::default()
     };
-    let metrics = create_metrics();
+    let metrics = create_metrics().expect("create_metrics ok in test");
     let res = run_profile(&profile, metrics).await;
     assert!(res.is_ok());
     let _ = fs::remove_file(&file_path);

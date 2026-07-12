@@ -2,16 +2,22 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v8.4.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v8.5.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-Версия `v8.4.1` — compile-verified релиз. Модульная архитектура с реальным multi-target
+Версия `v8.5.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v8.5.0 (D3):** формальная JSON Schema (`schemas/profile.schema.json`) +
+YAML-ввод профиля. Профили можно загружать как из JSON (`.json`), так и
+из YAML (`.yaml`/`.yml`) с автоопределением формата по расширению.
+Новый флаг `--schema-strict` для runtime-валидации через `jsonschema`;
+CI-стадия прогоняет его на всех примерах.
 
 **v8.4.1:** patch-релиз — починка регрессии `sender_throughput` бенчмарков
 (сломались ещё в v8.1.0 после введения F13-валидации профиля):
@@ -108,6 +114,41 @@ cargo test
 
 Программно: `validate_profile(&profile) -> Vec<ValidationError>` (пустой
 вектор = профиль валиден); `run_profile()` вызывает валидацию сам.
+
+### Формальная JSON Schema и YAML-ввод (D3, v8.5.0)
+
+Профили можно загружать как из JSON, так и из YAML:
+
+```bash
+# JSON
+./target/release/syslog-generator --profile examples/multi_target_roundrobin.json
+
+# YAML
+./target/release/syslog-generator --profile examples/multi_target_roundrobin.yaml
+./target/release/syslog-generator --profile examples/multi_target_roundrobin.yml
+```
+
+Формат определяется по расширению файла в `load_profile_from_path`
+(`.json` / `.yaml` / `.yml`). Неподдерживаемое расширение даёт явную
+ошибку `ConfigError::UnsupportedFormat`.
+
+Дополнительно к F13-валидации доступна структурная проверка против
+формальной JSON Schema (`schemas/profile.schema.json`) — встроена в
+бинарник через `include_str!`:
+
+```bash
+./target/release/syslog-generator --validate --schema-strict --profile my.yaml
+```
+
+Schema-strict ловит структурные ошибки (неправильные типы, неизвестные
+ключи, значения вне диапазонов 0..=23/0..=7) с более точными сообщениями
+от `jsonschema`, чем общий serde-парсер. В CI (`validate examples` job)
+schema-strict прогоняется на всех примерах из `examples/` — это регрессионный
+тест на изменения в схеме.
+
+Семантические правила (диапазоны facility/severity в зависимости от формата,
+веса шаблонов, условия остановки фазы) остаются на F13-валидаторе — JSON Schema
+дополняет, не дублирует.
 
 ## Бенчмарки
 

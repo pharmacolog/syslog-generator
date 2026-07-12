@@ -1,6 +1,33 @@
 
 # Changelog
 
+## v8.4.1 - 2026-07-12
+
+Patch-релиз сразу после v8.4.0: починка регрессии `sender_throughput`
+бенчмарков, сломавшихся ещё в v8.1.0 (внедрение валидации F13).
+
+### Fixed
+- **`benches/sender_throughput.rs`**: после F13 (v8.1.0) валидация профиля
+  корректно отвергает фазы без условий остановки (`duration_secs=0` +
+  `total_messages=None`) как `UnboundedPhase`. Бенчмарки `tcp_sender_throughput`
+  и `udp_sender_throughput` использовали `Phase { ..Default::default() }`,
+  из-за чего `run_profile(...).unwrap()` падал на старте. Регрессия была
+  пропущена при выпуске v8.1.0..v8.4.0, потому что `cargo test` не покрывает
+  бенчмарки.
+  - `make_profile` теперь принимает `total_messages: u64` и выставляет
+    `total_messages: Some(...)` — явное ограничение остановки, удовлетворяющее
+    валидации F13.
+  - Удалён устаревший комментарий про "caps generation at 100 messages per
+    phase" (это ограничение снято ещё в v7.5.0 с введением F1 rate-limiting).
+
+### Notes
+- Тесты: **88 unit + 49 + 11 integration = 148**, все зелёные.
+- Бенчмарки: все 9 кейсов (`message_generation` x3, `sender_throughput` x6)
+  проходят `cargo bench -- --quick` после починки.
+- clippy чист, fmt clean, `cargo bench --no-run --locked` успешен.
+- Покрытие тестами не снижено — это только ремонт бенчмарков, код прод-системы
+  не затронут.
+
 ## v8.4.0 - 2026-07-12
 
 Продолжение вехи D («Промышленная готовность», P1). Закрыта задача

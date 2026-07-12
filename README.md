@@ -2,16 +2,23 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v8.5.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v8.6.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-Версия `v8.5.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
+Версия `v8.6.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v8.6.0 (N2):** синхронизация Grafana-дашборда с реальными метриками.
+Добавлена `syslog_messages_by_format_total{format}` (счётчик по формату)
+и 6 panels в дашборд (rate/latency/active workers/errors/messages by format).
+Удалены фейковые gauge-ы `cpu_usage_percent`/`memory_usage_bytes` —
+они были объявлены, но никогда не обновлялись. Дашборд теперь покрывает
+все ключевые метрики нагрузки.
 
 **v8.5.0 (D3):** формальная JSON Schema (`schemas/profile.schema.json`) +
 YAML-ввод профиля. Профили можно загружать как из JSON (`.json`), так и

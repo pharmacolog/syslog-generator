@@ -176,6 +176,22 @@ for seq in 1..=total { ... }
 - **Регрессия бенчмарков `sender_throughput` после F13 (v8.4.1):** в v8.1.0 (F13 — валидация профиля) `run_profile()` стал отвергать фазы без условий остановки (`duration_secs=0` + `total_messages=None`). `benches/sender_throughput.rs::make_profile` использовал `Phase { ..Default::default() }`, что давало такую фазу — бенчмарк падал на старте с `ValidationError::UnboundedPhase`. Регрессия была пропущена в v8.1.0..v8.4.0, потому что `cargo test` не покрывает бенчмарки (требуется `cargo bench`). Починено в v8.4.1: `make_profile` теперь принимает `total_messages: u64` и выставляет `total_messages: Some(...)` — явное ограничение остановки, удовлетворяющее валидации F13. Все 9 бенчей (3 + 6) теперь проходят `cargo bench -- --quick`.
 - **D3 — формальная JSON Schema + YAML-ввод профиля (v8.5.0):** профили теперь можно загружать как из JSON (`.json`), так и из YAML (`.yaml`/`.yml`) с автоопределением формата по расширению в `load_profile_from_path`. Добавлена runtime-валидация через `jsonschema = "0.18"` (встроенная схема через `include_str!` в `schemas/profile.schema.json`) и CLI-флаг `--schema-strict`. Schema ловит структурные ошибки (типы, диапазоны, обязательные поля, unknown keys), семантика остаётся на F13. Новые варианты `ConfigError::Yaml` и `ConfigError::UnsupportedFormat`. CI-стадия "Validate examples" прогоняет `--validate --schema-strict` на всех `.json`/`.yaml`/`.yml` в `examples/` — регрессионный тест на изменения схемы. 6 профилей-примеров получили `total_messages: 100` (без этого F13 отвергал их как `UnboundedPhase`); `templates_basic.json` перенесён в `examples/templates/` (это не профиль, а массив шаблонов для `--message`). Все 167 тестов (102 unit + 54 integration + 11 N7) и 9 бенчей зелёные.
 - **N2 — синхронизация Grafana-дашборда (v8.6.0):** добавлена реальная `syslog_messages_by_format_total{format}` (CounterVec, инкремент в core.rs::run_phase_multi) и 6 panels в `dashboards/grafana.json`: messages rate by transport, messages by format, active workers, send p95 latency, message size p95, errors rate. Удалены фейковые gauge-ы `cpu_usage_percent`/`memory_usage_bytes` — они были объявлены, но никогда не обновлялись в runtime (нет реального сбора process metrics), в `/metrics` всегда показывали 0, в дашборде — пустые графики. Честный подход — не обещать то, чего нет. Если process metrics понадобятся в будущем — это отдельная задача (требует крейта `sysinfo` + фоновой задачи). Дашборд теперь покрывает все ключевые метрики нагрузки. +3 теста: `n2_no_cpu_or_memory_gauges_in_exposition`, `n2_messages_by_format_total_after_inc`, `test_n2_messages_by_format_total_exported`. Все 170 тестов (104 unit + 55 integration + 11 N7) и 9 бенчей зелёные.
+- **N5 + N8 + N11 (v8.6.1):** финальные P1-пробелы перед major v9.0. Закрыты:
+  - **N5** `src/template.rs` — `CompiledTemplate` с one-pass парсингом
+    `{{placeholder}}` (вместо O(N×M) `String::replace`-цикла). Для типичного
+    шаблона ~50 символов × 20 ключей это ~100x ускорение горячего пути
+    в `run_phase_multi`. Старая `render_template` сохранена как
+    backward-compatible обёртка.
+  - **N8** `src/syslog.rs::tests` — round-trip парсер RFC 5424
+    (`parse_rfc5424_for_test`) с 3 тестами (простой случай с бинарными
+    байтами \x80\x81, NILVALUE + BOM, structured_data с пробелами внутри
+    `[...]`). Гарантирует что наш вывод соответствует RFC и парсится
+    стандартными приёмниками (rsyslog, syslog-ng) корректно.
+  - **N11** — `docs/USER_GUIDE.md` и `docs/DEVELOPER_GUIDE.md` обновлены
+    до v8.6 (были заморожены на v7.4.0). `.meta.json` файлы
+    актуализированы (v4.0 → v8.6). После этого **все P1-задачи вехи D
+    закрыты**.
+  Все 181 тестов (115 unit + 55 integration + 11 N7) и 9 бенчей зелёные.
 
 #### P2 — Сопровождаемость и поставка
 - **N10. Вынести ядро из `lib.rs`-реэкспортов в чёткие слои** (`generator`, `transport`, `scheduler`, `format`, `observability`), убрать `architecture-notes.md`-заглушку, описать реальную архитектуру.

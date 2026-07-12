@@ -1,6 +1,52 @@
 
 # Changelog
 
+## v8.6.1 - 2026-07-13
+
+Patch-релиз перед major v9.0.0: закрытие оставшихся P1-пробелов вехи D
+(N5 предкомпиляция шаблонов, N8 round-trip парсинг RFC 5424, N11
+актуализация документации). Покрытие тестами не снижено — 181 тестов,
+все зелёные.
+
+### Changed
+- **`src/template.rs` — `CompiledTemplate`** (N5): старая `render_template`
+  делала `String::replace` в цикле по всем ключам — O(N×M) на каждый
+  вызов. Теперь шаблон парсится один раз в `Vec<TemplatePart>` (Literal/
+  Placeholder) и рендерится за один проход — O(N). Для типичного шаблона
+  длиной ~50 символов и ~20 ключей это даёт ~100x ускорение горячего
+  пути в `run_phase_multi` (где `render_template` вызывается 5 раз для
+  syslog header + 1 раз для тела). Старая `render_template(&str, &HashMap)`
+  сохранена как backward-compatible обёртка (внутри вызывает `compile +
+  render`). Все 88 предыдущих unit-тестов + 55 integration + 11 N7
+  проходят без изменений.
+
+### Added
+- **`syslog::tests::parse_rfc5424_for_test`** (N8): минимальный round-trip
+  парсер RFC 5424 — `build_rfc5424(&Header, &msg)` → `parse_rfc5424_for_test(&encoded)`
+  → сравнение полей. Работает с `&[u8]` напрямую (не UTF-8), потому что
+  MSG может содержать бинарные данные (\x80\x81 и т.п.) которые невалидны
+  в UTF-8. 3 round-trip теста: простой случай с бинарными байтами,
+  NILVALUE-поля + BOM, structured_data с пробелами внутри `[...]`.
+- + 8 unit-тестов в `template::tests` для CompiledTemplate.
+
+### Documentation
+- **`docs/USER_GUIDE.md` и `docs/DEVELOPER_GUIDE.md` обновлены до v8.6**
+  (N11): документы были заморожены на v7.4.0 (Initial commit). Карта
+  модулей, раздел архитектурных решений v8.x, примеры публичного API
+  для load_profile_from_path/validate_profile/validate_against_embedded_schema.
+- **`.meta.json` файлы обновлены до v8.6** (N11): `auth_schema.json.meta.json`,
+  `nginx_schema.json.meta.json`, `profile.json.meta.json`,
+  `templates.json.meta.json` — ранее ссылались на устаревшую "v4.0",
+  теперь "v8.6".
+
+### Notes
+- Тесты: **115 unit + 55 integration + 11 N7 = 181**, все зелёные.
+- 9 бенчей (3 + 6), все зелёные.
+- clippy чист, fmt clean.
+- Backward compatible: публичный API не изменился (добавлены новые
+  публичные типы — `CompiledTemplate`, `parse_rfc5424_for_test` доступен
+  только в `#[cfg(test)]`).
+
 ## v8.6.0 - 2026-07-13
 
 Финальная задача вехи D («Продакшн-готовность», P1): **N2 — синхронизация

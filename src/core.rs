@@ -408,6 +408,14 @@ pub async fn run_phase_multi(
             .messages_generated_total
             .with_label_values(&[&phase.name])
             .inc();
+        // N2 (v8.6.0): счётчик сообщений по формату. Инкрементируется
+        // здесь (а не в generate_message), чтобы не зависеть от наличия
+        // Metrics в чисто-функциональной generate_message (она используется
+        // и в бенчмарках без Metrics).
+        metrics
+            .messages_by_format_total
+            .with_label_values(&[phase.format_type()])
+            .inc();
         if distribution == "broadcast" {
             for tx in &txs {
                 let _ = tx.send(msg.clone()).await;

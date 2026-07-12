@@ -30,12 +30,14 @@ pub struct Metrics {
     pub bytes_total: CounterVec,
     pub errors_total: CounterVec,
     pub messages_by_sink: CounterVec,
+    /// N2 (v8.6.0): счётчик сгенерированных сообщений по формату (rfc5424/rfc3164/raw/protobuf).
+    /// Полезен для понимания, какой формат преобладает в трафике, и для построения
+    /// panel "messages by format" в Grafana. Инкрементируется в `generate_message`.
+    pub messages_by_format_total: CounterVec,
     pub generate_duration: Histogram,
     pub send_duration: Histogram,
     pub message_size_bytes: Histogram,
     pub reconnects_total: CounterVec,
-    pub cpu_usage: Gauge,
-    pub memory_usage: Gauge,
     pub shutdowns_total: IntCounter,
     pub drain_duration: Histogram,
     pub drain_timeouts_total: IntCounter,
@@ -89,6 +91,14 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "Messages by sink",
         &["sink"],
     )?;
+    // N2 (v8.6.0): счётчик сгенерированных сообщений по формату.
+    // Инкрементируется в `payload::generate_message` после успешной генерации;
+    // нужен для дашборда "messages by format".
+    let messages_by_format_total = make_counter_vec(
+        "syslog_messages_by_format_total",
+        "Total messages generated, by format",
+        &["format"],
+    )?;
     let generate_duration = make_histogram(
         "syslog_generate_duration_seconds",
         "Generate duration seconds",
@@ -119,14 +129,10 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "Total transport reconnection attempts after a write failure",
         &["transport", "target"],
     )?;
-    let cpu_usage = make_gauge(
-        "syslog_cpu_usage_percent",
-        "CPU usage percent of generator process",
-    )?;
-    let memory_usage = make_gauge(
-        "syslog_memory_usage_bytes",
-        "Memory usage in bytes of generator process",
-    )?;
+    // N2 (v8.6.0): cpu_usage/memory_usage удалены — Gauge'ы были объявлены,
+    // но никогда не обновлялись (нет реального сбора), поэтому в /metrics
+    // всегда показывали 0, а в дашборде — пустые графики. Честный подход —
+    // не обещать то, чего нет.
     let shutdowns_total = make_int_counter("syslog_shutdowns_total", "Total shutdown events")?;
     let drain_duration = make_histogram(
         "syslog_drain_duration_seconds",
@@ -166,6 +172,10 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
             Box::new(messages_by_sink.clone()),
         ),
         (
+            "syslog_messages_by_format_total",
+            Box::new(messages_by_format_total.clone()),
+        ),
+        (
             "syslog_generate_duration_seconds",
             Box::new(generate_duration.clone()),
         ),
@@ -181,8 +191,6 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
             "syslog_reconnects_total",
             Box::new(reconnects_total.clone()),
         ),
-        ("syslog_cpu_usage_percent", Box::new(cpu_usage.clone())),
-        ("syslog_memory_usage_bytes", Box::new(memory_usage.clone())),
         ("syslog_shutdowns_total", Box::new(shutdowns_total.clone())),
         (
             "syslog_drain_duration_seconds",
@@ -213,12 +221,11 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         bytes_total,
         errors_total,
         messages_by_sink,
+        messages_by_format_total,
         generate_duration,
         send_duration,
         message_size_bytes,
         reconnects_total,
-        cpu_usage,
-        memory_usage,
         shutdowns_total,
         drain_duration,
         drain_timeouts_total,
@@ -310,5 +317,57 @@ mod tests {
             .inc();
         let s = gather_metrics(&m).expect("gather_metrics ok");
         assert!(s.contains("syslog_messages_total"), "got:\n{s}");
+    }
+
+    /// N2 (v8.6.0): cpu_usage/memory_usage удалены — больше не должны
+    /// экспортироваться. Это регрессионный тест: если кто-то добавит их
+    /// обратно без реальной реализации сбора, тест напомнит что это
+    /// давало пустые графики в дашборде.
+    #[test]
+    fn n2_no_cpu_or_memory_gauges_in_exposition() {
+        let m = create_metrics().expect("create_metrics ok");
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(
+            !s.contains("syslog_cpu_usage_percent"),
+            "cpu_usage_percent Gauge удалён в N2 — в выводе его быть не должно"
+        );
+        assert!(
+            !s.contains("syslog_memory_usage_bytes"),
+            "memory_usage_bytes Gauge удалён в N2 — в выводе его быть не должно"
+        );
+    }
+
+    /// N2 (v8.6.0): `messages_by_format_total` присутствует в /metrics после
+    /// инкремента с явным форматом.
+    #[test]
+    fn n2_messages_by_format_total_after_inc() {
+        let m = create_metrics().expect("create_metrics ok");
+        m.messages_by_format_total
+            .with_label_values(&["rfc5424"])
+            .inc();
+        m.messages_by_format_total
+            .with_label_values(&["raw"])
+            .inc_by(3.0);
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(s.contains("syslog_messages_by_format_total"), "got:\n{s}");
+        assert!(s.contains("format=\"rfc5424\""), "got:\n{s}");
+        assert!(s.contains("format=\"raw\""), "got:\n{s}");
+        // Проверяем значения в экспорте. Prometheus exposition format
+        // использует ПРОБЕЛ между метрикой и значением (`metric{labels} 42`),
+        // не запятую.
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_messages_by_format_total{format=\"rfc5424\"}")
+                    && l.trim_end().ends_with(" 1")
+            }),
+            "rfc5424 должно быть = 1, got:\n{s}"
+        );
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_messages_by_format_total{format=\"raw\"}")
+                    && l.trim_end().ends_with(" 3")
+            }),
+            "raw должно быть = 3, got:\n{s}"
+        );
     }
 }

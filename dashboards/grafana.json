@@ -208,6 +208,12 @@
           "y": 8
         }
       }
+    ],
+    "description": "\u041f\u0430\u043d\u0435\u043b\u0438 \u0434\u043b\u044f \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 syslog-generator v8.6.0+. \u041f\u043e\u043a\u0440\u044b\u0432\u0430\u044e\u0442: shutdown/drain (syslog_shutdowns_total, syslog_drain_timeouts_total, syslog_drain_duration_seconds, syslog_messages_drained_total), \u043d\u0430\u0433\u0440\u0443\u0437\u043a\u0430 (syslog_messages_total, syslog_messages_by_format_total, syslog_active_workers, syslog_errors_total), \u043b\u0430\u0442\u0435\u043d\u0442\u043d\u043e\u0441\u0442\u044c \u0438 \u0440\u0430\u0437\u043c\u0435\u0440 (syslog_send_duration_seconds, syslog_message_size_bytes).",
+    "tags": [
+      "syslog-generator",
+      "load-test",
+      "v8.6"
     ]
   },
   "overwrite": true,
@@ -278,6 +284,134 @@
         "w": 12,
         "x": 0,
         "y": 48
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages rate by transport",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "expr": "sum by (transport) (rate(syslog_messages_total[1m]))",
+          "legendFormat": "{{transport}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages by format",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "expr": "sum by (format) (rate(syslog_messages_by_format_total[1m]))",
+          "legendFormat": "{{format}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Active Workers",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "syslog_active_workers",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Send p95 latency",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(syslog_send_duration_seconds_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Message size p95",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(syslog_message_size_bytes_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Errors rate",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(syslog_errors_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
       }
     }
   ]

@@ -1,9 +1,96 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::OnceLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use syslog_generator::{apply_overrides, apply_protobuf_schema, create_dispatcher, create_metrics, gather_metrics, generate_message, parse_target, render_template, run_profile, serialize_protobuf, validate_profile, Overrides, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, TargetConfig, ValidationError};
+
+/// Self-signed сертификат + ключ для TLS-тестов, сгенерированные через
+/// системный `openssl req` с явным config-файлом. Кэшируется на процесс —
+/// все TLS-тесты переиспользуют один и тот же сертификат (он не привязан
+/// к порту).
+///
+/// Почему `openssl req`, а не `rcgen`:
+/// rcgen 0.13 на некоторых окружениях (macOS, OpenSSL 3.x) генерирует
+/// PEM-блоки, которые `native_tls::Identity::from_pkcs8` не может
+/// распарсить (ошибка "Unknown format in import"). `openssl req -x509`
+/// с правильным конфигом даёт стабильный результат, который работает с
+/// native-tls на всех поддерживаемых платформах.
+///
+/// Почему config-файл, а не `-addext`:
+/// `openssl req` без конфига создаёт сертификат с `basicConstraints=CA:TRUE`,
+/// что не подходит для leaf-сервера (Security.framework на macOS и
+/// rustls/Go TLS на Linux отказываются принимать такой сертификат при
+/// handshake с ошибкой "connection closed via error"). Нужен leaf-сертификат
+/// с `CA:FALSE`, `keyUsage=digitalSignature,keyEncipherment`,
+/// `extendedKeyUsage=serverAuth` и SAN (DNS:localhost + IP:127.0.0.1).
+///
+/// Почему `-days 365`, а не дольше:
+/// Security.framework на macOS отклоняет сертификаты с validity period
+/// больше 825 дней (типичный лимит для TLS-сертификатов; код ошибки
+/// `-67901` — "The validity period in the certificate exceeds the maximum
+/// allowed"). 365 дней — с запасом, чтобы тесты не "протухали" между
+/// коммитами.
+const OPENSSL_SERVER_CNF: &str = r#"
+[req]
+distinguished_name = req_dn
+x509_extensions = v3_server
+prompt = no
+
+[req_dn]
+CN = localhost
+
+[v3_server]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+"#;
+
+struct TestTlsMaterial {
+    cert_pem: Vec<u8>,
+    key_pem: Vec<u8>,
+    /// Путь к PEM-файлу сертификата, который клиент читает через `tls_ca_file`.
+    cert_path: PathBuf,
+}
+
+fn openssl_self_signed() -> &'static TestTlsMaterial {
+    static CACHE: OnceLock<TestTlsMaterial> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        // Генерируем в фиксированный путь в target/, чтобы он не зависел
+        // от CWD (важно для cargo test, который может запускаться из разных мест).
+        let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
+        let dir = PathBuf::from(&target_dir).join("test-tls");
+        fs::create_dir_all(&dir).expect("create test-tls dir");
+        let cnf_path = dir.join("openssl-server.cnf");
+        let cert_path = dir.join("cert.pem");
+        let key_path = dir.join("key.pem");
+        fs::write(&cnf_path, OPENSSL_SERVER_CNF).expect("write openssl config");
+        let status = Command::new("openssl")
+            .args([
+                "req", "-x509",
+                "-newkey", "rsa:2048",
+                "-keyout", key_path.to_str().unwrap(),
+                "-out", cert_path.to_str().unwrap(),
+                "-days", "365",
+                "-nodes",
+                "-config", cnf_path.to_str().unwrap(),
+            ])
+            .status()
+            .expect("не удалось запустить openssl (проверьте, что openssl в PATH)");
+        assert!(status.success(), "openssl req завершился с ошибкой: {status:?}");
+        let cert_pem = fs::read(&cert_path).expect("read cert.pem");
+        let key_pem = fs::read(&key_path).expect("read key.pem");
+        TestTlsMaterial { cert_pem, key_pem, cert_path }
+    })
+}
 
 #[tokio::test]
 async fn test_metrics_presence() {
@@ -111,20 +198,30 @@ async fn spawn_udp_collector(expected: usize) -> (String, tokio::task::JoinHandl
 /// возвращает (addr, ca_pem_path, handle). CA-файл нужен тестам, чтобы
 /// проверять БЕЗОПАСНЫЙ путь N4 (клиент доверяет именно этому CA), а не
 /// отключать проверку. Файл создаётся синхронно до старта сервера.
+///
+/// Сертификат генерируется через системный `openssl req` (см.
+/// [`openssl_self_signed`]) — это совместимо с native-tls на всех
+/// поддерживаемых платформах, в отличие от `rcgen`, чей PEM-формат на
+/// некоторых окружениях не парсится `Identity::from_pkcs8`.
 async fn spawn_tls_collector(expected: usize) -> (String, String, tokio::task::JoinHandle<Vec<String>>) {
-    use rcgen::generate_simple_self_signed;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
-    // Генерируем сертификат заранее, чтобы записать CA-PEM для клиента.
-    let cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-    let key_pem = cert.key_pair.serialize_pem();
-    let cert_pem = cert.cert.pem();
-    let ca_path = format!("tls-ca-{}-{}.pem", std::process::id(), addr.replace([':', '.'], "_"));
-    fs::write(&ca_path, cert_pem.as_bytes()).unwrap();
+    let tls = openssl_self_signed();
+    // Копируем сертификат в target/test-tls/ca-<pid>-<addr>.pem чтобы
+    // совпадало с предыдущим контрактом (тесты могут удалить файл после прогона).
+    let ca_path = tls.cert_path.with_file_name(format!(
+        "ca-{}-{}.pem",
+        std::process::id(),
+        addr.replace([':', '.'], "_")
+    ));
+    fs::write(&ca_path, &tls.cert_pem).expect("write ca_path copy");
+    let cert_pem = tls.cert_pem.clone();
+    let key_pem = tls.key_pem.clone();
     let handle = tokio::spawn(async move {
         use native_tls::Identity;
         use tokio_native_tls::TlsAcceptor;
-        let id = Identity::from_pkcs8(cert_pem.as_bytes(), key_pem.as_bytes()).unwrap();
+        let id = Identity::from_pkcs8(&cert_pem, &key_pem)
+            .expect("Identity::from_pkcs8 должен принять openssl-generated PEM");
         let acceptor = native_tls::TlsAcceptor::builder(id).build().unwrap();
         let acceptor = TlsAcceptor::from(acceptor);
         let mut all = Vec::new();
@@ -138,7 +235,7 @@ async fn spawn_tls_collector(expected: usize) -> (String, String, tokio::task::J
         }
         all
     });
-    (addr, ca_path, handle)
+    (addr, ca_path.to_string_lossy().into_owned(), handle)
 }
 
 // `count` задаёт точное число сообщений через total_messages (детерминированно).

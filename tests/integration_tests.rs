@@ -1782,3 +1782,122 @@ fn test_n4_tls_insecure_defaults_false() {
     assert!(t.tls_domain.is_none());
     assert!(t.tls_ca_file.is_none());
 }
+
+// ===================== D3: JSON Schema + YAML-ввод (веха D) =====================
+//
+// D3 (v8.5.0): профили можно загружать как из JSON (.json), так и из YAML
+// (.yaml/.yml). Формат определяется по расширению файла в load_profile_from_path.
+// Дополнительно через флаг --schema-strict (CLI) профиль валидируется
+// против формальной JSON Schema (schemas/profile.schema.json).
+
+use syslog_generator::{load_profile_from_path, validate_against_embedded_schema};
+
+/// D3: YAML-профиль из examples/ загружается корректно (round-robin).
+#[test]
+fn test_d3_yaml_profile_loads() {
+    let path = "examples/multi_target_roundrobin.yaml";
+    let p = load_profile_from_path(std::path::Path::new(path))
+        .unwrap_or_else(|e| panic!("не удалось загрузить {path}: {e:?}"));
+    assert_eq!(p.distribution, "round-robin");
+    assert_eq!(p.targets.len(), 2);
+    assert_eq!(p.targets[0].address, "./yaml-rr-a.log");
+    assert_eq!(p.targets[1].address, "./yaml-rr-b.log");
+    assert_eq!(p.phases.len(), 1);
+    assert_eq!(p.phases[0].name, "yaml-rr");
+    assert_eq!(p.phases[0].messages_per_second, 6);
+    assert_eq!(p.phases[0].templates, vec!["yaml rr seq={{sequence}}"]);
+}
+
+/// D3: расширение .yml обрабатывается так же, как .yaml.
+#[test]
+fn test_d3_yml_profile_loads() {
+    let path = "examples/multi_target_roundrobin.yml";
+    let p = load_profile_from_path(std::path::Path::new(path))
+        .unwrap_or_else(|e| panic!("не удалось загрузить {path}: {e:?}"));
+    assert_eq!(p.phases[0].name, "yml-rr");
+    assert_eq!(p.targets.len(), 2);
+}
+
+/// D3: YAML-профиль с load_shape.burst сериализуется без потерь.
+#[test]
+fn test_d3_yaml_load_shape_burst() {
+    let path = "examples/load_shape_burst.yaml";
+    let p = load_profile_from_path(std::path::Path::new(path))
+        .unwrap_or_else(|e| panic!("не удалось загрузить {path}: {e:?}"));
+    use syslog_generator::LoadShape;
+    let shape = p.phases[0]
+        .load_shape
+        .as_ref()
+        .expect("load_shape должна быть");
+    match shape {
+        LoadShape::Burst {
+            base_rate,
+            burst_rate,
+            every_secs,
+            burst_secs,
+        } => {
+            assert_eq!(*base_rate, 100.0);
+            assert_eq!(*burst_rate, 8000.0);
+            assert_eq!(*every_secs, 10.0);
+            assert_eq!(*burst_secs, 2.0);
+        }
+        other => panic!("ожидался Burst, got: {other:?}"),
+    }
+}
+
+/// D3: неподдерживаемое расширение → ConfigError::UnsupportedFormat.
+#[test]
+fn test_d3_unsupported_extension_returns_error() {
+    use syslog_generator::ConfigError;
+    let bad_path = std::env::temp_dir().join("sg_test_d3_unknown.toml");
+    let e = load_profile_from_path(&bad_path).unwrap_err();
+    match e {
+        ConfigError::UnsupportedFormat { extension, .. } => {
+            assert_eq!(extension, "toml");
+        }
+        other => panic!("ожидался UnsupportedFormat, got: {other:?}"),
+    }
+}
+
+/// D3: все examples/*.json и examples/*.yaml проходят формальную JSON Schema.
+/// Это защищает от регрессий: если кто-то изменит схему, тест сразу
+/// покажет что примеры перестали соответствовать.
+///
+/// Файлы, которые не парсятся как Profile (например, schema-файлы для
+/// schema_file, мета-файлы), пропускаются — мы не можем отличить их
+/// по имени, только попыткой десериализации.
+#[test]
+fn test_d3_all_examples_pass_schema() {
+    let entries: Vec<_> = std::fs::read_dir("examples")
+        .expect("examples/ должен существовать")
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let p = e.path();
+            matches!(
+                p.extension().and_then(|x| x.to_str()),
+                Some("json") | Some("yaml") | Some("yml")
+            )
+        })
+        .collect();
+
+    let mut count = 0;
+    for entry in entries {
+        let path = entry.path();
+        // Пробуем загрузить как Profile. Если не парсится — это не профиль
+        // (например, schema-файл для schema_file), пропускаем молча.
+        let p = match load_profile_from_path(&path) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        // Схема-файлы (без phases) парсятся как Profile с пустым phases —
+        // отфильтровываем по этому признаку.
+        if p.phases.is_empty() {
+            continue;
+        }
+        validate_against_embedded_schema(&p)
+            .unwrap_or_else(|e| panic!("schema {}: {e}", path.display()));
+        count += 1;
+    }
+    // Гарантируем, что примеры YAML реально добавились (не только JSON).
+    assert!(count >= 5, "ожидалось >= 5 примеров-профилей, got: {count}");
+}

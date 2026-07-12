@@ -1,6 +1,77 @@
 
 # Changelog
 
+## v8.5.0 - 2026-07-12
+
+Продолжение вехи D («Промышленная готовность», P1). Закрыта задача
+**D3 — формальная JSON Schema + YAML-ввод профиля**. Профили теперь можно
+загружать как из JSON (.json), так и из YAML (.yaml/.yml) с автоопределением
+формата по расширению. Добавлена runtime-валидация через `jsonschema`
+(встроенная в бинарник через `include_str!`) и флаг `--schema-strict` для CI.
+
+### Added
+- **D3 — формальная JSON Schema** (`schemas/profile.schema.json`):
+  Draft 2020-12, $defs для вложенных типов (TargetConfig, SyslogConfig,
+  ShutdownConfig, ProtobufSchemaFieldMap, LoadShape с oneOf по тегированным
+  вариантам, Phase). Ловит структурные ошибки: неправильные типы,
+  обязательные поля, диапазоны (facility 0..=23, severity 0..=7), framing
+  enum, дополнительные ключи (additionalProperties=false), источник
+  контента (oneOf: templates/templates_file/schema_file), minItems:1
+  для phases. Семантические правила остаются на F13-валидаторе.
+- **D3 — YAML-ввод профиля.** `load_profile_from_yaml_str()` + автоопределение
+  формата в `load_profile_from_path()` по расширению файла (.json/.yaml/.yml).
+  Расширение проверяется ДО открытия файла — опечатка в имени даёт явную
+  `ConfigError::UnsupportedFormat`, а не маскирующую `Io(NotFound)`.
+- **`src/schema_check.rs`** (новый модуль): runtime-валидация Profile против
+  встроенной JSON Schema через crate `jsonschema = "0.18"`. Публичные API:
+  `validate_against_embedded_schema(&Profile)`, `validate_against_schema(...)`,
+  тип `SchemaCheckError` (thiserror), константа `PROFILE_SCHEMA`.
+- **CLI-флаг `--schema-strict`**: дополнительно к F13-валидации проверяет
+  профиль против формальной JSON Schema. Полезно для CI и для отлова
+  структурных ошибок до старта прогона.
+- **CI-стадия "Validate examples"** в `.github/workflows/ci.yml`:
+  `cargo run -- --validate --schema-strict --profile <file>` для каждого
+  `.json`/`.yaml`/`.yml` в `examples/`. Защищает от регрессий в схеме и
+  в примерах.
+
+### Changed
+- `src/config.rs::Phase`: `templates` теперь с `skip_serializing_if = "Vec::is_empty"`,
+  `templates_file`/`schema_file` — с `skip_serializing_if = "Option::is_none"`.
+  Это нужно для D3: пустые значения не сериализуются в JSON, и тогда
+  `anyOf required: ["templates"|"templates_file"|"schema_file"]` в схеме
+  корректно отлавливает фазы без контент-источника.
+- `src/main.rs`: ручной `serde_json::from_str(&text)` заменён на
+  `load_profile_from_path(path)` с автоопределением формата.
+- 6 профилей в `examples/*.json` (graceful_shutdown, multi_target_*,
+  protobuf_format, single_target) получили `total_messages: 100` в фазах,
+  где его не было — без этого F13 отвергал их как `UnboundedPhase`.
+- `examples/templates_basic.json` перенесён в `examples/templates/` —
+  это не профиль, а массив шаблонов для `--message`, логически отделён
+  от профилей.
+- `src/error.rs`: добавлены варианты `ConfigError::Yaml` и
+  `ConfigError::UnsupportedFormat` (вместо TODO-комментария).
+
+### Dependencies
+- `+serde_yaml = "0.9"` — YAML-парсинг.
+- `+jsonschema = "0.18"` — runtime JSON Schema валидация.
+
+### Notes
+- Тесты: **102 unit + 54 integration + 11 N7 = 167**, все зелёные.
+  Из них 14 новых: 6 config::tests (YAML/JSON загрузка), 6 schema_check::tests,
+  2 config_error_yaml/unsupported_format, +5 integration в D3 секции.
+- clippy чист, fmt clean.
+- Бенчмарки: 9 кейсов (3 message_generation + 6 sender_throughput), все
+  зелёные (регрессия v8.4.0 закрыта в v8.4.1, тут не сломалась).
+- Live-проверка: `./syslog-generator --validate --schema-strict --profile
+  examples/multi_target_roundrobin.yaml` → rc=0, "профиль валиден: 1 фаз(ы),
+  2 цел(ей)".
+- 11 примеров (4 .json + 1 .yaml + 1 .yml + 5 уже валидных) проходят
+  полный цикл F13 + schema-strict. Schema-файлы (`schema_*.json`,
+  `protobuf_schema.json`) корректно пропускаются через фильтр в CI.
+- Публичный API расширен: `ConfigError::{Yaml, UnsupportedFormat}`,
+  `RuntimeError::Config(#[from] ConfigError)` уже работал через `#[from]`,
+  новые варианты подхватываются автоматически.
+
 ## v8.4.1 - 2026-07-12
 
 Patch-релиз сразу после v8.4.0: починка регрессии `sender_throughput`

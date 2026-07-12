@@ -1,12 +1,18 @@
 
 # syslog-generator
 
-Версия `v8.2.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
+Версия `v8.3.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`).
+
+**v8.3.0 (N7):** типизированные ошибки рантайма через `thiserror`. В рантайм-коде
+больше нет `.unwrap()`/`.expect()`: `MetricsError`, `ConfigError`, `DrainError`
+и общий `RuntimeError` пробрасываются через `?` и всплывают в `eprintln` как
+структурированное сообщение с человекочитаемым контекстом. Добавлены 11 новых
+интеграционных тестов в `tests/n7_runtime_errors.rs`.
 
 ## Quick start
 

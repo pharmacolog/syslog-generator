@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pharmacolog/syslog-generator/schemas/profile.schema.json",
+  "title": "syslog-generator profile",
+  "description": "Схема профиля нагрузки для syslog-generator (D3, v8.5.0). Семантические правила (диапазоны facility/severity, веса шаблонов, наличие условий остановки фазы и т.п.) проверяются рантайм-валидатором validate.rs; эта схема ловит только структурные ошибки и ошибки типов.",
+  "type": "object",
+  "$defs": {
+    "TargetConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "transport"],
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Адрес target'а: для file — путь к файлу; для tcp/udp/tls — host:port. tls_domain по умолчанию берёт host-часть."
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["tcp", "udp", "tls", "file"],
+          "description": "Транспорт доставки. Семантическая валидация (диапазоны и т.п.) — в validate.rs."
+        },
+        "connections": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Число воркеров в пуле на target. Семантика >=1 проверяется в F13."
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Вес для distribution=weighted (F2)."
+        },
+        "framing": {
+          "type": "string",
+          "enum": ["non-transparent", "octet-counting", "octet_counting", "octet"],
+          "default": "non-transparent",
+          "description": "Фрейминг для потоковых транспортов по RFC 6587. Для udp/file игнорируется."
+        },
+        "tls_domain": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4: имя хоста для SNI и проверки имени в сертификате. None → хост из address."
+        },
+        "tls_ca_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4: путь к PEM-файлу доверенного CA."
+        },
+        "tls_insecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "N4: opt-in в небезопасный режим (отключить проверку)."
+        }
+      }
+    },
+    "SyslogConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "facility": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23,
+          "default": 1,
+          "description": "RFC 5424 §6.2.1. Структурный диапазон 0..=23 проверяется здесь; полная семантика — в validate.rs (только для rfc5424/rfc3164)."
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "default": 6,
+          "description": "RFC 5424 §6.2.1. Структурный диапазон 0..=7."
+        },
+        "hostname": { "type": "string", "default": "{{hostname}}" },
+        "app_name": { "type": "string", "default": "syslog-generator" },
+        "procid": { "type": "string", "default": "-" },
+        "msgid": { "type": "string", "default": "-" },
+        "structured_data": { "type": "string", "default": "-" },
+        "bom": { "type": "boolean", "default": false }
+      }
+    },
+    "ShutdownConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["drain", "immediate"],
+          "default": "drain"
+        },
+        "drain_timeout_secs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 15
+        }
+      }
+    },
+    "ProtobufSchemaFieldMap": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fields": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+    "LoadShape": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "constant" },
+            "rate": { "type": "number", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "linear" },
+            "start_rate": { "type": "number", "minimum": 0 },
+            "end_rate": { "type": "number", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "sine" },
+            "min_rate": { "type": "number", "minimum": 0 },
+            "max_rate": { "type": "number", "minimum": 0 },
+            "period_secs": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "burst" },
+            "base_rate": { "type": "number", "minimum": 0 },
+            "burst_rate": { "type": "number", "minimum": 0 },
+            "every_secs": { "type": "number", "exclusiveMinimum": 0 },
+            "burst_secs": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "Phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "duration_secs": { "type": "integer", "minimum": 0, "default": 0 },
+        "messages_per_second": { "type": "integer", "minimum": 0, "default": 0 },
+        "total_messages": { "type": ["integer", "null"], "minimum": 1 },
+        "templates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Массив шаблонов (не сериализуется, если пустой — тогда требуется templates_file или schema_file)."
+        },
+        "templates_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Путь к файлу с шаблонами (альтернатива templates)."
+        },
+        "schema_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Путь к schema.json (F5)."
+        },
+        "format": {
+          "type": ["string", "null"],
+          "enum": ["rfc5424", "rfc3164", "raw", "protobuf", null]
+        },
+        "output": { "type": ["string", "null"], "minLength": 1 },
+        "seed": { "type": ["integer", "null"], "minimum": 0 },
+        "protobuf_schema": { "$ref": "#/$defs/ProtobufSchemaFieldMap" },
+        "syslog": { "$ref": "#/$defs/SyslogConfig" },
+        "load_shape": { "$ref": "#/$defs/LoadShape" },
+        "template_weights": {
+          "type": ["array", "null"],
+          "items": { "type": "number" }
+        },
+        "pad_to_bytes": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "anyOf": [
+        { "required": ["templates"] },
+        { "required": ["templates_file"] },
+        { "required": ["schema_file"] }
+      ],
+      "description": "Хотя бы один из templates/templates_file/schema_file обязателен (F13 — иначе фаза не имеет источника контента)."
+    },
+    "Distribution": {
+      "type": "string",
+      "enum": ["round-robin", "broadcast", "weighted"]
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TargetConfig" },
+      "description": "Список целей доставки. Может быть пустым, если задаётся через --target CLI-флагом."
+    },
+    "distribution": { "$ref": "#/$defs/Distribution" },
+    "shutdown": { "$ref": "#/$defs/ShutdownConfig" },
+    "phases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Phase" },
+      "minItems": 1,
+      "description": "Хотя бы одна фаза обязательна (F13 — иначе профиль не имеет работы)."
+    },
+    "metrics_addr": {
+      "type": ["string", "null"],
+      "description": "F12: адрес HTTP /metrics endpoint, напр. 127.0.0.1:9090. None → метрики не экспортируются через HTTP."
+    }
+  }
+}

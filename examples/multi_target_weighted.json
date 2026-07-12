@@ -22,7 +22,8 @@
       "messages_per_second": 8,
       "templates": [
         "weighted seq={{sequence}}"
-      ]
+      ],
+      "total_messages": 100
     }
   ]
 }

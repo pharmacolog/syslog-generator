@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "8.4.1"
+version = "8.5.0"
 edition = "2021"
 
 [dependencies]
@@ -11,6 +11,7 @@ clap = { version = "4", features = ["derive"] }
 prometheus = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "io-util", "fs"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 native-tls = "0.2"
@@ -20,6 +21,7 @@ governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
 regex-syntax = "0.8"
+jsonschema = "0.18"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }

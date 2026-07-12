@@ -1,0 +1,26 @@
+# D3 (v8.5.0): пример профиля в YAML с расширением .yml.
+# Тот же профиль что multi_target_roundrobin.yaml, но проверяется
+# что load_profile_from_path распознаёт обе YAML-расширения.
+
+targets:
+  - address: ./yml-rr-a.log
+    transport: file
+    weight: 1
+  - address: ./yml-rr-b.log
+    transport: file
+    weight: 1
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 15
+
+phases:
+  - name: yml-rr
+    messages_per_second: 6
+    total_messages: 6
+    templates:
+      - "yml rr seq={{sequence}}"
+
+metrics_addr: null

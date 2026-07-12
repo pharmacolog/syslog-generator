@@ -89,6 +89,33 @@ jobs:
         # (результаты зависят от железа runner'а и не сравнимы).
         run: cargo bench --no-run --locked
 
+      - name: Validate examples against JSON Schema (D3, v8.5.0)
+        # D3: каждый профиль-пример в examples/ (json/yaml/yml) должен
+        # проходить и F13-семантическую валидацию, и формальную JSON Schema
+        # (--schema-strict). Это защищает от регрессий в схеме и в примерах.
+        #
+        # Исключаем schema_*.json — это schema-файлы для schema_file, а не
+        # самостоятельные профили (они парсятся как Profile с пустым phases
+        # и валидацию не проходят, что корректно — они не предназначены для
+        # --validate).
+        run: |
+          set -e
+          status=0
+          for f in examples/*.json examples/*.yaml examples/*.yml; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+              schema_*.json) continue ;;
+              *.meta.json) continue ;;
+            esac
+            echo "checking $f"
+            if ! cargo run --quiet --bin syslog-generator -- \
+              --validate --schema-strict --profile "$f"; then
+              echo "FAILED: $f"
+              status=1
+            fi
+          done
+          exit $status
+
   msrv:
     # MSRV (Minimum Supported Rust Version). Этот job — best effort:
     # падение здесь не блокирует merge, но сигнализирует о росте MSRV.

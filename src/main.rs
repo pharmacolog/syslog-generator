@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use std::fs;
+use std::path::Path;
 use std::process::ExitCode;
 use syslog_generator::{
-    apply_overrides, create_metrics, format_errors, run_profile, validate_profile, Args, Profile,
+    apply_overrides, create_metrics, format_errors, load_profile_from_path, run_profile,
+    validate_against_embedded_schema, validate_profile, Args, Profile,
 };
 
 #[tokio::main]
@@ -23,13 +24,12 @@ async fn run() -> Result<ExitCode> {
     let args = Args::parse();
 
     // 1. Загружаем профиль из файла или начинаем с пустого (быстрый CLI-режим).
+    // D3 (v8.5.0): формат определяется по расширению — .json/.yaml/.yml.
+    // Для обратной совместимости путь без расширения или с неизвестным
+    // расширением отвергается явной ошибкой `ConfigError::UnsupportedFormat`.
     let mut profile: Profile = match &args.profile {
-        Some(path) => {
-            let text = fs::read_to_string(path)
-                .with_context(|| format!("не удалось прочитать профиль {path:?}"))?;
-            serde_json::from_str(&text)
-                .with_context(|| format!("невалидный JSON профиля {path:?}"))?
-        }
+        Some(path) => load_profile_from_path(Path::new(path))
+            .with_context(|| format!("загрузка профиля {path:?}"))?,
         None => Profile::default(),
     };
 
@@ -44,7 +44,16 @@ async fn run() -> Result<ExitCode> {
         return Ok(ExitCode::FAILURE);
     }
 
-    // 3. F13: валидация. При --validate — только проверка и выход.
+    // 3. D3: структурная проверка через формальную JSON Schema.
+    // Выполняется ПЕРЕД семантической валидацией, чтобы отловить
+    // структурные ошибки (неправильные типы, неизвестные ключи, значения
+    // вне диапазонов) с более точными сообщениями от jsonschema.
+    if args.schema_strict {
+        validate_against_embedded_schema(&profile)
+            .map_err(|e| anyhow::anyhow!("ошибка структурной валидации (schema-strict): {e}"))?;
+    }
+
+    // 4. F13: семантическая валидация. При --validate — только проверка и выход.
     let errors = validate_profile(&profile);
     if !errors.is_empty() {
         eprint!("{}", format_errors(&errors));
@@ -59,13 +68,13 @@ async fn run() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
-    // 4. --print-config: вывести итоговый профиль и выйти.
+    // 5. --print-config: вывести итоговый профиль и выйти.
     if args.print_config {
         println!("{}", serde_json::to_string_pretty(&profile)?);
         return Ok(ExitCode::SUCCESS);
     }
 
-    // 5. Запуск.
+    // 6. Запуск.
     // N7: create_metrics() теперь возвращает Result<Metrics, MetricsError>.
     // Раньше здесь был `.expect()` — при ошибке инициализации registry процесс
     // падал с паникой. Теперь ошибка всплывает через `?` как `anyhow::Error`

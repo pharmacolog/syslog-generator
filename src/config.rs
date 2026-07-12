@@ -1,5 +1,9 @@
+use crate::error::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::io::Read;
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TargetConfig {
@@ -152,9 +156,20 @@ pub struct Phase {
     /// Условие остановки по общему количеству сообщений. None = не ограничивать по количеству.
     #[serde(default)]
     pub total_messages: Option<u64>,
-    #[serde(default)]
+    /// F14: мультишаблоны — если задано и templates, и templates_file —
+    /// приоритет у schema, иначе выбирается случайный из списка templates.
+    /// `skip_serializing_if = "Vec::is_empty"` нужно для D3: пустой массив
+    /// не сериализуется в JSON, и тогда anyOf `required: ["templates"]` в
+    /// schemas/profile.schema.json корректно отлавливает фазы без
+    /// контент-источника (только templates_file / schema_file).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub templates: Vec<String>,
+    /// `skip_serializing_if = "Option::is_none"` нужно для D3: None не
+    /// сериализуется в JSON, и тогда anyOf `required: ["templates_file"]`
+    /// в schema корректно отлавливает фазы без этого источника.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub templates_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema_file: Option<String>,
     pub format: Option<String>,
     pub output: Option<String>,
@@ -209,5 +224,238 @@ impl Default for Profile {
             phases: Vec::new(),
             metrics_addr: None,
         }
+    }
+}
+
+/// Загрузить профиль из JSON-строки.
+///
+/// Используется в основном из main.rs и тестов; внешние пользователи могут
+/// вызывать [`load_profile_from_path`] для автоопределения формата.
+pub fn load_profile_from_json_str(s: &str) -> Result<Profile, ConfigError> {
+    serde_json::from_str(s).map_err(|source| ConfigError::Json {
+        path: "<inline>".to_string(),
+        source,
+    })
+}
+
+/// Загрузить профиль из YAML-строки (D3, v8.5.0).
+///
+/// `serde_yaml` поддерживает те же serde-дерайвы, что и `serde_json`, поэтому
+/// структура `Profile` парсится идентично. YAML чувствителен к отступам —
+/// неявный фолбэк на JSON не делаем, чтобы ошибка была однозначной.
+pub fn load_profile_from_yaml_str(s: &str) -> Result<Profile, ConfigError> {
+    serde_yaml::from_str(s).map_err(|source| ConfigError::Yaml {
+        path: "<inline>".to_string(),
+        source,
+    })
+}
+
+/// Загрузить профиль из файла с автоопределением формата по расширению.
+///
+/// - `.json`  → [`load_profile_from_json_str`]
+/// - `.yaml` / `.yml` → [`load_profile_from_yaml_str`]
+/// - любое другое расширение → `ConfigError::UnsupportedFormat`
+///
+/// Расширение проверяется **до** открытия файла — иначе пользователь с
+/// опечаткой в имени (`profile.jsn`) сначала получает `Io(NotFound)`, и
+/// только потом, посмотрев расширение, понимает что файл бы и не
+/// распарсился. Это намеренная строгость.
+pub fn load_profile_from_path(path: &Path) -> Result<Profile, ConfigError> {
+    let path_str = path.to_string_lossy().into_owned();
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    // Сначала проверяем расширение.
+    match ext.as_deref() {
+        Some("json") => {}
+        Some("yaml") | Some("yml") => {}
+        Some(other) => {
+            return Err(ConfigError::UnsupportedFormat {
+                path: path_str,
+                extension: other.to_string(),
+            });
+        }
+        None => {
+            return Err(ConfigError::UnsupportedFormat {
+                path: path_str,
+                extension: String::new(),
+            });
+        }
+    }
+    // Только теперь читаем файл.
+    let mut file = fs::File::open(path).map_err(|source| ConfigError::Io {
+        path: path_str.clone(),
+        source,
+    })?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf)
+        .map_err(|source| ConfigError::Io {
+            path: path_str.clone(),
+            source,
+        })?;
+    match ext.as_deref() {
+        Some("json") => serde_json::from_str(&buf).map_err(|source| ConfigError::Json {
+            path: path_str,
+            source,
+        }),
+        Some("yaml") | Some("yml") => {
+            serde_yaml::from_str(&buf).map_err(|source| ConfigError::Yaml {
+                path: path_str,
+                source,
+            })
+        }
+        _ => unreachable!("расширение уже проверено выше"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn minimal_yaml() -> &'static str {
+        r#"
+targets:
+  - address: 127.0.0.1:514
+    transport: tcp
+distribution: round-robin
+shutdown:
+  mode: drain
+  drain_timeout_secs: 15
+phases:
+  - name: yaml-test
+    messages_per_second: 10
+    total_messages: 5
+    templates:
+      - "yaml seq={{sequence}}"
+"#
+    }
+
+    #[test]
+    fn load_profile_from_yaml_str_parses_minimal() {
+        let p = load_profile_from_yaml_str(minimal_yaml()).expect("yaml должен парситься");
+        assert_eq!(p.distribution, "round-robin");
+        assert_eq!(p.phases.len(), 1);
+        assert_eq!(p.phases[0].name, "yaml-test");
+        assert_eq!(p.phases[0].total_messages, Some(5));
+        assert_eq!(p.phases[0].templates, vec!["yaml seq={{sequence}}"]);
+        assert_eq!(p.targets.len(), 1);
+        assert_eq!(p.targets[0].address, "127.0.0.1:514");
+        assert_eq!(p.targets[0].transport, "tcp");
+    }
+
+    #[test]
+    fn load_profile_from_yaml_str_parses_load_shape_burst() {
+        let yaml = r#"
+targets:
+  - address: 127.0.0.1:514
+    transport: tcp
+distribution: round-robin
+phases:
+  - name: burst
+    duration_secs: 60
+    templates: ["x"]
+    load_shape:
+      type: burst
+      base_rate: 100
+      burst_rate: 8000
+      every_secs: 10
+      burst_secs: 2
+"#;
+        let p = load_profile_from_yaml_str(yaml).expect("yaml с load_shape");
+        let shape = p.phases[0]
+            .load_shape
+            .as_ref()
+            .expect("load_shape должна распарситься");
+        match shape {
+            crate::load_shape::LoadShape::Burst {
+                base_rate,
+                burst_rate,
+                every_secs,
+                burst_secs,
+            } => {
+                assert_eq!(*base_rate, 100.0);
+                assert_eq!(*burst_rate, 8000.0);
+                assert_eq!(*every_secs, 10.0);
+                assert_eq!(*burst_secs, 2.0);
+            }
+            other => panic!("ожидался LoadShape::Burst, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_profile_from_yaml_str_reports_yaml_error_with_path() {
+        // Битый YAML — нарушение структуры (несовпадение отступа).
+        let bad = "targets:\n  - address: 127.0.0.1:514\n transport: tcp\n";
+        let e = load_profile_from_yaml_str(bad).unwrap_err();
+        match e {
+            ConfigError::Yaml { path, .. } => assert_eq!(path, "<inline>"),
+            other => panic!("ожидался ConfigError::Yaml, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_profile_from_json_still_works() {
+        let json = r#"{
+            "distribution": "broadcast",
+            "targets": [{"address": "/tmp/x.log", "transport": "file"}],
+            "phases": [{"name": "j", "templates": ["x"]}]
+        }"#;
+        let p = load_profile_from_json_str(json).expect("json должен парситься");
+        assert_eq!(p.distribution, "broadcast");
+        assert_eq!(p.phases.len(), 1);
+    }
+
+    #[test]
+    fn load_profile_from_path_dispatches_by_extension() {
+        let dir = std::env::temp_dir();
+        let json_path = dir.join("sg_cfg_test_dispatch.json");
+        let yaml_path = dir.join("sg_cfg_test_dispatch.yaml");
+        let yml_path = dir.join("sg_cfg_test_dispatch.yml");
+        let unknown_path = dir.join("sg_cfg_test_dispatch.toml");
+
+        let mut files = [
+            (
+                &json_path,
+                r#"{"distribution":"round-robin","phases":[{"name":"j","templates":["x"]}]}"#,
+            ),
+            (&yaml_path, minimal_yaml()),
+            (&yml_path, minimal_yaml()),
+        ];
+        for (path, content) in &mut files {
+            let mut f = fs::File::create(path).unwrap();
+            f.write_all(content.as_bytes()).unwrap();
+            f.sync_all().unwrap();
+        }
+
+        let p_json = load_profile_from_path(&json_path).expect("json path");
+        assert_eq!(p_json.distribution, "round-robin");
+        let p_yaml = load_profile_from_path(&yaml_path).expect("yaml path");
+        assert_eq!(p_yaml.distribution, "round-robin");
+        assert_eq!(p_yaml.phases[0].name, "yaml-test");
+        let p_yml = load_profile_from_path(&yml_path).expect("yml path");
+        assert_eq!(p_yml.phases[0].name, "yaml-test");
+
+        let e = load_profile_from_path(&unknown_path).unwrap_err();
+        match e {
+            ConfigError::UnsupportedFormat { extension, .. } => {
+                assert_eq!(extension, "toml");
+            }
+            other => panic!("ожидался UnsupportedFormat, got: {other:?}"),
+        }
+
+        // Cleanup.
+        for (path, _) in &files {
+            let _ = fs::remove_file(path);
+        }
+        let _ = fs::remove_file(&unknown_path);
+    }
+
+    #[test]
+    fn load_profile_from_path_io_error_for_missing_file() {
+        let path = std::env::temp_dir().join("sg_cfg_test_definitely_missing_xyz.json");
+        let e = load_profile_from_path(&path).unwrap_err();
+        assert!(matches!(e, ConfigError::Io { .. }), "got: {e:?}");
     }
 }

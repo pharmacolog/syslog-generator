@@ -22,7 +22,8 @@
       "messages_per_second": 6,
       "templates": [
         "rr seq={{sequence}}"
-      ]
+      ],
+      "total_messages": 100
     }
   ]
 }

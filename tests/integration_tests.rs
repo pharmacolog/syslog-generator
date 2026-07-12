@@ -1358,6 +1358,90 @@ async fn test_n3_metrics_size_and_latency_exported() {
     let _ = fs::remove_file(out_path);
 }
 
+/// N2 (v8.6.0): `syslog_messages_by_format_total` инкрементируется в
+/// `run_phase_multi` для каждой фазы по её `format_type()`. Проверяем что
+/// после прогона mixed-target профиля (raw + rfc5424) обе серии присутствуют.
+#[tokio::test]
+async fn test_n2_messages_by_format_total_exported() {
+    let dir = std::env::temp_dir();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let file_path = dir.join(format!("sg_n2_fmt_{nanos}.log"));
+    let _ = fs::remove_file(&file_path);
+
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.to_string_lossy().to_string(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: Default::default(),
+        phases: vec![
+            Phase {
+                name: "raw_phase".into(),
+                total_messages: Some(3),
+                messages_per_second: 1000,
+                seed: Some(1),
+                format: Some("raw".into()),
+                templates: vec!["raw {{sequence}}".into()],
+                ..Default::default()
+            },
+            Phase {
+                name: "rfc_phase".into(),
+                total_messages: Some(2),
+                messages_per_second: 1000,
+                seed: Some(2),
+                format: Some("rfc5424".into()),
+                templates: vec!["rfc {{sequence}}".into()],
+                ..Default::default()
+            },
+        ],
+        metrics_addr: None,
+    };
+
+    let metrics = create_metrics().expect("create_metrics ok in test");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
+
+    // CounterVec без наблюдённых меток не экспортируется до первого inc —
+    // здесь инкременты были, значит серии должны быть.
+    assert!(
+        out.contains("syslog_messages_by_format_total"),
+        "нет syslog_messages_by_format_total в выводе, got:\n{out}"
+    );
+    // raw_phase дал 3 инкремента с label format="raw".
+    assert!(
+        out.lines().any(|l| {
+            l.starts_with("syslog_messages_by_format_total{format=\"raw\"}")
+                && l.trim_end().ends_with(" 3")
+        }),
+        "ожидалась серия format=raw со значением 3, got:\n{out}"
+    );
+    // rfc_phase дал 2 инкремента с label format="rfc5424".
+    assert!(
+        out.lines().any(|l| {
+            l.starts_with("syslog_messages_by_format_total{format=\"rfc5424\"}")
+                && l.trim_end().ends_with(" 2")
+        }),
+        "ожидалась серия format=rfc5424 со значением 2, got:\n{out}"
+    );
+
+    // N2: cpu_usage_percent и memory_usage_bytes удалены.
+    assert!(
+        !out.contains("syslog_cpu_usage_percent"),
+        "cpu_usage_percent должен быть удалён в N2"
+    );
+    assert!(
+        !out.contains("syslog_memory_usage_bytes"),
+        "memory_usage_bytes должен быть удалён в N2"
+    );
+
+    let _ = fs::remove_file(&file_path);
+}
+
 #[tokio::test]
 async fn test_n3_reconnect_metric_registered_and_scrapeable() {
     // Счётчик syslog_reconnects_total — это CounterVec с метками; Prometheus

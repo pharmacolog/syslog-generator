@@ -44,9 +44,23 @@ fn bench_generate_message_template(c: &mut Criterion) {
 
 fn bench_dispatcher_weighted(c: &mut Criterion) {
     let targets = vec![
-        TargetConfig { address: "a".into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: "b".into(), transport: "tcp".into(), weight: 3, ..Default::default() },
-        TargetConfig { address: "c".into(), transport: "udp".into(), weight: 2, ..Default::default() },
+        TargetConfig {
+            address: "a".into(),
+            transport: "file".into(),
+            ..Default::default()
+        },
+        TargetConfig {
+            address: "b".into(),
+            transport: "tcp".into(),
+            weight: 3,
+            ..Default::default()
+        },
+        TargetConfig {
+            address: "c".into(),
+            transport: "udp".into(),
+            weight: 2,
+            ..Default::default()
+        },
     ];
     c.bench_function("create_dispatcher_weighted", |b| {
         b.iter(|| {

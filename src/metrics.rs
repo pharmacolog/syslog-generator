@@ -15,7 +15,9 @@
 //! обёрнуты в `Arc`, поэтому клонирование дешёвое).
 
 use crate::error::MetricsError;
-use prometheus::{CounterVec, Encoder, Gauge, Histogram, HistogramOpts, IntCounter, Registry, TextEncoder};
+use prometheus::{
+    CounterVec, Encoder, Gauge, Histogram, HistogramOpts, IntCounter, Registry, TextEncoder,
+};
 
 #[derive(Clone)]
 pub struct Metrics {
@@ -81,11 +83,7 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "Total bytes sent",
         &["transport", "phase", "target"],
     )?;
-    let errors_total = make_counter_vec(
-        "syslog_errors_total",
-        "Total send errors",
-        &["target"],
-    )?;
+    let errors_total = make_counter_vec("syslog_errors_total", "Total send errors", &["target"])?;
     let messages_by_sink = make_counter_vec(
         "syslog_messages_by_sink_total",
         "Messages by sink",
@@ -102,8 +100,8 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "syslog_send_duration_seconds",
         "Per-message send latency into the transport (write/send syscall)",
         Some(vec![
-            0.000005, 0.00001, 0.000025, 0.00005, 0.0001, 0.00025, 0.0005, 0.001,
-            0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
+            0.000005, 0.00001, 0.000025, 0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005,
+            0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
         ]),
     )?;
     // Размер отправленного сообщения в байтах (тело SYSLOG-MSG без фрейминга).
@@ -111,8 +109,8 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "syslog_message_size_bytes",
         "Size of generated syslog message payload in bytes",
         Some(vec![
-            16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 2048.0, 4096.0,
-            8192.0, 16384.0, 32768.0, 65536.0,
+            16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 2048.0, 4096.0, 8192.0, 16384.0,
+            32768.0, 65536.0,
         ]),
     )?;
     // Число переустановок соединения (TCP/TLS) после ошибки записи.
@@ -129,19 +127,14 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "syslog_memory_usage_bytes",
         "Memory usage in bytes of generator process",
     )?;
-    let shutdowns_total = make_int_counter(
-        "syslog_shutdowns_total",
-        "Total shutdown events",
-    )?;
+    let shutdowns_total = make_int_counter("syslog_shutdowns_total", "Total shutdown events")?;
     let drain_duration = make_histogram(
         "syslog_drain_duration_seconds",
         "Graceful drain duration",
         Some(vec![0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0]),
     )?;
-    let drain_timeouts_total = make_int_counter(
-        "syslog_drain_timeouts_total",
-        "Total drain timeout events",
-    )?;
+    let drain_timeouts_total =
+        make_int_counter("syslog_drain_timeouts_total", "Total drain timeout events")?;
     let messages_drained_total = make_counter_vec(
         "syslog_messages_drained_total",
         "Messages drained during shutdown",
@@ -153,26 +146,61 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
     // `.unwrap()` в кодовой базе (был в цикле `register(...).unwrap()`).
     let pairs: Vec<(&str, Box<dyn prometheus::core::Collector>)> = vec![
         ("syslog_messages_total", Box::new(messages_total.clone())),
-        ("syslog_messages_generated_total", Box::new(messages_generated_total.clone())),
-        ("syslog_target_rate_messages_per_second", Box::new(target_rate.clone())),
-        ("syslog_achieved_rate_messages_per_second", Box::new(achieved_rate.clone())),
+        (
+            "syslog_messages_generated_total",
+            Box::new(messages_generated_total.clone()),
+        ),
+        (
+            "syslog_target_rate_messages_per_second",
+            Box::new(target_rate.clone()),
+        ),
+        (
+            "syslog_achieved_rate_messages_per_second",
+            Box::new(achieved_rate.clone()),
+        ),
         ("syslog_active_workers", Box::new(active_workers.clone())),
         ("syslog_bytes_total", Box::new(bytes_total.clone())),
         ("syslog_errors_total", Box::new(errors_total.clone())),
-        ("syslog_messages_by_sink_total", Box::new(messages_by_sink.clone())),
-        ("syslog_generate_duration_seconds", Box::new(generate_duration.clone())),
-        ("syslog_send_duration_seconds", Box::new(send_duration.clone())),
-        ("syslog_message_size_bytes", Box::new(message_size_bytes.clone())),
-        ("syslog_reconnects_total", Box::new(reconnects_total.clone())),
+        (
+            "syslog_messages_by_sink_total",
+            Box::new(messages_by_sink.clone()),
+        ),
+        (
+            "syslog_generate_duration_seconds",
+            Box::new(generate_duration.clone()),
+        ),
+        (
+            "syslog_send_duration_seconds",
+            Box::new(send_duration.clone()),
+        ),
+        (
+            "syslog_message_size_bytes",
+            Box::new(message_size_bytes.clone()),
+        ),
+        (
+            "syslog_reconnects_total",
+            Box::new(reconnects_total.clone()),
+        ),
         ("syslog_cpu_usage_percent", Box::new(cpu_usage.clone())),
         ("syslog_memory_usage_bytes", Box::new(memory_usage.clone())),
         ("syslog_shutdowns_total", Box::new(shutdowns_total.clone())),
-        ("syslog_drain_duration_seconds", Box::new(drain_duration.clone())),
-        ("syslog_drain_timeouts_total", Box::new(drain_timeouts_total.clone())),
-        ("syslog_messages_drained_total", Box::new(messages_drained_total.clone())),
+        (
+            "syslog_drain_duration_seconds",
+            Box::new(drain_duration.clone()),
+        ),
+        (
+            "syslog_drain_timeouts_total",
+            Box::new(drain_timeouts_total.clone()),
+        ),
+        (
+            "syslog_messages_drained_total",
+            Box::new(messages_drained_total.clone()),
+        ),
     ];
     for (name, c) in pairs {
-        registry.register(c).map_err(|source| MetricsError::register(name, source))?;
+        registry
+            .register(c)
+            .map_err(|source| MetricsError::register(name, source))?;
     }
 
     Ok(Metrics {
@@ -232,10 +260,15 @@ fn make_gauge(name: &str, help: &str) -> Result<Gauge, MetricsError> {
 }
 
 fn make_int_counter(name: &str, help: &str) -> Result<IntCounter, MetricsError> {
-    IntCounter::new(name, help).map_err(|source| MetricsError::construct("IntCounter", name, source))
+    IntCounter::new(name, help)
+        .map_err(|source| MetricsError::construct("IntCounter", name, source))
 }
 
-fn make_histogram(name: &str, help: &str, buckets: Option<Vec<f64>>) -> Result<Histogram, MetricsError> {
+fn make_histogram(
+    name: &str,
+    help: &str,
+    buckets: Option<Vec<f64>>,
+) -> Result<Histogram, MetricsError> {
     let opts = HistogramOpts::new(name, help);
     let opts = match buckets {
         Some(b) => opts.buckets(b),

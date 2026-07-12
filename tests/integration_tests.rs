@@ -1,12 +1,16 @@
-
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
+use syslog_generator::{
+    apply_overrides, apply_protobuf_schema, create_dispatcher, create_metrics, gather_metrics,
+    generate_message, parse_target, render_template, run_profile, serialize_protobuf,
+    validate_profile, Overrides, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig,
+    TargetConfig, ValidationError,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
-use syslog_generator::{apply_overrides, apply_protobuf_schema, create_dispatcher, create_metrics, gather_metrics, generate_message, parse_target, render_template, run_profile, serialize_protobuf, validate_profile, Overrides, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, TargetConfig, ValidationError};
 
 /// Self-signed сертификат + ключ для TLS-тестов, сгенерированные через
 /// системный `openssl req` с явным config-файлом. Кэшируется на процесс —
@@ -75,20 +79,33 @@ fn openssl_self_signed() -> &'static TestTlsMaterial {
         fs::write(&cnf_path, OPENSSL_SERVER_CNF).expect("write openssl config");
         let status = Command::new("openssl")
             .args([
-                "req", "-x509",
-                "-newkey", "rsa:2048",
-                "-keyout", key_path.to_str().unwrap(),
-                "-out", cert_path.to_str().unwrap(),
-                "-days", "365",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-keyout",
+                key_path.to_str().unwrap(),
+                "-out",
+                cert_path.to_str().unwrap(),
+                "-days",
+                "365",
                 "-nodes",
-                "-config", cnf_path.to_str().unwrap(),
+                "-config",
+                cnf_path.to_str().unwrap(),
             ])
             .status()
             .expect("не удалось запустить openssl (проверьте, что openssl в PATH)");
-        assert!(status.success(), "openssl req завершился с ошибкой: {status:?}");
+        assert!(
+            status.success(),
+            "openssl req завершился с ошибкой: {status:?}"
+        );
         let cert_pem = fs::read(&cert_path).expect("read cert.pem");
         let key_pem = fs::read(&key_path).expect("read key.pem");
-        TestTlsMaterial { cert_pem, key_pem, cert_path }
+        TestTlsMaterial {
+            cert_pem,
+            key_pem,
+            cert_path,
+        }
     })
 }
 
@@ -108,7 +125,11 @@ async fn test_metrics_presence() {
     assert!(empty.contains("syslog_generate_duration_seconds"));
 
     let profile = make_profile(
-        vec![TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() }],
+        vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         "round-robin",
         1,
         "metrics",
@@ -134,11 +155,20 @@ fn test_template_render() {
 #[test]
 fn test_weighted_dispatcher() {
     let targets = vec![
-        TargetConfig { address: "a".into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: "b".into(), transport: "file".into(), weight: 3, ..Default::default() },
+        TargetConfig {
+            address: "a".into(),
+            transport: "file".into(),
+            ..Default::default()
+        },
+        TargetConfig {
+            address: "b".into(),
+            transport: "file".into(),
+            weight: 3,
+            ..Default::default()
+        },
     ];
     let seq = create_dispatcher(&targets, "weighted");
-    assert_eq!(seq, vec![0,1,1,1]);
+    assert_eq!(seq, vec![0, 1, 1, 1]);
 }
 
 #[test]
@@ -154,7 +184,11 @@ fn test_protobuf_mapping() {
 
 #[test]
 fn test_generate_message_from_template() {
-    let phase = Phase { name: "test".into(), templates: vec!["app={{real_app}} seq={{sequence}}".into()], ..Default::default() };
+    let phase = Phase {
+        name: "test".into(),
+        templates: vec!["app={{real_app}} seq={{sequence}}".into()],
+        ..Default::default()
+    };
     let msg = generate_message(&phase, 7).unwrap();
     let s = String::from_utf8(msg).unwrap();
     assert!(s.contains("app=test"));
@@ -171,7 +205,11 @@ async fn spawn_tcp_collector(expected: usize) -> (String, tokio::task::JoinHandl
             let mut buf = vec![0u8; 1024];
             let n = stream.read(&mut buf).await.unwrap();
             let s = String::from_utf8_lossy(&buf[..n]).to_string();
-            all.extend(s.lines().map(|x| x.to_string()).filter(|x| !x.trim().is_empty()));
+            all.extend(
+                s.lines()
+                    .map(|x| x.to_string())
+                    .filter(|x| !x.trim().is_empty()),
+            );
         }
         all
     });
@@ -187,7 +225,11 @@ async fn spawn_udp_collector(expected: usize) -> (String, tokio::task::JoinHandl
             let mut buf = vec![0u8; 1024];
             let (n, _) = sock.recv_from(&mut buf).await.unwrap();
             let s = String::from_utf8_lossy(&buf[..n]).to_string();
-            all.extend(s.lines().map(|x| x.to_string()).filter(|x| !x.trim().is_empty()));
+            all.extend(
+                s.lines()
+                    .map(|x| x.to_string())
+                    .filter(|x| !x.trim().is_empty()),
+            );
         }
         all
     });
@@ -203,7 +245,9 @@ async fn spawn_udp_collector(expected: usize) -> (String, tokio::task::JoinHandl
 /// [`openssl_self_signed`]) — это совместимо с native-tls на всех
 /// поддерживаемых платформах, в отличие от `rcgen`, чей PEM-формат на
 /// некоторых окружениях не парсится `Identity::from_pkcs8`.
-async fn spawn_tls_collector(expected: usize) -> (String, String, tokio::task::JoinHandle<Vec<String>>) {
+async fn spawn_tls_collector(
+    expected: usize,
+) -> (String, String, tokio::task::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let tls = openssl_self_signed();
@@ -231,7 +275,11 @@ async fn spawn_tls_collector(expected: usize) -> (String, String, tokio::task::J
             let mut buf = vec![0u8; 1024];
             let n = tls.read(&mut buf).await.unwrap();
             let s = String::from_utf8_lossy(&buf[..n]).to_string();
-            all.extend(s.lines().map(|x| x.to_string()).filter(|x| !x.trim().is_empty()));
+            all.extend(
+                s.lines()
+                    .map(|x| x.to_string())
+                    .filter(|x| !x.trim().is_empty()),
+            );
         }
         all
     });
@@ -245,7 +293,13 @@ fn make_profile(targets: Vec<TargetConfig>, distribution: &str, count: u64, name
         targets,
         distribution: distribution.into(),
         shutdown: ShutdownConfig::default(),
-        phases: vec![Phase { name: name.into(), messages_per_second: 0, total_messages: Some(count), templates: vec![format!("{} {{{{sequence}}}}", name)], ..Default::default() }],
+        phases: vec![Phase {
+            name: name.into(),
+            messages_per_second: 0,
+            total_messages: Some(count),
+            templates: vec![format!("{} {{{{sequence}}}}", name)],
+            ..Default::default()
+        }],
         metrics_addr: None,
     }
 }
@@ -257,13 +311,41 @@ async fn test_mixed_multi_target_broadcast_end_to_end() {
     let (tcp_addr, tcp_server) = spawn_tcp_collector(1).await;
     let (udp_addr, udp_server) = spawn_udp_collector(1).await;
     let (tls_addr, tls_ca, tls_server) = spawn_tls_collector(1).await;
-    let profile = make_profile(vec![
-        TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: tcp_addr, transport: "tcp".into(), ..Default::default() },
-        TargetConfig { address: udp_addr, transport: "udp".into(), ..Default::default() },
-        TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
-    ], "broadcast", 1, "broadcast");
-    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
+    let profile = make_profile(
+        vec![
+            TargetConfig {
+                address: file_path.into(),
+                transport: "file".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tcp_addr,
+                transport: "tcp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: udp_addr,
+                transport: "udp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tls_addr,
+                transport: "tls".into(),
+                tls_domain: Some("localhost".into()),
+                tls_ca_file: Some(tls_ca.clone()),
+                ..Default::default()
+            },
+        ],
+        "broadcast",
+        1,
+        "broadcast",
+    );
+    run_profile(
+        &profile,
+        create_metrics().expect("create_metrics ok in test"),
+    )
+    .await
+    .unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -283,13 +365,41 @@ async fn test_mixed_multi_target_round_robin_end_to_end() {
     let (tcp_addr, tcp_server) = spawn_tcp_collector(1).await;
     let (udp_addr, udp_server) = spawn_udp_collector(1).await;
     let (tls_addr, tls_ca, tls_server) = spawn_tls_collector(1).await;
-    let profile = make_profile(vec![
-        TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: tcp_addr, transport: "tcp".into(), ..Default::default() },
-        TargetConfig { address: udp_addr, transport: "udp".into(), ..Default::default() },
-        TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
-    ], "round-robin", 4, "rr");
-    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
+    let profile = make_profile(
+        vec![
+            TargetConfig {
+                address: file_path.into(),
+                transport: "file".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tcp_addr,
+                transport: "tcp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: udp_addr,
+                transport: "udp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tls_addr,
+                transport: "tls".into(),
+                tls_domain: Some("localhost".into()),
+                tls_ca_file: Some(tls_ca.clone()),
+                ..Default::default()
+            },
+        ],
+        "round-robin",
+        4,
+        "rr",
+    );
+    run_profile(
+        &profile,
+        create_metrics().expect("create_metrics ok in test"),
+    )
+    .await
+    .unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -309,13 +419,42 @@ async fn test_mixed_multi_target_weighted_end_to_end() {
     let (tcp_addr, tcp_server) = spawn_tcp_collector(1).await;
     let (udp_addr, udp_server) = spawn_udp_collector(2).await;
     let (tls_addr, tls_ca, tls_server) = spawn_tls_collector(1).await;
-    let profile = make_profile(vec![
-        TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: tcp_addr, transport: "tcp".into(), ..Default::default() },
-        TargetConfig { address: udp_addr, transport: "udp".into(), weight: 2, ..Default::default() },
-        TargetConfig { address: tls_addr, transport: "tls".into(), tls_domain: Some("localhost".into()), tls_ca_file: Some(tls_ca.clone()), ..Default::default() },
-    ], "weighted", 5, "weighted");
-    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
+    let profile = make_profile(
+        vec![
+            TargetConfig {
+                address: file_path.into(),
+                transport: "file".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tcp_addr,
+                transport: "tcp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: udp_addr,
+                transport: "udp".into(),
+                weight: 2,
+                ..Default::default()
+            },
+            TargetConfig {
+                address: tls_addr,
+                transport: "tls".into(),
+                tls_domain: Some("localhost".into()),
+                tls_ca_file: Some(tls_ca.clone()),
+                ..Default::default()
+            },
+        ],
+        "weighted",
+        5,
+        "weighted",
+    );
+    run_profile(
+        &profile,
+        create_metrics().expect("create_metrics ok in test"),
+    )
+    .await
+    .unwrap();
     let file_content = fs::read_to_string(file_path).unwrap();
     let tcp = tcp_server.await.unwrap();
     let udp = udp_server.await.unwrap();
@@ -335,7 +474,11 @@ async fn test_total_messages_removes_cap_above_100() {
     let file_path = "cap-removed.log";
     let _ = fs::remove_file(file_path);
     let profile = make_profile(
-        vec![TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() }],
+        vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         "round-robin",
         250,
         "cap",
@@ -357,7 +500,11 @@ async fn test_rate_limiting_respects_target() {
     let file_path = "rate-limited.log";
     let _ = fs::remove_file(file_path);
     let profile = Profile {
-        targets: vec![TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
@@ -374,7 +521,11 @@ async fn test_rate_limiting_respects_target() {
     let content = fs::read_to_string(file_path).unwrap();
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
     // Токен-бакет governor даёт начальный burst (до ~rate) + пополнение за 1с.
-    assert!((40..=110).contains(&lines), "rate-limited count out of range: {}", lines);
+    assert!(
+        (40..=110).contains(&lines),
+        "rate-limited count out of range: {}",
+        lines
+    );
     let _ = fs::remove_file(file_path);
 }
 
@@ -387,7 +538,11 @@ async fn test_load_shape_linear_ramp_volume() {
     let file_path = "loadshape-linear.log";
     let _ = fs::remove_file(file_path);
     let profile = Profile {
-        targets: vec![TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
@@ -395,7 +550,10 @@ async fn test_load_shape_linear_ramp_volume() {
             duration_secs: 2,
             format: Some("raw".into()),
             templates: vec!["ramp {{sequence}}".into()],
-            load_shape: Some(LoadShape::Linear { start_rate: 20.0, end_rate: 220.0 }),
+            load_shape: Some(LoadShape::Linear {
+                start_rate: 20.0,
+                end_rate: 220.0,
+            }),
             ..Default::default()
         }],
         metrics_addr: None,
@@ -406,7 +564,11 @@ async fn test_load_shape_linear_ramp_volume() {
     let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
     // Площадь под линейной кривой за 2с = (20+220)/2 * 2 = 240. Широкий допуск
     // на накладные расходы планировщика/sleep.
-    assert!((150..=340).contains(&lines), "linear ramp volume out of range: {}", lines);
+    assert!(
+        (150..=340).contains(&lines),
+        "linear ramp volume out of range: {}",
+        lines
+    );
     let _ = fs::remove_file(file_path);
 }
 
@@ -418,7 +580,11 @@ async fn test_load_shape_burst_exceeds_base() {
     let file_path = "loadshape-burst.log";
     let _ = fs::remove_file(file_path);
     let profile = Profile {
-        targets: vec![TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
@@ -426,7 +592,12 @@ async fn test_load_shape_burst_exceeds_base() {
             duration_secs: 2,
             format: Some("raw".into()),
             templates: vec!["burst {{sequence}}".into()],
-            load_shape: Some(LoadShape::Burst { base_rate: 10.0, burst_rate: 500.0, every_secs: 1.0, burst_secs: 0.3 }),
+            load_shape: Some(LoadShape::Burst {
+                base_rate: 10.0,
+                burst_rate: 500.0,
+                every_secs: 1.0,
+                burst_secs: 0.3,
+            }),
             ..Default::default()
         }],
         metrics_addr: None,
@@ -443,7 +614,9 @@ async fn test_load_shape_burst_exceeds_base() {
 
 // Коллектор, считающий число принятых TCP-соединений и собирающий строки,
 // пока не наберётся `expected_msgs` сообщений.
-async fn spawn_tcp_conn_counter(expected_msgs: usize) -> (String, tokio::task::JoinHandle<(usize, Vec<String>)>) {
+async fn spawn_tcp_conn_counter(
+    expected_msgs: usize,
+) -> (String, tokio::task::JoinHandle<(usize, Vec<String>)>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let handle = tokio::spawn(async move {
@@ -453,13 +626,16 @@ async fn spawn_tcp_conn_counter(expected_msgs: usize) -> (String, tokio::task::J
         loop {
             {
                 let m = msgs.lock().unwrap();
-                if m.len() >= expected_msgs { break; }
+                if m.len() >= expected_msgs {
+                    break;
+                }
             }
             let accept = listener.accept();
-            let (mut stream, _) = match tokio::time::timeout(std::time::Duration::from_secs(5), accept).await {
-                Ok(Ok(s)) => s,
-                _ => break,
-            };
+            let (mut stream, _) =
+                match tokio::time::timeout(std::time::Duration::from_secs(5), accept).await {
+                    Ok(Ok(s)) => s,
+                    _ => break,
+                };
             *conns.lock().unwrap() += 1;
             let msgs = msgs.clone();
             tokio::spawn(async move {
@@ -470,7 +646,11 @@ async fn spawn_tcp_conn_counter(expected_msgs: usize) -> (String, tokio::task::J
                         Ok(n) => {
                             let s = String::from_utf8_lossy(&buf[..n]).to_string();
                             let mut guard = msgs.lock().unwrap();
-                            guard.extend(s.lines().map(|x| x.to_string()).filter(|x| !x.trim().is_empty()));
+                            guard.extend(
+                                s.lines()
+                                    .map(|x| x.to_string())
+                                    .filter(|x| !x.trim().is_empty()),
+                            );
                         }
                     }
                 }
@@ -488,7 +668,12 @@ async fn test_connection_pool_opens_multiple_connections() {
     // connections=3 на TCP-target должны открыть 3 отдельных соединения (пул воркеров).
     let (tcp_addr, server) = spawn_tcp_conn_counter(30).await;
     let profile = Profile {
-        targets: vec![TargetConfig { address: tcp_addr, transport: "tcp".into(), connections: 3, ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: tcp_addr,
+            transport: "tcp".into(),
+            connections: 3,
+            ..Default::default()
+        }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
@@ -504,10 +689,18 @@ async fn test_connection_pool_opens_multiple_connections() {
     run_profile(&profile, metrics.clone()).await.unwrap();
     let (conns, msgs) = server.await.unwrap();
     assert_eq!(conns, 3, "expected 3 pooled connections, got {}", conns);
-    assert_eq!(msgs.len(), 30, "expected 30 messages delivered, got {}", msgs.len());
+    assert_eq!(
+        msgs.len(),
+        30,
+        "expected 30 messages delivered, got {}",
+        msgs.len()
+    );
     let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
     assert!(out.contains("syslog_active_workers"));
-    assert!(out.contains("syslog_active_workers 3"), "active_workers gauge should equal 3");
+    assert!(
+        out.contains("syslog_active_workers 3"),
+        "active_workers gauge should equal 3"
+    );
 }
 
 // ---- Веха B: валидный syslog (RFC 5424 / RFC 3164 + framing) ----
@@ -528,7 +721,8 @@ fn phase_with_format(fmt: &str, syslog: syslog_generator::SyslogConfig, template
 fn test_rfc5424_message_is_valid() {
     use syslog_generator::SyslogConfig;
     let syslog = SyslogConfig {
-        facility: 4, severity: 2, // PRI = 34
+        facility: 4,
+        severity: 2, // PRI = 34
         hostname: "myhost".into(),
         app_name: "myapp".into(),
         procid: "999".into(),
@@ -544,14 +738,21 @@ fn test_rfc5424_message_is_valid() {
     let parts: Vec<&str> = msg.splitn(8, ' ').collect();
     assert_eq!(parts[0], "<34>1");
     // TIMESTAMP RFC3339 с миллисекундами и Z.
-    assert!(parts[1].ends_with('Z') && parts[1].contains('T') && parts[1].contains('.'),
-        "bad TIMESTAMP: {}", parts[1]);
+    assert!(
+        parts[1].ends_with('Z') && parts[1].contains('T') && parts[1].contains('.'),
+        "bad TIMESTAMP: {}",
+        parts[1]
+    );
     assert_eq!(parts[2], "myhost");
     assert_eq!(parts[3], "myapp");
     assert_eq!(parts[4], "999");
     assert_eq!(parts[5], "MSG01");
     assert_eq!(parts[6], "[ex@32473"); // SD разбит по пробелу внутри
-    assert!(parts[7].starts_with("k=\"v\"] user login 7"), "bad SD/MSG: {}", parts[7]);
+    assert!(
+        parts[7].starts_with("k=\"v\"] user login 7"),
+        "bad SD/MSG: {}",
+        parts[7]
+    );
 }
 
 #[test]
@@ -561,26 +762,36 @@ fn test_rfc5424_nilvalues_and_pri_default() {
     let phase = phase_with_format("rfc5424", SyslogConfig::default(), "hello");
     let msg = String::from_utf8(generate_message(&phase, 1).unwrap()).unwrap();
     assert!(msg.starts_with("<14>1 "));
-    assert!(msg.contains(" - - - hello") || msg.ends_with(" - - - hello"),
-        "expected NILVALUEs for procid/msgid/sd: {}", msg);
+    assert!(
+        msg.contains(" - - - hello") || msg.ends_with(" - - - hello"),
+        "expected NILVALUEs for procid/msgid/sd: {}",
+        msg
+    );
 }
 
 #[test]
 fn test_rfc5424_bom_prefixes_msg() {
     use syslog_generator::SyslogConfig;
-    let sc = SyslogConfig { bom: true, ..Default::default() };
+    let sc = SyslogConfig {
+        bom: true,
+        ..Default::default()
+    };
     let phase = phase_with_format("rfc5424", sc, "payload");
     let bytes = generate_message(&phase, 1).unwrap();
     // BOM (EF BB BF) должен стоять непосредственно перед MSG.
     let needle = [0xEF, 0xBB, 0xBF, b'p', b'a', b'y'];
-    assert!(bytes.windows(needle.len()).any(|w| w == needle), "BOM not found before MSG");
+    assert!(
+        bytes.windows(needle.len()).any(|w| w == needle),
+        "BOM not found before MSG"
+    );
 }
 
 #[test]
 fn test_rfc3164_message_is_valid() {
     use syslog_generator::SyslogConfig;
     let sc = SyslogConfig {
-        facility: 1, severity: 6, // PRI = 14
+        facility: 1,
+        severity: 6, // PRI = 14
         hostname: "srv1".into(),
         app_name: "sshd".into(),
         procid: "1234".into(),
@@ -592,7 +803,11 @@ fn test_rfc3164_message_is_valid() {
     let msg = String::from_utf8(generate_message(&phase, 1).unwrap()).unwrap();
     assert!(msg.starts_with("<14>"), "bad PRI: {}", msg);
     // <PRI>Mmm dd hh:mm:ss srv1 sshd[1234]: session opened
-    assert!(msg.contains(" srv1 sshd[1234]: session opened"), "bad RFC3164 body: {}", msg);
+    assert!(
+        msg.contains(" srv1 sshd[1234]: session opened"),
+        "bad RFC3164 body: {}",
+        msg
+    );
 }
 
 #[test]
@@ -610,13 +825,18 @@ async fn test_octet_counting_framing_over_tcp() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let server = tokio::spawn(async move {
-        let (mut stream, _) = tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
-            .await.unwrap().unwrap();
+        let (mut stream, _) =
+            tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                .await
+                .unwrap()
+                .unwrap();
         let mut buf = Vec::new();
         let mut tmp = vec![0u8; 4096];
         // Читаем, пока есть данные (до закрытия отправителем).
         loop {
-            match tokio::time::timeout(std::time::Duration::from_millis(800), stream.read(&mut tmp)).await {
+            match tokio::time::timeout(std::time::Duration::from_millis(800), stream.read(&mut tmp))
+                .await
+            {
                 Ok(Ok(0)) | Err(_) => break,
                 Ok(Ok(n)) => buf.extend_from_slice(&tmp[..n]),
                 Ok(Err(_)) => break,
@@ -625,33 +845,78 @@ async fn test_octet_counting_framing_over_tcp() {
         buf
     });
     let profile = Profile {
-        targets: vec![TargetConfig { address: addr, transport: "tcp".into(), framing: "octet-counting".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: addr,
+            transport: "tcp".into(),
+            framing: "octet-counting".into(),
+            ..Default::default()
+        }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
-        phases: vec![phase_with_format("rfc5424", syslog_generator::SyslogConfig::default(), "octet test")],
+        phases: vec![phase_with_format(
+            "rfc5424",
+            syslog_generator::SyslogConfig::default(),
+            "octet test",
+        )],
         metrics_addr: None,
     };
-    run_profile(&profile, create_metrics().expect("create_metrics ok in test")).await.unwrap();
+    run_profile(
+        &profile,
+        create_metrics().expect("create_metrics ok in test"),
+    )
+    .await
+    .unwrap();
     let raw = server.await.unwrap();
     let s = String::from_utf8(raw).unwrap();
     // Формат: `<N> SP SYSLOG-MSG`, где первое поле — длина в октетах.
     let sp = s.find(' ').expect("no MSG-LEN prefix");
     let msg_len: usize = s[..sp].parse().expect("MSG-LEN not a number");
     let payload = &s[sp + 1..];
-    assert_eq!(payload.len(), msg_len, "octet count mismatch: declared {}, actual {}", msg_len, payload.len());
-    assert!(payload.starts_with("<14>1 "), "framed payload is not RFC5424: {}", payload);
-    assert!(payload.ends_with("octet test"), "unexpected MSG: {}", payload);
+    assert_eq!(
+        payload.len(),
+        msg_len,
+        "octet count mismatch: declared {}, actual {}",
+        msg_len,
+        payload.len()
+    );
+    assert!(
+        payload.starts_with("<14>1 "),
+        "framed payload is not RFC5424: {}",
+        payload
+    );
+    assert!(
+        payload.ends_with("octet test"),
+        "unexpected MSG: {}",
+        payload
+    );
 }
 
 #[tokio::test]
 async fn test_negative_paths_connection_failures_record_errors() {
     let file_path = "negative-ok.log";
     let _ = fs::remove_file(file_path);
-    let profile = make_profile(vec![
-        TargetConfig { address: file_path.into(), transport: "file".into(), ..Default::default() },
-        TargetConfig { address: "127.0.0.1:9".into(), transport: "tcp".into(), ..Default::default() },
-        TargetConfig { address: "127.0.0.1:9".into(), transport: "tls".into(), ..Default::default() },
-    ], "broadcast", 1, "neg");
+    let profile = make_profile(
+        vec![
+            TargetConfig {
+                address: file_path.into(),
+                transport: "file".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: "127.0.0.1:9".into(),
+                transport: "tcp".into(),
+                ..Default::default()
+            },
+            TargetConfig {
+                address: "127.0.0.1:9".into(),
+                transport: "tls".into(),
+                ..Default::default()
+            },
+        ],
+        "broadcast",
+        1,
+        "neg",
+    );
     let metrics = create_metrics().expect("create_metrics ok in test");
     let _ = run_profile(&profile, metrics.clone()).await;
     let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
@@ -664,7 +929,9 @@ async fn test_negative_paths_connection_failures_record_errors() {
 
 fn write_tmp(name: &str, content: &str) -> String {
     let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
     let path = std::env::temp_dir().join(format!("sg_{}_{}.json", name, nanos));
     fs::write(&path, content).unwrap();
     path.to_string_lossy().to_string()
@@ -674,13 +941,18 @@ fn write_tmp(name: &str, content: &str) -> String {
 fn test_f4_seed_reproducibility() {
     // Одинаковый seed → одинаковая последовательность сообщений (детерминизм).
     let phase = Phase {
-        name: "det".into(), seed: Some(12345),
+        name: "det".into(),
+        seed: Some(12345),
         format: Some("raw".into()),
         templates: vec!["{{faker.ipv4}}|{{faker.uuid}}|{{faker.username}}".into()],
         ..Default::default()
     };
-    let a: Vec<String> = (0..10).map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap()).collect();
-    let b: Vec<String> = (0..10).map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap()).collect();
+    let a: Vec<String> = (0..10)
+        .map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap())
+        .collect();
+    let b: Vec<String> = (0..10)
+        .map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap())
+        .collect();
     assert_eq!(a, b, "тот же seed должен давать тот же вывод");
     // Соседние seq различаются.
     assert_ne!(a[0], a[1]);
@@ -702,8 +974,13 @@ fn test_f4_multifield_schema_deterministic_order() {
         }
     }"#;
     let path = write_tmp("multifield", schema);
-    let phase = Phase { name: "mf".into(), seed: Some(555), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "mf".into(),
+        seed: Some(555),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     // Многократные вызовы для одного seq обязаны совпадать (стабильный порядок полей).
     let ref_msg = String::from_utf8(generate_message(&phase, 3).unwrap()).unwrap();
     for _ in 0..50 {
@@ -716,8 +993,13 @@ fn test_f4_multifield_schema_deterministic_order() {
 #[test]
 fn test_f4_different_seed_differs() {
     let mk = |seed: u64| {
-        let p = Phase { name: "d".into(), seed: Some(seed), format: Some("raw".into()),
-            templates: vec!["{{faker.uuid}}".into()], ..Default::default() };
+        let p = Phase {
+            name: "d".into(),
+            seed: Some(seed),
+            format: Some("raw".into()),
+            templates: vec!["{{faker.uuid}}".into()],
+            ..Default::default()
+        };
         String::from_utf8(generate_message(&p, 1).unwrap()).unwrap()
     };
     assert_ne!(mk(1), mk(2));
@@ -725,9 +1007,16 @@ fn test_f4_different_seed_differs() {
 
 #[test]
 fn test_f5_faker_tokens_in_default_values() {
-    let phase = Phase { name: "f".into(), seed: Some(7), format: Some("raw".into()),
-        templates: vec!["ip={{faker.ipv4}} mac={{faker.mac}} st={{faker.http_status}} ua={{faker.user_agent}}".into()],
-        ..Default::default() };
+    let phase = Phase {
+        name: "f".into(),
+        seed: Some(7),
+        format: Some("raw".into()),
+        templates: vec![
+            "ip={{faker.ipv4}} mac={{faker.mac}} st={{faker.http_status}} ua={{faker.user_agent}}"
+                .into(),
+        ],
+        ..Default::default()
+    };
     let s = String::from_utf8(generate_message(&phase, 1).unwrap()).unwrap();
     assert!(!s.contains("{{"), "остались нерендеренные токены: {s}");
     // ipv4 — 4 октета
@@ -748,11 +1037,24 @@ fn test_f5_schema_int_range_and_string_len() {
         }
     }"#;
     let path = write_tmp("intstr", schema);
-    let phase = Phase { name: "sc".into(), seed: Some(3), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "sc".into(),
+        seed: Some(3),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     for i in 0..50 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
-        let n: i64 = s.split("n=").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+        let n: i64 = s
+            .split("n=")
+            .nth(1)
+            .unwrap()
+            .split(' ')
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
         assert!((100..=105).contains(&n), "int вне диапазона: {n}");
         let sv = s.split("s=").nth(1).unwrap();
         assert_eq!(sv.len(), 12, "string len != 12: {sv}");
@@ -768,8 +1070,13 @@ fn test_f6_weighted_enum_distribution() {
         "fields": {"k": {"type":"enum","values":["a","b","c"],"distribution":"weighted","weights":[0,1,0]}}
     }"#;
     let path = write_tmp("wenum", schema);
-    let phase = Phase { name: "w".into(), seed: Some(4), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "w".into(),
+        seed: Some(4),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     for i in 0..30 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
         assert_eq!(s, "b");
@@ -784,22 +1091,41 @@ fn test_f6_zipf_enum_hot_key() {
         "fields": {"k": {"type":"enum","values":["r1","r2","r3","r4","r5"],"distribution":"zipf","zipf_exponent":1.3}}
     }"#;
     let path = write_tmp("zenum", schema);
-    let phase = Phase { name: "z".into(), seed: Some(5), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
-    let mut c_r1 = 0; let mut c_r5 = 0;
+    let phase = Phase {
+        name: "z".into(),
+        seed: Some(5),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
+    let mut c_r1 = 0;
+    let mut c_r5 = 0;
     for i in 0..3000 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
-        if s == "r1" { c_r1 += 1; }
-        if s == "r5" { c_r5 += 1; }
+        if s == "r1" {
+            c_r1 += 1;
+        }
+        if s == "r5" {
+            c_r5 += 1;
+        }
     }
-    assert!(c_r1 > c_r5, "zipf: горячий ключ r1({c_r1}) должен доминировать над r5({c_r5})");
+    assert!(
+        c_r1 > c_r5,
+        "zipf: горячий ключ r1({c_r1}) должен доминировать над r5({c_r5})"
+    );
     let _ = fs::remove_file(path);
 }
 
 #[test]
 fn test_f6_padding_reaches_size() {
-    let phase = Phase { name: "p".into(), seed: Some(6), format: Some("raw".into()),
-        templates: vec!["x".into()], pad_to_bytes: Some(64), ..Default::default() };
+    let phase = Phase {
+        name: "p".into(),
+        seed: Some(6),
+        format: Some("raw".into()),
+        templates: vec!["x".into()],
+        pad_to_bytes: Some(64),
+        ..Default::default()
+    };
     let s = generate_message(&phase, 1).unwrap();
     assert_eq!(s.len(), 64, "паддинг должен добить до 64 байт");
     assert!(s.starts_with(b"x "));
@@ -808,21 +1134,34 @@ fn test_f6_padding_reaches_size() {
 #[test]
 fn test_f14_multi_template_uses_more_than_first() {
     // Три разных шаблона; при вариативном выборе должны встретиться минимум два.
-    let phase = Phase { name: "mt".into(), seed: Some(99), format: Some("raw".into()),
-        templates: vec!["AAA".into(), "BBB".into(), "CCC".into()], ..Default::default() };
+    let phase = Phase {
+        name: "mt".into(),
+        seed: Some(99),
+        format: Some("raw".into()),
+        templates: vec!["AAA".into(), "BBB".into(), "CCC".into()],
+        ..Default::default()
+    };
     let mut seen = std::collections::HashSet::new();
     for i in 0..60 {
         seen.insert(String::from_utf8(generate_message(&phase, i).unwrap()).unwrap());
     }
-    assert!(seen.len() >= 2, "мультишаблон должен использовать не только первый: {seen:?}");
+    assert!(
+        seen.len() >= 2,
+        "мультишаблон должен использовать не только первый: {seen:?}"
+    );
 }
 
 #[test]
 fn test_f14_weighted_template_selection() {
     // Вес [0,1] → всегда второй шаблон.
-    let phase = Phase { name: "wt".into(), seed: Some(11), format: Some("raw".into()),
+    let phase = Phase {
+        name: "wt".into(),
+        seed: Some(11),
+        format: Some("raw".into()),
         templates: vec!["FIRST".into(), "SECOND".into()],
-        template_weights: Some(vec![0.0, 1.0]), ..Default::default() };
+        template_weights: Some(vec![0.0, 1.0]),
+        ..Default::default()
+    };
     for i in 0..30 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
         assert_eq!(s, "SECOND");
@@ -841,8 +1180,13 @@ fn test_f5_regex_field_matches_pattern() {
         }
     }"#;
     let path = write_tmp("regexfield", schema);
-    let phase = Phase { name: "rx".into(), seed: Some(4242), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "rx".into(),
+        seed: Some(4242),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     let re = regex::Regex::new(r"^id=[A-Z]{2}[0-9]{6}$").unwrap();
     for i in 0..50 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
@@ -858,10 +1202,19 @@ fn test_f5_regex_deterministic_by_seed() {
         "fields": { "tok": {"type": "regex", "regex": "sess-[a-f0-9]{8}"} }
     }"#;
     let path = write_tmp("regexdet", schema);
-    let phase = Phase { name: "rxd".into(), seed: Some(777), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
-    let a: Vec<_> = (0..20).map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap()).collect();
-    let b: Vec<_> = (0..20).map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap()).collect();
+    let phase = Phase {
+        name: "rxd".into(),
+        seed: Some(777),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
+    let a: Vec<_> = (0..20)
+        .map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap())
+        .collect();
+    let b: Vec<_> = (0..20)
+        .map(|i| String::from_utf8(generate_message(&phase, i).unwrap()).unwrap())
+        .collect();
     assert_eq!(a, b, "regex должен быть воспроизводим по seed");
     let _ = fs::remove_file(path);
 }
@@ -879,11 +1232,22 @@ fn test_f6_cross_field_correlation() {
         }
     }"#;
     let path = write_tmp("corr", schema);
-    let phase = Phase { name: "cr".into(), seed: Some(2024), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "cr".into(),
+        seed: Some(2024),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     for i in 0..200 {
         let s = String::from_utf8(generate_message(&phase, i).unwrap()).unwrap();
-        let status = s.split("status=").nth(1).unwrap().split(' ').next().unwrap();
+        let status = s
+            .split("status=")
+            .nth(1)
+            .unwrap()
+            .split(' ')
+            .next()
+            .unwrap();
         let level = s.split("level=").nth(1).unwrap().trim();
         let expected = match status {
             "200" | "301" => "INFO",
@@ -891,7 +1255,10 @@ fn test_f6_cross_field_correlation() {
             "500" => "ERROR",
             _ => "UNKNOWN",
         };
-        assert_eq!(level, expected, "корреляция status={status} → level нарушена: {s}");
+        assert_eq!(
+            level, expected,
+            "корреляция status={status} → level нарушена: {s}"
+        );
     }
     let _ = fs::remove_file(path);
 }
@@ -908,8 +1275,13 @@ fn test_f6_correlation_default_when_no_mapping_hit() {
         }
     }"#;
     let path = write_tmp("corrdef", schema);
-    let phase = Phase { name: "crd".into(), seed: Some(5), format: Some("raw".into()),
-        schema_file: Some(path.clone()), ..Default::default() };
+    let phase = Phase {
+        name: "crd".into(),
+        seed: Some(5),
+        format: Some("raw".into()),
+        schema_file: Some(path.clone()),
+        ..Default::default()
+    };
     let s = String::from_utf8(generate_message(&phase, 1).unwrap()).unwrap();
     assert!(s.contains("b=DEFV"), "ожидался mapping_default: {s}");
     let _ = fs::remove_file(path);
@@ -929,31 +1301,60 @@ fn test_f10_protobuf_is_valid_wire_format() {
     assert_ne!(bytes.first(), Some(&b'{'));
     // Ручной разбор wire-format: field1 (LEN "hello"), field2 (VARINT 150).
     // tag1 = (1<<3)|2 = 0x0A, len=5, "hello", tag2 = (2<<3)|0 = 0x10, 0x96 0x01.
-    assert_eq!(bytes, vec![0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', 0x10, 0x96, 0x01]);
+    assert_eq!(
+        bytes,
+        vec![0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', 0x10, 0x96, 0x01]
+    );
 }
 
 // ---- Веха A, N3: метрики латентности/размера/реконнектов ----
 
 #[tokio::test]
 async fn test_n3_metrics_size_and_latency_exported() {
-    let out_path = std::env::temp_dir().join(format!("sg_n3_{}.log",
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let out_path = std::env::temp_dir().join(format!(
+        "sg_n3_{}.log",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let profile = Profile {
-        targets: vec![TargetConfig { address: out_path.to_string_lossy().to_string(),
-            transport: "file".into(), ..Default::default() }],
-        phases: vec![Phase { name: "n3".into(), total_messages: Some(20),
-            messages_per_second: 500, seed: Some(1), format: Some("raw".into()),
-            templates: vec!["payload {{sequence}}".into()], ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: out_path.to_string_lossy().to_string(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        phases: vec![Phase {
+            name: "n3".into(),
+            total_messages: Some(20),
+            messages_per_second: 500,
+            seed: Some(1),
+            format: Some("raw".into()),
+            templates: vec!["payload {{sequence}}".into()],
+            ..Default::default()
+        }],
         ..Default::default()
     };
     let metrics = create_metrics().expect("create_metrics ok in test");
     run_profile(&profile, metrics.clone()).await.unwrap();
     let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
-    assert!(out.contains("syslog_message_size_bytes"), "нет histogram размера сообщений");
-    assert!(out.contains("syslog_send_duration_seconds"), "нет histogram латентности отправки");
+    assert!(
+        out.contains("syslog_message_size_bytes"),
+        "нет histogram размера сообщений"
+    );
+    assert!(
+        out.contains("syslog_send_duration_seconds"),
+        "нет histogram латентности отправки"
+    );
     // Гистограммы дают _bucket/_sum/_count — основа для p50/p95/p99.
-    assert!(out.contains("syslog_send_duration_seconds_bucket"), "нет корзин латентности");
-    assert!(out.contains("syslog_message_size_bytes_count"), "нет счётчика размера");
+    assert!(
+        out.contains("syslog_send_duration_seconds_bucket"),
+        "нет корзин латентности"
+    );
+    assert!(
+        out.contains("syslog_message_size_bytes_count"),
+        "нет счётчика размера"
+    );
     let _ = fs::remove_file(out_path);
 }
 
@@ -966,18 +1367,35 @@ async fn test_n3_reconnect_metric_registered_and_scrapeable() {
     let metrics = create_metrics().expect("create_metrics ok in test");
     // До наблюдения — серий нет.
     let before = gather_metrics(&metrics).expect("gather_metrics ok in test");
-    assert!(!before.lines().any(|l| l.starts_with("syslog_reconnects_total{")),
-        "до наблюдения не должно быть серий reconnects");
+    assert!(
+        !before
+            .lines()
+            .any(|l| l.starts_with("syslog_reconnects_total{")),
+        "до наблюдения не должно быть серий reconnects"
+    );
     // Наблюдаем серию через публичное поле (так же, как в боевом
     // коде реконнекта через record_reconnect).
-    metrics.reconnects_total.with_label_values(&["tcp", "127.0.0.1:514"]).inc();
+    metrics
+        .reconnects_total
+        .with_label_values(&["tcp", "127.0.0.1:514"])
+        .inc();
     let after = gather_metrics(&metrics).expect("gather_metrics ok in test");
-    assert!(after.contains("syslog_reconnects_total"), "метрика reconnects не экспортируется");
-    let series = after.lines().find(|l| l.starts_with("syslog_reconnects_total{"))
+    assert!(
+        after.contains("syslog_reconnects_total"),
+        "метрика reconnects не экспортируется"
+    );
+    let series = after
+        .lines()
+        .find(|l| l.starts_with("syslog_reconnects_total{"))
         .expect("ожидалась серия reconnects после инкремента");
-    assert!(series.contains("transport=\"tcp\"") && series.contains("127.0.0.1:514"),
-        "метки reconnects некорректны: {series}");
-    assert!(series.trim_end().ends_with("1"), "значение счётчика должно быть 1: {series}");
+    assert!(
+        series.contains("transport=\"tcp\"") && series.contains("127.0.0.1:514"),
+        "метки reconnects некорректны: {series}"
+    );
+    assert!(
+        series.trim_end().ends_with("1"),
+        "значение счётчика должно быть 1: {series}"
+    );
 }
 
 #[tokio::test]
@@ -989,16 +1407,28 @@ async fn test_n3_dead_tcp_target_records_errors() {
     let addr = listener.local_addr().unwrap().to_string();
     drop(listener); // порт свободен, никто не слушает
     let profile = Profile {
-        targets: vec![TargetConfig { address: addr, transport: "tcp".into(), ..Default::default() }],
-        phases: vec![Phase { name: "rc".into(), total_messages: Some(5),
-            messages_per_second: 100, seed: Some(1), format: Some("raw".into()),
-            templates: vec!["x {{sequence}}".into()], ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: addr,
+            transport: "tcp".into(),
+            ..Default::default()
+        }],
+        phases: vec![Phase {
+            name: "rc".into(),
+            total_messages: Some(5),
+            messages_per_second: 100,
+            seed: Some(1),
+            format: Some("raw".into()),
+            templates: vec!["x {{sequence}}".into()],
+            ..Default::default()
+        }],
         ..Default::default()
     };
     run_profile(&profile, metrics.clone()).await.unwrap();
     let out = gather_metrics(&metrics).expect("gather_metrics ok in test");
-    assert!(out.lines().any(|l| l.starts_with("syslog_errors_total{")),
-        "ожидались ошибки отправки на мёртвый TCP-таргет");
+    assert!(
+        out.lines().any(|l| l.starts_with("syslog_errors_total{")),
+        "ожидались ошибки отправки на мёртвый TCP-таргет"
+    );
 }
 
 // ===================== F11 CLI-оверрайды + F13 валидация (веха D) =====================
@@ -1025,9 +1455,15 @@ async fn test_f13_run_profile_rejects_invalid_profile() {
     };
     let metrics = create_metrics().expect("create_metrics ok in test");
     let res = run_profile(&profile, metrics).await;
-    assert!(res.is_err(), "невалидный профиль должен быть отклонён run_profile");
+    assert!(
+        res.is_err(),
+        "невалидный профиль должен быть отклонён run_profile"
+    );
     let msg = format!("{}", res.unwrap_err());
-    assert!(msg.contains("transport"), "сообщение об ошибке должно указывать на transport: {msg}");
+    assert!(
+        msg.contains("transport"),
+        "сообщение об ошибке должно указывать на transport: {msg}"
+    );
 }
 
 #[tokio::test]
@@ -1065,7 +1501,12 @@ async fn test_f13_collects_all_errors() {
     };
     let errs = validate_profile(&profile);
     // пустой address, bad transport, junk framing, zero connections, bad distribution, no phases
-    assert!(errs.len() >= 6, "ожидалось >=6 ошибок, получено {}: {:?}", errs.len(), errs);
+    assert!(
+        errs.len() >= 6,
+        "ожидалось >=6 ошибок, получено {}: {:?}",
+        errs.len(),
+        errs
+    );
     assert!(errs.contains(&ValidationError::NoPhases));
 }
 
@@ -1088,7 +1529,10 @@ async fn test_f11_apply_overrides_then_run_to_file() {
     apply_overrides(&mut profile, &overrides);
 
     // валидация должна пройти
-    assert!(validate_profile(&profile).is_empty(), "профиль после оверрайдов должен быть валиден");
+    assert!(
+        validate_profile(&profile).is_empty(),
+        "профиль после оверрайдов должен быть валиден"
+    );
     // distribution должен быть непустым (Default::default даёт round-robin)
     assert_eq!(profile.distribution, "round-robin");
 
@@ -1097,7 +1541,12 @@ async fn test_f11_apply_overrides_then_run_to_file() {
 
     let content = fs::read_to_string(&out).unwrap();
     let lines: Vec<&str> = content.lines().collect();
-    assert_eq!(lines.len(), 4, "ожидалось 4 сообщения, получено {}: {content:?}", lines.len());
+    assert_eq!(
+        lines.len(),
+        4,
+        "ожидалось 4 сообщения, получено {}: {content:?}",
+        lines.len()
+    );
     assert_eq!(lines[0], "cli-evt 1");
     assert_eq!(lines[3], "cli-evt 4");
     let _ = fs::remove_file(&out);
@@ -1117,12 +1566,24 @@ async fn test_f11_target_parsing_variants() {
 async fn test_f11_scalar_overrides_apply_to_all_phases() {
     let mut profile = Profile {
         phases: vec![
-            Phase { name: "a".into(), templates: vec!["x".into()], ..Default::default() },
-            Phase { name: "b".into(), templates: vec!["y".into()], ..Default::default() },
+            Phase {
+                name: "a".into(),
+                templates: vec!["x".into()],
+                ..Default::default()
+            },
+            Phase {
+                name: "b".into(),
+                templates: vec!["y".into()],
+                ..Default::default()
+            },
         ],
         ..Default::default()
     };
-    let overrides = Overrides { rate: Some(250), duration: Some(45), ..Default::default() };
+    let overrides = Overrides {
+        rate: Some(250),
+        duration: Some(45),
+        ..Default::default()
+    };
     apply_overrides(&mut profile, &overrides);
     for p in &profile.phases {
         assert_eq!(p.messages_per_second, 250);
@@ -1147,7 +1608,11 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
     let _ = fs::remove_file(&file_path);
 
     let profile = Profile {
-        targets: vec![TargetConfig { address: file_path.clone(), transport: "file".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: file_path.clone(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         metrics_addr: Some(addr_str.clone()),
         phases: vec![Phase {
             // Длительная фаза (~2 с с ограниченным rate) — чтобы HTTP /metrics
@@ -1172,24 +1637,39 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
     for _ in 0..50 {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         if let Ok(mut c) = TcpStream::connect(&addr_str).await {
-            c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").await.unwrap();
+            c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+                .await
+                .unwrap();
             let mut buf = Vec::new();
             let _ = c.read_to_end(&mut buf).await;
             body = String::from_utf8_lossy(&buf).to_string();
-            if body.contains("HTTP/1.1 200") { break; }
+            if body.contains("HTTP/1.1 200") {
+                break;
+            }
         }
     }
     assert!(body.contains("HTTP/1.1 200 OK"), "нет 200 OK: {body}");
-    assert!(body.contains("text/plain; version=0.0.4"), "нет prometheus content-type: {body}");
-    assert!(body.contains("syslog_messages_total"), "нет метрик в теле: {body}");
+    assert!(
+        body.contains("text/plain; version=0.0.4"),
+        "нет prometheus content-type: {body}"
+    );
+    assert!(
+        body.contains("syslog_messages_total"),
+        "нет метрик в теле: {body}"
+    );
 
     // 404 на неизвестный путь.
     let mut c404 = TcpStream::connect(&addr_str).await.unwrap();
-    c404.write_all(b"GET /nope HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").await.unwrap();
+    c404.write_all(b"GET /nope HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
     let mut buf404 = Vec::new();
     let _ = c404.read_to_end(&mut buf404).await;
     let body404 = String::from_utf8_lossy(&buf404);
-    assert!(body404.contains("HTTP/1.1 404 Not Found"), "ожидался 404: {body404}");
+    assert!(
+        body404.contains("HTTP/1.1 404 Not Found"),
+        "ожидался 404: {body404}"
+    );
 
     let _ = run.await.unwrap();
     let _ = fs::remove_file(&file_path);
@@ -1202,7 +1682,11 @@ async fn test_f12_no_metrics_addr_no_server() {
     let file_path = format!("f12-nometrics-{}.log", std::process::id());
     let _ = fs::remove_file(&file_path);
     let profile = Profile {
-        targets: vec![TargetConfig { address: file_path.clone(), transport: "file".into(), ..Default::default() }],
+        targets: vec![TargetConfig {
+            address: file_path.clone(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
         metrics_addr: None,
         phases: vec![Phase {
             name: "f12b".into(),
@@ -1244,7 +1728,8 @@ async fn test_n4_tls_ca_file_missing_rejected() {
     };
     let errs = validate_profile(&profile);
     assert!(
-        errs.iter().any(|e| matches!(e, ValidationError::TlsCaFileNotFound { .. })),
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::TlsCaFileNotFound { .. })),
         "ожидалась ошибка TlsCaFileNotFound, получено: {errs:?}"
     );
 }
@@ -1254,7 +1739,11 @@ async fn test_n4_tls_ca_file_missing_rejected() {
 async fn test_n4_tls_ca_file_present_ok() {
     // Создаём временный PEM-подобный файл (валидация проверяет только наличие).
     let ca_path = format!("n4-ca-{}.pem", std::process::id());
-    fs::write(&ca_path, b"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n").unwrap();
+    fs::write(
+        &ca_path,
+        b"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
+    )
+    .unwrap();
     let profile = Profile {
         targets: vec![TargetConfig {
             address: "127.0.0.1:6514".into(),
@@ -1274,7 +1763,9 @@ async fn test_n4_tls_ca_file_present_ok() {
     };
     let errs = validate_profile(&profile);
     assert!(
-        !errs.iter().any(|e| matches!(e, ValidationError::TlsCaFileNotFound { .. })),
+        !errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::TlsCaFileNotFound { .. })),
         "неожиданная ошибка CA: {errs:?}"
     );
     let _ = fs::remove_file(&ca_path);
@@ -1284,7 +1775,10 @@ async fn test_n4_tls_ca_file_present_ok() {
 #[test]
 fn test_n4_tls_insecure_defaults_false() {
     let t = TargetConfig::default();
-    assert!(!t.tls_insecure, "по умолчанию TLS должен проверять сертификаты");
+    assert!(
+        !t.tls_insecure,
+        "по умолчанию TLS должен проверять сертификаты"
+    );
     assert!(t.tls_domain.is_none());
     assert!(t.tls_ca_file.is_none());
 }

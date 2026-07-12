@@ -76,13 +76,24 @@ impl MetricsError {
     /// Удобный конструктор для ошибок `Construct` (используется в хелперах
     /// `make_*` в `metrics.rs`). Имя метрики копируется, чтобы `Display`
     /// оставался валидным после возврата из функции.
-    pub fn construct(kind: &'static str, name: impl Into<String>, source: prometheus::Error) -> Self {
-        Self::Construct { kind, name: name.into(), source }
+    pub fn construct(
+        kind: &'static str,
+        name: impl Into<String>,
+        source: prometheus::Error,
+    ) -> Self {
+        Self::Construct {
+            kind,
+            name: name.into(),
+            source,
+        }
     }
 
     /// Удобный конструктор для ошибок `Register`.
     pub fn register(name: impl Into<String>, source: prometheus::Error) -> Self {
-        Self::Register { name: name.into(), source }
+        Self::Register {
+            name: name.into(),
+            source,
+        }
     }
 }
 
@@ -110,11 +121,17 @@ pub enum ConfigError {
 
 impl ConfigError {
     pub fn io(path: impl Into<String>, source: io::Error) -> Self {
-        Self::Io { path: path.into(), source }
+        Self::Io {
+            path: path.into(),
+            source,
+        }
     }
 
     pub fn json(path: impl Into<String>, source: serde_json::Error) -> Self {
-        Self::Json { path: path.into(), source }
+        Self::Json {
+            path: path.into(),
+            source,
+        }
     }
 }
 
@@ -293,9 +310,13 @@ mod tests {
     /// При ребрендинге/правке текстов ошибок — обновить снимки намеренно.
     #[test]
     fn runtime_error_display_snapshots() {
-        assert_eq!(format!("{}", RuntimeError::Cancelled), "операция отменена (CancellationToken)");
+        assert_eq!(
+            format!("{}", RuntimeError::Cancelled),
+            "операция отменена (CancellationToken)"
+        );
         let m: RuntimeError =
-            MetricsError::construct("CounterVec", "x", prometheus::Error::Msg("oops".into())).into();
+            MetricsError::construct("CounterVec", "x", prometheus::Error::Msg("oops".into()))
+                .into();
         assert!(format!("{m}").starts_with("не удалось создать CounterVec-метрику"));
     }
 }

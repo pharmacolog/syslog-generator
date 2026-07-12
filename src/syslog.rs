@@ -120,10 +120,18 @@ pub fn build_rfc3164(h: &Header, msg: &[u8]) -> Vec<u8> {
     let hostname = {
         // RFC3164 HOSTNAME без пробелов; NILVALUE неуместен — берём "localhost".
         let s = sanitize_header(&h.hostname, 255);
-        if s == NILVALUE { "localhost".to_string() } else { s }
+        if s == NILVALUE {
+            "localhost".to_string()
+        } else {
+            s
+        }
     };
     let app = sanitize_header(&h.app_name, 32);
-    let app = if app == NILVALUE { "app".to_string() } else { app };
+    let app = if app == NILVALUE {
+        "app".to_string()
+    } else {
+        app
+    };
     let tag = if h.procid.is_empty() || h.procid == NILVALUE {
         format!("{}:", app)
     } else {
@@ -149,7 +157,7 @@ mod tests {
         assert_eq!(prival(0, 0), 0);
         assert_eq!(prival(20, 5), 165);
         assert_eq!(prival(1, 6), 14); // user.info
-        // Зажим диапазонов.
+                                      // Зажим диапазонов.
         assert_eq!(prival(255, 255), 23 * 8 + 7);
     }
 
@@ -180,10 +188,14 @@ mod tests {
     #[test]
     fn test_rfc5424_bom() {
         let h = Header {
-            facility: 1, severity: 6,
-            hostname: "h".into(), app_name: "a".into(),
-            procid: "-".into(), msgid: "-".into(),
-            structured_data: "-".into(), bom: true,
+            facility: 1,
+            severity: 6,
+            hostname: "h".into(),
+            app_name: "a".into(),
+            procid: "-".into(),
+            msgid: "-".into(),
+            structured_data: "-".into(),
+            bom: true,
         };
         let out = build_rfc5424(&h, b"x");
         // BOM должен стоять непосредственно перед MSG.
@@ -193,10 +205,14 @@ mod tests {
     #[test]
     fn test_rfc3164_structure() {
         let h = Header {
-            facility: 1, severity: 6,
-            hostname: "srv".into(), app_name: "sshd".into(),
-            procid: "42".into(), msgid: "-".into(),
-            structured_data: "-".into(), bom: false,
+            facility: 1,
+            severity: 6,
+            hostname: "srv".into(),
+            app_name: "sshd".into(),
+            procid: "42".into(),
+            msgid: "-".into(),
+            structured_data: "-".into(),
+            bom: false,
         };
         let out = String::from_utf8(build_rfc3164(&h, b"login")).unwrap();
         assert!(out.starts_with("<14>"));
@@ -207,11 +223,14 @@ mod tests {
     fn test_header_sanitization() {
         // Пробелы заменяются на '_', пустое поле → NILVALUE, обрезка по длине.
         let h = Header {
-            facility: 1, severity: 6,
+            facility: 1,
+            severity: 6,
             hostname: "has space".into(),
             app_name: "".into(),
-            procid: "-".into(), msgid: "-".into(),
-            structured_data: "-".into(), bom: false,
+            procid: "-".into(),
+            msgid: "-".into(),
+            structured_data: "-".into(),
+            bom: false,
         };
         let out = String::from_utf8(build_rfc5424(&h, b"m")).unwrap();
         assert!(out.contains(" has_space "));

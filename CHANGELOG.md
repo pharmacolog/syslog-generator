@@ -1,6 +1,55 @@
 
 # Changelog
 
+## v8.6.0 - 2026-07-13
+
+Финальная задача вехи D («Продакшн-готовность», P1): **N2 — синхронизация
+Grafana-дашборда** с реальным выводом `metrics_server`. Дашборд приведён
+в соответствие с фактическими метриками: добавлены panels для основных
+показателей нагрузки (rate/latency/errors/active workers/messages by format),
+а фейковые gauge-ы cpu_usage/memory_usage удалены из runtime и не упоминаются
+в дашборде.
+
+### Added
+- **N2 — `syslog_messages_by_format_total{format}`** (CounterVec): реальный
+  счётчик сгенерированных сообщений по формату (rfc5424/rfc3164/raw/protobuf).
+  Инкрементируется в `core.rs::run_phase_multi` после `generate_message`
+  с label = `phase.format_type()`. Раньше метрика упоминалась в дашборде,
+  но в runtime не отдавалась.
+- **6 новых panels в `dashboards/grafana.json`** (всего 10):
+  - "Messages rate by transport" (timeseries, 12×8):
+    `sum by (transport) (rate(syslog_messages_total[1m]))`
+  - "Messages by format" (timeseries, 12×8):
+    `sum by (format) (rate(syslog_messages_by_format_total[1m]))`
+  - "Active Workers" (stat): `syslog_active_workers`
+  - "Send p95 latency" (stat):
+    `histogram_quantile(0.95, sum(rate(syslog_send_duration_seconds_bucket[5m])) by (le))`
+  - "Message size p95" (stat):
+    `histogram_quantile(0.95, sum(rate(syslog_message_size_bytes_bucket[5m])) by (le))`
+  - "Errors rate" (stat): `sum(rate(syslog_errors_total[1m]))`
+
+### Removed
+- **N2 — `syslog_cpu_usage_percent` и `syslog_memory_usage_bytes`**:
+  Gauge'ы были объявлены, но никогда не обновлялись в runtime (нет
+  реального сбора process metrics). В `/metrics` они всегда показывали 0,
+  в дашборде — пустые графики. Удалены из `src/metrics.rs` и не упоминаются
+  в новой версии дашборда. Честный подход — не обещать то, чего нет.
+  Если в будущем понадобится process metrics — это отдельная задача
+  (требует крейта `sysinfo` + фоновой задачи).
+
+### Changed
+- `dashboards/grafana.json`: `description` дополнен списком всех panels
+  и метрик, `tags = ["syslog-generator", "load-test", "v8.6"]` для фильтрации.
+
+### Notes
+- Тесты: **104 unit + 55 integration + 11 N7 = 170**, все зелёные.
+  Из них 3 новых: 2 unit в `metrics::tests` (`n2_no_cpu_or_memory_gauges_in_exposition`,
+  `n2_messages_by_format_total_after_inc`) + 1 integration
+  `test_n2_messages_by_format_total_exported`.
+- clippy чист, fmt clean, build --release успешен (syslog-generator 8.6.0).
+- Бенчмарки: 9 кейсов (3 + 6), все зелёные.
+- Закрыта последняя задача вехи D. Далее — переход к вехе E (P2).
+
 ## v8.5.0 - 2026-07-12
 
 Продолжение вехи D («Промышленная готовность», P1). Закрыта задача

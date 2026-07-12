@@ -1,6 +1,52 @@
 
 # Changelog
 
+## v9.0.0 - 2026-07-13
+
+**Milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА.** Major-бамп
+(8.6.1 → 9.0.0) как семантический маркер перехода к вехе E (P2 «Зрелость»).
+
+Закрыты все P1-задачи AUDIT.md §4.1 (F1-F10), §4.2 (N1-N9), и часть
+P2 (D3, N10 как тех. долг). Это **первый major-релиз** после v7.4.0
+(Initial commit), символизирующий достижение промышленной готовности
+генератора.
+
+### Why a major bump?
+v8.x → v9.0 — это **не breaking change**. Публичный API полностью
+backward-compatible: добавлены новые публичные типы (`CompiledTemplate`,
+`RuntimeError`, `MetricsError`, `ConfigError`, `DrainError`,
+`SchemaCheckError`, `validate_against_embedded_schema`), удалено ничего.
+Major bump сделан как milestone release:
+1. **Семантический маркер** — переход от этапа разработки (v0-v8.x)
+   к зрелому этапу (v9.0+) с фиксированным набором P1-возможностей.
+2. **Release-train** — следующая веха E (F15, F16, F17, N10, N12) будет
+   наращивать функциональность поверх стабильного ядра v9.
+3. **Соответствие semver-recommended** для milestone releases
+   (см. semver.org/#how-should-i-handle-deprecating-functionality).
+
+### Закрытые задачи (полная веха D)
+**P0 (F1-F10):** rate-limiting (F1), connections (F2), load_shape (F3),
+RNG с seed (F4), faker/regex/distributions (F5/F6), RFC 5424 (F7),
+RFC 3164 (F8), framing (F9), protobuf wire-format (F10), live metrics (N3).
+
+**P1 (F11-F14, N4, N7, N9):** CLI (F11), HTTP /metrics (F12), validation (F13),
+multi-template (F14), безопасный TLS (N4), типизированные ошибки (N7),
+CI-пайплайн (N9).
+
+**Закрытие P1-пробелов (v8.6.1):** CompiledTemplate (N5, ~100x шаблонов),
+round-trip RFC 5424 (N8), документация (N11).
+
+**Синхронизация с реальностью (v8.6.0):** Grafana-дашборд (N2),
+JSON Schema + YAML (D3).
+
+### Notes
+- Тесты: **115 unit + 55 integration + 11 N7 = 181**, все зелёные.
+- 9 бенчей (3 + 6), все проходят `cargo bench -- --quick`.
+- clippy чист, fmt clean, build --release успешен (syslog-generator 9.0.0).
+- Backward compatibility: всё v8.x код продолжает работать без изменений.
+- Следующая веха — E (P2 «Зрелость»): F15 (CEF/LEEF/JSON-lines),
+  F16 (Kafka/Redpanda), F17 (сценарии аномалий), N12 (Docker), N10 (рефакторинг).
+
 ## v8.6.1 - 2026-07-13
 
 Patch-релиз перед major v9.0.0: закрытие оставшихся P1-пробелов вехи D

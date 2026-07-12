@@ -117,9 +117,13 @@ async fn n7_run_profile_smoke_does_not_panic() {
 fn n7_version_returns_zero() {
     let (rc, out, _err) = run_bin(&["--version"], None);
     assert_eq!(rc, 0, "--version должен вернуть rc=0");
+    // Проверяем формат "MAJOR.MINOR.PATCH" (минимум одна цифра перед точкой),
+    // а не конкретную версию — иначе тест ломается на каждом bump'е.
     assert!(
-        out.contains("8."),
-        "ожидался номер версии в stdout, got: {out}"
+        out.chars().any(|c| c.is_ascii_digit())
+            && out.contains('.')
+            && out.chars().filter(|c| c.is_ascii_digit()).count() >= 3,
+        "ожидался номер версии MAJOR.MINOR.PATCH в stdout, got: {out}"
     );
 }
 

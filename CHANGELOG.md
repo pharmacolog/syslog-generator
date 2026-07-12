@@ -1,6 +1,49 @@
 
 # Changelog
 
+## v8.3.1 - 2026-07-12
+
+Patch-релиз сразу после v8.3.0: починка 3 упавших TLS-интеграционных
+тестов, которые воспроизводились и до N7 (были задокументированы как
+известное ограничение окружения). Покрытие тестами не снижено — все
+49 integration-тестов теперь зелёные.
+
+### Fixed
+- **TLS-интеграционные тесты mixed-multi-target** (`test_mixed_multi_target_*_end_to_end`):
+  три теста, проверяющие end-to-end доставку через все транспорты одновременно
+  (file + tcp + udp + tls), теперь проходят на чистом `dev`.
+  Причины падений:
+  1. `rcgen::generate_simple_self_signed` (rcgen 0.13) на окружении с
+     OpenSSL 3.x генерирует PEM-блок, который `native_tls::Identity::from_pkcs8`
+     отказывается парсить ("Unknown format in import").
+  2. `openssl req -x509 -days 36500` (100 лет validity) превышает лимит
+     Security.framework на macOS (825 дней) — "The validity period in the
+     certificate exceeds the maximum allowed".
+  3. Сертификат без явных extensions (basicConstraints/keyUsage/extendedKeyUsage)
+     отклоняется TLS-клиентом как неподходящий для serverAuth.
+
+### Changed
+- `tests/integration_tests.rs`: добавлен helper `openssl_self_signed()`
+  с кэшированием через `OnceLock` — self-signed сертификат для
+  `localhost` (CN + SAN: DNS:localhost, IP:127.0.0.1, CA:FALSE,
+  digitalSignature+keyEncipherment, serverAuth) генерируется через
+  `openssl req -config openssl-server.cnf` один раз на процесс и
+  переиспользуется всеми TLS-тестами. Артефакты пишутся в
+  `target/test-tls/`. Зависимость от `rcgen` в integration-тестах
+  сохранена (используется в `benches/sender_throughput.rs` не было,
+  rcgen остаётся в dev-deps для возможного будущего использования);
+  в самих тестах смешанных транспортов rcgen больше не применяется.
+
+### Notes
+- Тесты: **88 unit + 49 + 11 integration = 148** — ВСЕ зелёные.
+  Прогон: 88 unit (было 88), 49 integration (было 46, +3 починено),
+  11 N7-integration (без изменений). Полное покрытие тестами
+  восстановлено.
+- clippy чист, cargo build --release успешен.
+- Требование окружения: `openssl` (>= 1.1.1) в PATH — есть на macOS,
+  Linux и в стандартных CI-образах. Если openssl недоступен,
+  TLS-тесты упадут с понятным сообщением.
+
 ## v8.3.0 - 2026-07-12
 
 Продолжение вехи D («Промышленная готовность», P1). Закрыта задача

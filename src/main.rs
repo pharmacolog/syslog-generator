@@ -11,6 +11,8 @@ async fn main() -> ExitCode {
     match run().await {
         Ok(code) => code,
         Err(e) => {
+            // anywho::Error::Display для цепочки; #[from] в RuntimeError/MetricsError/
+            // ConfigError даёт внятные русскоязычные сообщения.
             eprintln!("ошибка: {e:#}");
             ExitCode::FAILURE
         }
@@ -60,7 +62,12 @@ async fn run() -> Result<ExitCode> {
     }
 
     // 5. Запуск.
-    let metrics = create_metrics();
+    // N7: create_metrics() теперь возвращает Result<Metrics, MetricsError>.
+    // Раньше здесь был `.expect()` — при ошибке инициализации registry процесс
+    // падал с паникой. Теперь ошибка всплывает через `?` как `anyhow::Error`
+    // (благодаря `From<MetricsError>` для anyhow::Error) и приводит к
+    // ExitCode::FAILURE с внятным сообщением.
+    let metrics = create_metrics().context("инициализация Prometheus-метрик")?;
     run_profile(&profile, metrics).await.context("выполнение профиля")?;
     Ok(ExitCode::SUCCESS)
 }

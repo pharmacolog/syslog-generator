@@ -2,6 +2,7 @@
 pub mod cli;
 pub mod config;
 pub mod core;
+pub mod error;
 pub mod load_shape;
 pub mod metrics;
 pub mod metrics_server;
@@ -18,6 +19,7 @@ pub use config::{Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogC
 pub use load_shape::LoadShape;
 pub use payload::{derive_rng, faker, gen_from_regex, int_in_range, pad_to_size, random_string, weighted_index, zipf_index};
 pub use core::{create_dispatcher, default_values, generate_message, load_schema, load_templates, run_phase_multi, run_profile};
+pub use error::{ConfigError, DrainError, MetricsError, RuntimeError};
 pub use metrics::{create_metrics, gather_metrics, Metrics};
 pub use protobuf::{apply_protobuf_schema, serialize_protobuf, serialize_protobuf_like, PbType};
 pub use schema::{Schema, SchemaField};

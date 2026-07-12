@@ -28,10 +28,7 @@ pub enum LoadShape {
     },
     /// Линейный ramp от `start_rate` до `end_rate` за `duration_secs` фазы.
     /// После окончания длительности (или если она не задана) держит `end_rate`.
-    Linear {
-        start_rate: f64,
-        end_rate: f64,
-    },
+    Linear { start_rate: f64, end_rate: f64 },
     /// Синусоида между `min_rate` и `max_rate` с периодом `period_secs`.
     /// В `t=0` находится в минимуме и растёт (фаза -pi/2).
     Sine {
@@ -92,7 +89,11 @@ impl LoadShape {
                 max_rate,
                 period_secs,
             } => {
-                let period = if *period_secs <= 0.0 { 1.0 } else { *period_secs };
+                let period = if *period_secs <= 0.0 {
+                    1.0
+                } else {
+                    *period_secs
+                };
                 let mid = (min_rate + max_rate) / 2.0;
                 let amp = (max_rate - min_rate) / 2.0;
                 // Старт в минимуме: -cos даёт -1 при t=0.

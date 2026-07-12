@@ -49,11 +49,15 @@ pub async fn graceful_drain_wait(
     };
     match tokio::time::timeout(timeout, wait_all).await {
         Ok(res) => {
-            metrics.drain_duration.observe(started.elapsed().as_secs_f64());
+            metrics
+                .drain_duration
+                .observe(started.elapsed().as_secs_f64());
             res
         }
         Err(_) => {
-            metrics.drain_duration.observe(started.elapsed().as_secs_f64());
+            metrics
+                .drain_duration
+                .observe(started.elapsed().as_secs_f64());
             metrics.drain_timeouts_total.inc();
             Err(DrainError::timeout(timeout_secs))
         }

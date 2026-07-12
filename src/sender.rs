@@ -1,6 +1,5 @@
-
-use anyhow::Result;
 use crate::metrics::Metrics;
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, UdpSocket};
@@ -10,13 +9,32 @@ use tokio_util::sync::CancellationToken;
 /// Общий приёмник очереди target'а, из которого читают несколько воркеров пула.
 pub type SharedRx = Arc<Mutex<mpsc::Receiver<Vec<u8>>>>;
 
-pub async fn record_send(metrics: &Metrics, transport: &str, phase: &str, target: &str, bytes: u64, shutdown: &CancellationToken) {
-    metrics.messages_by_sink.with_label_values(&[transport]).inc();
-    metrics.messages_total.with_label_values(&[transport, phase, target, "success"]).inc();
-    metrics.bytes_total.with_label_values(&[transport, phase, target]).inc_by(bytes as f64);
+pub async fn record_send(
+    metrics: &Metrics,
+    transport: &str,
+    phase: &str,
+    target: &str,
+    bytes: u64,
+    shutdown: &CancellationToken,
+) {
+    metrics
+        .messages_by_sink
+        .with_label_values(&[transport])
+        .inc();
+    metrics
+        .messages_total
+        .with_label_values(&[transport, phase, target, "success"])
+        .inc();
+    metrics
+        .bytes_total
+        .with_label_values(&[transport, phase, target])
+        .inc_by(bytes as f64);
     metrics.message_size_bytes.observe(bytes as f64);
     if shutdown.is_cancelled() {
-        metrics.messages_drained_total.with_label_values(&[target]).inc();
+        metrics
+            .messages_drained_total
+            .with_label_values(&[target])
+            .inc();
     }
 }
 
@@ -27,7 +45,10 @@ fn record_send_latency(metrics: &Metrics, elapsed: std::time::Duration) {
 
 /// Отметить попытку переустановки соединения.
 fn record_reconnect(metrics: &Metrics, transport: &str, target: &str) {
-    metrics.reconnects_total.with_label_values(&[transport, target]).inc();
+    metrics
+        .reconnects_total
+        .with_label_values(&[transport, target])
+        .inc();
 }
 
 pub async fn record_error(metrics: &Metrics, target: &str) {
@@ -94,20 +115,45 @@ async fn drain_as_errors(rx: &SharedRx, metrics: &Metrics, addr: &str) {
     }
 }
 
-pub async fn target_sender_file(path: String, phase_name: String, rx: SharedRx, metrics: Metrics, shutdown: CancellationToken) -> Result<()> {
-    let mut file = tokio::fs::OpenOptions::new().create(true).append(true).open(&path).await?;
+pub async fn target_sender_file(
+    path: String,
+    phase_name: String,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+) -> Result<()> {
+    let mut file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .await?;
     while let Some(msg) = next_msg(&rx).await {
         // Единый write_all + O_APPEND — атомарная дозапись без перемешивания
         // между конкурентными воркерами пула.
         let t0 = std::time::Instant::now();
         file.write_all(&frame(&msg)).await?;
         record_send_latency(&metrics, t0.elapsed());
-        record_send(&metrics, "file", &phase_name, &path, msg.len() as u64, &shutdown).await;
+        record_send(
+            &metrics,
+            "file",
+            &phase_name,
+            &path,
+            msg.len() as u64,
+            &shutdown,
+        )
+        .await;
     }
     Ok(())
 }
 
-pub async fn target_sender_tcp(addr: String, phase_name: String, rx: SharedRx, metrics: Metrics, shutdown: CancellationToken, framing: Framing) -> Result<()> {
+pub async fn target_sender_tcp(
+    addr: String,
+    phase_name: String,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+    framing: Framing,
+) -> Result<()> {
     let mut stream = match TcpStream::connect(&addr).await {
         Ok(s) => s,
         Err(_) => {
@@ -130,7 +176,15 @@ pub async fn target_sender_tcp(addr: String, phase_name: String, rx: SharedRx, m
                     let t1 = std::time::Instant::now();
                     if stream.write_all(&framed).await.is_ok() {
                         record_send_latency(&metrics, t1.elapsed());
-                        record_send(&metrics, "tcp", &phase_name, &addr, msg.len() as u64, &shutdown).await;
+                        record_send(
+                            &metrics,
+                            "tcp",
+                            &phase_name,
+                            &addr,
+                            msg.len() as u64,
+                            &shutdown,
+                        )
+                        .await;
                     } else {
                         record_error(&metrics, &addr).await;
                     }
@@ -142,7 +196,15 @@ pub async fn target_sender_tcp(addr: String, phase_name: String, rx: SharedRx, m
             }
         } else {
             record_send_latency(&metrics, t0.elapsed());
-            record_send(&metrics, "tcp", &phase_name, &addr, msg.len() as u64, &shutdown).await;
+            record_send(
+                &metrics,
+                "tcp",
+                &phase_name,
+                &addr,
+                msg.len() as u64,
+                &shutdown,
+            )
+            .await;
         }
     }
     Ok(())
@@ -155,7 +217,13 @@ async fn reconnect_tcp(addr: &str, metrics: &Metrics, transport: &str) -> Option
     TcpStream::connect(addr).await.ok()
 }
 
-pub async fn target_sender_udp(addr: String, phase_name: String, rx: SharedRx, metrics: Metrics, shutdown: CancellationToken) -> Result<()> {
+pub async fn target_sender_udp(
+    addr: String,
+    phase_name: String,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+) -> Result<()> {
     let socket = UdpSocket::bind("127.0.0.1:0").await?;
     while let Some(msg) = next_msg(&rx).await {
         let t0 = std::time::Instant::now();
@@ -163,7 +231,15 @@ pub async fn target_sender_udp(addr: String, phase_name: String, rx: SharedRx, m
             record_error(&metrics, &addr).await;
         } else {
             record_send_latency(&metrics, t0.elapsed());
-            record_send(&metrics, "udp", &phase_name, &addr, msg.len() as u64, &shutdown).await;
+            record_send(
+                &metrics,
+                "udp",
+                &phase_name,
+                &addr,
+                msg.len() as u64,
+                &shutdown,
+            )
+            .await;
         }
     }
     Ok(())
@@ -196,7 +272,15 @@ pub fn build_tls_connector(params: &TlsParams) -> Result<tokio_native_tls::TlsCo
     Ok(tokio_native_tls::TlsConnector::from(connector))
 }
 
-pub async fn target_sender_tls(addr: String, tls_params: TlsParams, phase_name: String, rx: SharedRx, metrics: Metrics, shutdown: CancellationToken, framing: Framing) -> Result<()> {
+pub async fn target_sender_tls(
+    addr: String,
+    tls_params: TlsParams,
+    phase_name: String,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+    framing: Framing,
+) -> Result<()> {
     let domain = tls_params.domain.clone();
     let connector = match build_tls_connector(&tls_params) {
         Ok(c) => c,
@@ -229,7 +313,15 @@ pub async fn target_sender_tls(addr: String, tls_params: TlsParams, phase_name: 
                     let t1 = std::time::Instant::now();
                     if tls.write_all(&framed).await.is_ok() {
                         record_send_latency(&metrics, t1.elapsed());
-                        record_send(&metrics, "tls", &phase_name, &addr, msg.len() as u64, &shutdown).await;
+                        record_send(
+                            &metrics,
+                            "tls",
+                            &phase_name,
+                            &addr,
+                            msg.len() as u64,
+                            &shutdown,
+                        )
+                        .await;
                     } else {
                         record_error(&metrics, &addr).await;
                     }
@@ -241,7 +333,15 @@ pub async fn target_sender_tls(addr: String, tls_params: TlsParams, phase_name: 
             }
         } else {
             record_send_latency(&metrics, t0.elapsed());
-            record_send(&metrics, "tls", &phase_name, &addr, msg.len() as u64, &shutdown).await;
+            record_send(
+                &metrics,
+                "tls",
+                &phase_name,
+                &addr,
+                msg.len() as u64,
+                &shutdown,
+            )
+            .await;
         }
     }
     Ok(())
@@ -265,14 +365,22 @@ mod tests {
     /// системные корни доверия активны, insecure выключен.
     #[test]
     fn test_build_tls_connector_secure_default() {
-        let params = TlsParams { domain: "example.com".into(), ca_pem: None, insecure: false };
+        let params = TlsParams {
+            domain: "example.com".into(),
+            ca_pem: None,
+            insecure: false,
+        };
         assert!(build_tls_connector(&params).is_ok());
     }
 
     /// N4: небезопасный режим (явный opt-in) тоже строится без ошибок.
     #[test]
     fn test_build_tls_connector_insecure() {
-        let params = TlsParams { domain: "example.com".into(), ca_pem: None, insecure: true };
+        let params = TlsParams {
+            domain: "example.com".into(),
+            ca_pem: None,
+            insecure: true,
+        };
         assert!(build_tls_connector(&params).is_ok());
     }
 

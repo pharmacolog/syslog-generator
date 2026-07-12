@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 
 pub fn render_template(template: &str, values: &HashMap<String, String>) -> String {

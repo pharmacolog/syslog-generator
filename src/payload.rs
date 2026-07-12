@@ -42,7 +42,9 @@ const USER_AGENTS: &[&str] = &[
 ];
 
 /// Частые HTTP-статусы для faker.http_status.
-const HTTP_STATUSES: &[u16] = &[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 429, 500, 502, 503];
+const HTTP_STATUSES: &[u16] = &[
+    200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 429, 500, 502, 503,
+];
 
 const HOST_ADJ: &[&str] = &["web", "db", "cache", "api", "edge", "worker", "auth", "log"];
 const USER_NAMES: &[&str] = &[
@@ -77,7 +79,14 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
         "username" => USER_NAMES[rng.random_range(0..USER_NAMES.len())].to_string(),
         "user_agent" => USER_AGENTS[rng.random_range(0..USER_AGENTS.len())].to_string(),
         "url" => {
-            let paths = ["/", "/login", "/api/v1/users", "/health", "/static/app.js", "/search?q=x"];
+            let paths = [
+                "/",
+                "/login",
+                "/api/v1/users",
+                "/health",
+                "/static/app.js",
+                "/search?q=x",
+            ];
             format!(
                 "https://{}-{:02}.example.com{}",
                 HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
@@ -213,8 +222,15 @@ fn gen_hir(hir: &regex_syntax::hir::Hir, rng: &mut StdRng, out: &mut String) {
         HirKind::Class(class) => gen_class(class, rng, out),
         HirKind::Repetition(rep) => {
             let min = rep.min;
-            let max = rep.max.unwrap_or(min + REGEX_MAX_REPEAT).min(min + REGEX_MAX_REPEAT);
-            let count = if max > min { rng.random_range(min..=max) } else { min };
+            let max = rep
+                .max
+                .unwrap_or(min + REGEX_MAX_REPEAT)
+                .min(min + REGEX_MAX_REPEAT);
+            let count = if max > min {
+                rng.random_range(min..=max)
+            } else {
+                min
+            };
             for _ in 0..count {
                 gen_hir(&rep.sub, rng, out);
             }
@@ -326,7 +342,10 @@ mod tests {
         let parts: Vec<&str> = u.split('-').collect();
         assert_eq!(parts.len(), 5);
         assert_eq!(&u[14..15], "4", "версия должна быть 4: {u}");
-        assert!(matches!(&u[19..20], "8" | "9" | "a" | "b"), "вариант RFC4122: {u}");
+        assert!(
+            matches!(&u[19..20], "8" | "9" | "a" | "b"),
+            "вариант RFC4122: {u}"
+        );
     }
 
     #[test]
@@ -363,7 +382,9 @@ mod tests {
         let mut rng = derive_rng(Some(6), 1);
         assert_eq!(random_string(0, &mut rng).len(), 0);
         assert_eq!(random_string(32, &mut rng).len(), 32);
-        assert!(random_string(16, &mut rng).chars().all(|c| c.is_ascii_alphanumeric()));
+        assert!(random_string(16, &mut rng)
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric()));
     }
 
     #[test]
@@ -399,7 +420,10 @@ mod tests {
         for seq in 1..50 {
             let mut rng = derive_rng(Some(100), seq);
             let s = gen_from_regex(r"[A-Z]{3}-[0-9]{4}", &mut rng);
-            assert!(re.is_match(&s), "regex output {s:?} не соответствует паттерну");
+            assert!(
+                re.is_match(&s),
+                "regex output {s:?} не соответствует паттерну"
+            );
         }
     }
 

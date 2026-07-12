@@ -2,13 +2,12 @@
 
 Дата аудита: 2026-07-11. Базис аудита: реальный компилируемый код v7.4.0 (проверен `cargo build/test/bench/clippy`), документация (`README.md`, `docs/`, `examples/`, `REVIEW.md`), Grafana-дашборд.
 
-> **Статус на v8.3.1 (2026-07-12):** вехи A, B и C закрыты полностью (v8.0.0).
+> **Статус на v8.4.0 (2026-07-12):** вехи A, B и C закрыты полностью (v8.0.0).
 > Веха D (P1) — в работе: закрыты F11 (расширенный CLI, v8.1.0), F13 (валидация
 > профиля, v8.1.0), **F12 (HTTP-эндпоинт /metrics, v8.2.0)**,
 > **безопасный TLS (N4, v8.2.0)**, **типизированные ошибки рантайма (N7, v8.3.0)**,
-> а в v8.3.1 починены 3 упавших TLS-интеграционных теста — все 49 integration
-> и 88 unit-тестов зелёные.
-> Осталось в вехе D: CI-пайплайн (N9), формальная JSON Schema/YAML (D3),
+> починка 3 упавших TLS-тестов (v8.3.1), **CI-пайплайн GitHub Actions (N9, v8.4.0)**.
+> Осталось в вехе D: формальная JSON Schema/YAML (D3),
 > синхронизация дашборда/доков (N2).
 > Ранее отложенные опциональные задачи A/B/C (F5 regex, F6 корреляции,
 > F10 честный protobuf, N3 метрики) закрыты в v8.0.0.
@@ -169,7 +168,7 @@ for seq in 1..=total { ... }
 #### P1 — Надёжность и качество
 - **N7. Обработка ошибок. ✅ Сделано (v8.3.0).** В рантайм-коде (вне `#[cfg(test)]`) устранены все `.unwrap()`/`.expect()`. Введён `src/error.rs` с доменными enum'ами `MetricsError`/`ConfigError`/`DrainError` и общим `RuntimeError` (через `thiserror`). `create_metrics()`/`gather_metrics()` теперь возвращают `Result<_, MetricsError>`; `graceful_drain_wait` — `Result<(), DrainError>`. Ошибки пробрасываются через `?` в `anyhow::Error` на границе CLI и уходят в `eprintln` с `ExitCode::FAILURE`. Политика recoverability (bind-fail на `/metrics`, transport-fail sender'ов) сохранена. 11 новых интеграционных тестов в `tests/n7_runtime_errors.rs`; +14 unit-тестов в `error::tests`/`metrics::tests`.
 - **N8. Расширение тестов.** Тесты корректности RFC-форматов (парсинг обратно валидатором), rate-точности, framing, reconnect, back-pressure; property-based тесты (`proptest`) для генераторов; тесты детерминизма по seed.
-- **N9. CI-пайплайн.** GitHub Actions/CI: `fmt` + `clippy -D warnings` + `test` + `bench --no-run` + аудит зависимостей (`cargo-audit`, `cargo-deny`).
+- **N9. CI-пайплайн. ✅ Сделано (v8.4.0).** GitHub Actions workflow `.github/workflows/ci.yml` запускается на каждый push в `main`/`dev` и PR в `main`. Матрица: `ubuntu-latest` + `macos-latest`. Стадии: `cargo fmt --all -- --check` → `cargo clippy --all-targets -- -D warnings` → `cargo build --release --locked` → `cargo test --no-run --locked` → `cargo test --locked` → `cargo bench --no-run --locked`. Кэш cargo через `Swatinem/rust-cache@v2`. На Linux устанавливается `libssl-dev` для `openssl-sys`. Best-effort `msrv` job читает канал из `rust-toolchain.toml`. Актуализирован `.gitignore` (тестовые логи/TLS-PEM/zip-архивы/IDE) и применён `cargo fmt --all` для прохождения CI-гейта. README получил бейджи CI.
 
 #### P2 — Сопровождаемость и поставка
 - **N10. Вынести ядро из `lib.rs`-реэкспортов в чёткие слои** (`generator`, `transport`, `scheduler`, `format`, `observability`), убрать `architecture-notes.md`-заглушку, описать реальную архитектуру.
@@ -183,7 +182,7 @@ for seq in 1..=total { ... }
 1. **Веха A — «Настоящая нагрузка» (P0 F1–F3, N3): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** rate-limiting (F1, v7.5.0), connections (F2, v7.6.0), профили нагрузки во времени (F3, v7.8.0 — constant/linear/sine/burst), метрики нагрузки с латентностью/размером/реконнектами (N3, v8.0.0). Без отложенных задач.
 2. **Веха B — «Валидный syslog» (P0 F7–F10): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** RFC 5424/3164 + framing (v7.7.0); честный protobuf wire-format (F10, v8.0.0). Делает вывод пригодным для реальных приёмников. Без отложенных задач.
 3. **Веха C — «Вариативный пейлоад» (P0 F4–F6, F14): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** ГПСЧ+seed (F4, v7.9.0), богатый faker-набор + типы полей + **regex** (F5), распределения uniform/weighted/zipf + паддинг + **межполевые корреляции** (F6), мультишаблоны с весами (F14). Ранее отложенные `regex` и корреляции реализованы в v8.0.0. Закрывает «глубокую кастомизацию» пейлоада без остаточных задач.
-4. **Веха D — «Продакшн-готовность» (P1): 🔄 В РАБОТЕ.** Сделано: CLI (F11, v8.1.0), валидация профиля (F13, v8.1.0), типизированные ошибки валидации (`ValidationError` через `thiserror`), **HTTP-эндпоинт /metrics (F12, v8.2.0)**, **безопасный TLS по умолчанию (N4, v8.2.0)**, **типизированные ошибки рантайма (N7, v8.3.0)**. Осталось: CI-пайплайн (N9), формальная JSON Schema/YAML (D3), синхронизация дашборда/доков (N2).
+4. **Веха D — «Продакшн-готовность» (P1): 🔄 В РАБОТЕ.** Сделано: CLI (F11, v8.1.0), валидация профиля (F13, v8.1.0), типизированные ошибки валидации (`ValidationError` через `thiserror`), **HTTP-эндпоинт /metrics (F12, v8.2.0)**, **безопасный TLS по умолчанию (N4, v8.2.0)**, **типизированные ошибки рантайма (N7, v8.3.0)**, починка TLS-тестов (v8.3.1), **CI-пайплайн GitHub Actions (N9, v8.4.0)**. Осталось: формальная JSON Schema/YAML (D3), синхронизация дашборда/доков (N2).
 5. **Веха E — «Зрелость» (P2):** доп. форматы/транспорты, сценарии аномалий, Docker/compose, рефакторинг слоёв.
 
 Каждая веха завершается compile-verified релизом с обновлением `CHANGELOG.md` и документации (как в текущем процессе v7.4.0).

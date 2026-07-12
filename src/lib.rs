@@ -8,6 +8,7 @@ pub mod metrics_server;
 pub mod payload;
 pub mod protobuf;
 pub mod schema;
+pub mod schema_check;
 pub mod sender;
 pub mod shutdown;
 pub mod syslog;
@@ -16,7 +17,8 @@ pub mod validate;
 
 pub use cli::{apply_overrides, parse_target, Args, Overrides};
 pub use config::{
-    Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, Phase, Profile,
+    ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use core::{
     create_dispatcher, default_values, generate_message, load_schema, load_templates,
@@ -32,6 +34,9 @@ pub use payload::{
 };
 pub use protobuf::{apply_protobuf_schema, serialize_protobuf, serialize_protobuf_like, PbType};
 pub use schema::{Schema, SchemaField};
+pub use schema_check::{
+    validate_against_embedded_schema, validate_against_schema, SchemaCheckError, PROFILE_SCHEMA,
+};
 pub use sender::{
     build_tls_connector, record_send, target_sender_file, Framing, SharedRx, TlsParams,
 };

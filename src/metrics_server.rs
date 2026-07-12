@@ -40,12 +40,20 @@ pub fn build_http_response(status_line: &str, content_type: &str, body: &str) ->
 
 /// Маршрутизация: возвращает готовый HTTP-ответ для (method, path).
 /// GET /metrics и GET / → метрики; всё остальное → 404.
+///
+/// N7: `gather_metrics` теперь возвращает `Result<String, MetricsError>`.
+/// При ошибке кодирования (теоретически невозможно, но тип требует обработки)
+/// возвращаем 500 с описанием — это лучше, чем паника или пустое тело.
 pub fn route(method: &str, path: &str, metrics: &Metrics) -> String {
     match (method, path) {
-        ("GET", "/metrics") | ("GET", "/") => {
-            let body = gather_metrics(metrics);
-            build_http_response("200 OK", PROM_CONTENT_TYPE, &body)
-        }
+        ("GET", "/metrics") | ("GET", "/") => match gather_metrics(metrics) {
+            Ok(body) => build_http_response("200 OK", PROM_CONTENT_TYPE, &body),
+            Err(e) => build_http_response(
+                "500 Internal Server Error",
+                "text/plain; charset=utf-8",
+                &format!("500 Internal Server Error: ошибка экспорта метрик: {e}\n"),
+            ),
+        },
         ("GET", _) => build_http_response(
             "404 Not Found",
             "text/plain; charset=utf-8",
@@ -147,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_route_metrics_200() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         // CounterVec без наблюдённых меток не экспортируется, поэтому
         // сначала инкрементируем одну серию.
         metrics.messages_total.with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"]).inc();
@@ -162,21 +170,21 @@ mod tests {
 
     #[test]
     fn test_route_root_alias_200() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         let resp = route("GET", "/", &metrics);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
     }
 
     #[test]
     fn test_route_unknown_404() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         let resp = route("GET", "/healthz", &metrics);
         assert!(resp.starts_with("HTTP/1.1 404 Not Found"));
     }
 
     #[test]
     fn test_route_non_get_405() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         let resp = route("POST", "/metrics", &metrics);
         assert!(resp.starts_with("HTTP/1.1 405 Method Not Allowed"));
     }
@@ -192,7 +200,7 @@ mod tests {
     /// GET /metrics и проверяем, что получили prometheus-текст.
     #[tokio::test]
     async fn test_serve_real_get_metrics() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         // Увеличим счётчик, чтобы вывод был непустым.
         metrics.messages_total.with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"]).inc();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -227,7 +235,7 @@ mod tests {
     /// Реальный GET на неизвестный путь → 404.
     #[tokio::test]
     async fn test_serve_real_get_404() {
-        let metrics = create_metrics();
+        let metrics = create_metrics().expect("create_metrics ok in test");
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let shutdown = CancellationToken::new();

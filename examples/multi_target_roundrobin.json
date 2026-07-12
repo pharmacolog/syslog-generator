@@ -1,0 +1,28 @@
+{
+  "targets": [
+    {
+      "address": "./rr-a.log",
+      "transport": "file",
+      "weight": 1
+    },
+    {
+      "address": "./rr-b.log",
+      "transport": "file",
+      "weight": 1
+    }
+  ],
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "rr",
+      "messages_per_second": 6,
+      "templates": [
+        "rr seq={{sequence}}"
+      ]
+    }
+  ]
+}

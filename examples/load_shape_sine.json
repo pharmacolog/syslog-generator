@@ -1,0 +1,14 @@
+{
+  "targets": [{ "address": "127.0.0.1:514", "transport": "udp" }],
+  "distribution": "round-robin",
+  "phases": [
+    {
+      "name": "diurnal-wave",
+      "format": "rfc3164",
+      "duration_secs": 120,
+      "templates": ["metric collected sample={{sequence}}"],
+      "syslog": { "facility": 16, "severity": 6, "hostname": "sensor-1", "app_name": "collector" },
+      "load_shape": { "type": "sine", "min_rate": 200, "max_rate": 2000, "period_secs": 60 }
+    }
+  ]
+}

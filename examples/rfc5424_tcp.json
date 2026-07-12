@@ -1,0 +1,22 @@
+{
+  "targets": [
+    { "address": "127.0.0.1:514", "transport": "tcp", "connections": 4, "framing": "non-transparent" }
+  ],
+  "distribution": "round-robin",
+  "shutdown": { "mode": "drain", "drain_timeout_secs": 15 },
+  "phases": [
+    {
+      "name": "auth",
+      "format": "rfc5424",
+      "messages_per_second": 2000,
+      "duration_secs": 30,
+      "templates": ["User {{sequence}} logged in from {{faker.ipv4}}"],
+      "syslog": {
+        "facility": 4, "severity": 5,
+        "hostname": "web-01", "app_name": "authsvc",
+        "procid": "8421", "msgid": "AUTH",
+        "structured_data": "[origin@32473 ip=\"192.0.2.1\"]"
+      }
+    }
+  ]
+}

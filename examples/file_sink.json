@@ -1,0 +1,21 @@
+{
+  "targets": [
+    {
+      "address": "logs.txt",
+      "transport": "file",
+      "file_path": "logs.txt",
+      "connections": 1
+    }
+  ],
+  "phases": [
+    {
+      "name": "file",
+      "duration_secs": 10,
+      "messages_per_second": 100,
+      "templates": [
+        "seq={{sequence}}"
+      ],
+      "seed": 42
+    }
+  ]
+}

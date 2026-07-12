@@ -1,0 +1,284 @@
+{
+  "dashboard": {
+    "title": "syslog-generator",
+    "uid": "syslog-generator",
+    "timezone": "browser",
+    "schemaVersion": 36,
+    "refresh": "5s",
+    "panels": [
+      {
+        "title": "CPU Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "syslog_cpu_usage_percent",
+            "legendFormat": "CPU %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "title": "Memory Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "syslog_memory_usage_bytes",
+            "legendFormat": "Bytes",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 32
+        }
+      },
+      {
+        "title": "Messages by Target",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "sum by (target) (rate(syslog_messages_total[1m]))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "title": "Errors by Target",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "sum by (target) (rate(syslog_errors_total[1m]))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 36
+        }
+      },
+      {
+        "title": "Message Size Distribution",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "sum(rate(syslog_message_size_bytes_bucket[1m])) by (le)",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "title": "Generate Duration",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "sum(rate(syslog_generate_duration_seconds_bucket[1m])) by (le)",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "title": "Messages by Format",
+        "type": "pie",
+        "targets": [
+          {
+            "expr": "sum(rate(syslog_messages_by_format_total[1m])) by (format)",
+            "legendFormat": "{{format}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "title": "Messages by Sink",
+        "type": "pie",
+        "targets": [
+          {
+            "expr": "sum(rate(syslog_messages_by_sink_total[1m])) by (sink)",
+            "legendFormat": "{{sink}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "title": "Messages/sec",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(syslog_messages_total[1m])",
+            "legendFormat": "{{transport}} / {{phase}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "title": "Bytes/sec",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(syslog_bytes_total[1m])",
+            "legendFormat": "{{transport}} / {{phase}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "title": "Active workers",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "syslog_active_workers",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "title": "Errors total",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "syslog_errors_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 8
+        }
+      }
+    ]
+  },
+  "overwrite": true,
+  "panels": [
+    {
+      "title": "Shutdown Events",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "syslog_shutdowns_total",
+          "legendFormat": "shutdowns",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 44
+      }
+    },
+    {
+      "title": "Drain Timeouts",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "syslog_drain_timeouts_total",
+          "legendFormat": "timeouts",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 44
+      }
+    },
+    {
+      "title": "Drain Duration",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(syslog_drain_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 drain",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      }
+    },
+    {
+      "title": "Messages Drained by Target",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "sum by (target) (increase(syslog_messages_drained_total[15m]))",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "template": "{{method}} {{path}} {{status}} bytes={{bytes}} rt={{req_time}}ms client={{client_ip}} ua=\"{{ua}}\" rid={{rid}} ts={{ts}}",
+  "fields": {
+    "method":   { "type": "enum", "values": ["GET","POST","PUT","DELETE"], "distribution": "weighted", "weights": [70, 20, 7, 3] },
+    "path":     { "type": "enum", "values": ["/","/api/v1/users","/api/v1/orders","/health","/static/app.js","/search"], "distribution": "zipf", "zipf_exponent": 1.1 },
+    "status":   { "type": "enum", "values": ["200","201","301","400","404","500"], "distribution": "weighted", "weights": [80, 5, 3, 4, 5, 3] },
+    "bytes":    { "type": "int", "min": 64, "max": 1048576 },
+    "req_time": { "type": "int", "min": 1, "max": 2500 },
+    "client_ip":{ "type": "faker", "faker": "ipv4" },
+    "ua":       { "type": "faker", "faker": "user_agent" },
+    "rid":      { "type": "faker", "faker": "uuid" },
+    "ts":       { "type": "datetime", "jitter_secs": 5 }
+  }
+}

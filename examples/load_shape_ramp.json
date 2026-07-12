@@ -1,0 +1,23 @@
+{
+  "targets": [{ "address": "127.0.0.1:514", "transport": "tcp", "connections": 4 }],
+  "distribution": "round-robin",
+  "shutdown": { "mode": "drain", "drain_timeout_secs": 15 },
+  "phases": [
+    {
+      "name": "ramp-up",
+      "format": "rfc5424",
+      "duration_secs": 60,
+      "templates": ["User {{sequence}} logged in from {{faker.ipv4}}"],
+      "syslog": { "facility": 4, "severity": 5, "hostname": "web-01", "app_name": "authsvc" },
+      "load_shape": { "type": "linear", "start_rate": 100, "end_rate": 5000 }
+    },
+    {
+      "name": "ramp-down",
+      "format": "rfc5424",
+      "duration_secs": 30,
+      "templates": ["User {{sequence}} logged out"],
+      "syslog": { "facility": 4, "severity": 5, "hostname": "web-01", "app_name": "authsvc" },
+      "load_shape": { "type": "linear", "start_rate": 5000, "end_rate": 0 }
+    }
+  ]
+}

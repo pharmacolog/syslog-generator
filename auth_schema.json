@@ -1,0 +1,10 @@
+{
+  "fields": {
+    "timestamp": {"type": "datetime", "format": "rfc3339"},
+    "src_ip": {"type": "faker", "faker": "ipv4"},
+    "user": {"type": "enum", "values": ["root", "admin", "deploy", "alice", "bob"]},
+    "action": {"type": "enum", "values": ["login", "logout", "failed", "sudo"]},
+    "session_id": {"type": "faker", "faker": "uuid"}
+  },
+  "template": "{{timestamp}} {{src_ip}} {{user}} {{action}} session={{session_id}}"
+}

@@ -1,0 +1,23 @@
+{
+  "targets": [
+    {
+      "address": "./shutdown.log",
+      "transport": "file",
+      "weight": 1
+    }
+  ],
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "steady",
+      "messages_per_second": 10,
+      "templates": [
+        "seq={{sequence}}"
+      ]
+    }
+  ]
+}

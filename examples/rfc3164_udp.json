@@ -1,0 +1,16 @@
+{
+  "targets": [
+    { "address": "127.0.0.1:514", "transport": "udp" }
+  ],
+  "distribution": "round-robin",
+  "phases": [
+    {
+      "name": "kernel",
+      "format": "rfc3164",
+      "messages_per_second": 1000,
+      "total_messages": 5000,
+      "templates": ["link state change on eth{{sequence}}"],
+      "syslog": { "facility": 0, "severity": 6, "hostname": "router1", "app_name": "kernel" }
+    }
+  ]
+}

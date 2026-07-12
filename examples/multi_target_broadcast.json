@@ -1,0 +1,28 @@
+{
+  "targets": [
+    {
+      "address": "./b-a.log",
+      "transport": "file",
+      "weight": 1
+    },
+    {
+      "address": "./b-b.log",
+      "transport": "file",
+      "weight": 1
+    }
+  ],
+  "distribution": "broadcast",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "broadcast",
+      "messages_per_second": 4,
+      "templates": [
+        "broadcast seq={{sequence}}"
+      ]
+    }
+  ]
+}

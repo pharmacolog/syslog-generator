@@ -1,0 +1,28 @@
+{
+  "targets": [
+    {
+      "address": "./w-a.log",
+      "transport": "file",
+      "weight": 1
+    },
+    {
+      "address": "./w-b.log",
+      "transport": "file",
+      "weight": 3
+    }
+  ],
+  "distribution": "weighted",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "weighted",
+      "messages_per_second": 8,
+      "templates": [
+        "weighted seq={{sequence}}"
+      ]
+    }
+  ]
+}

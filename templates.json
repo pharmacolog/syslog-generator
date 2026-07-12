@@ -1,0 +1,5 @@
+[
+  "{{timestamp}} {{real_hostname}} {{real_app}}[{{pid}}]: event seq={{sequence}} ip={{faker.ipv4}}",
+  "{{real_app}}: {{real_action}} user={{faker.username}} from {{faker.ipv4}} id={{random_int}}",
+  "kernel: {{real_action}} interface eth0 on {{real_hostname}} cmd={{faker.command}}"
+]

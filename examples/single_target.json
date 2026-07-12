@@ -1,0 +1,24 @@
+{
+  "targets": [
+    {
+      "address": "./single_target.log",
+      "transport": "file",
+      "connections": 1,
+      "weight": 1
+    }
+  ],
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "single",
+      "messages_per_second": 5,
+      "templates": [
+        "{{timestamp}} {{real_app}} seq={{sequence}}"
+      ]
+    }
+  ]
+}

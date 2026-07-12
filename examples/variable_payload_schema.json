@@ -1,0 +1,16 @@
+{
+  "targets": [{ "address": "127.0.0.1:6514", "transport": "tls", "framing": "octet-counting" }],
+  "distribution": "round-robin",
+  "phases": [
+    {
+      "name": "http-access-log",
+      "format": "rfc5424",
+      "seed": 2024,
+      "messages_per_second": 1000,
+      "duration_secs": 60,
+      "schema_file": "examples/schema_http_access.json",
+      "pad_to_bytes": 512,
+      "syslog": { "facility": 16, "severity": 6, "hostname": "web-01", "app_name": "nginx", "msgid": "ACCESS" }
+    }
+  ]
+}

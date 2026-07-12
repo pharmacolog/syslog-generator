@@ -1,0 +1,15 @@
+{
+  "targets": [{ "address": "127.0.0.1:514", "transport": "tcp", "connections": 2, "framing": "octet-counting" }],
+  "distribution": "round-robin",
+  "shutdown": { "mode": "drain", "drain_timeout_secs": 10 },
+  "phases": [
+    {
+      "name": "spiky-traffic",
+      "format": "rfc5424",
+      "duration_secs": 60,
+      "templates": ["event id={{sequence}} src={{faker.ipv4}}"],
+      "syslog": { "facility": 10, "severity": 4, "hostname": "fw-1", "app_name": "firewall", "msgid": "TRAFFIC" },
+      "load_shape": { "type": "burst", "base_rate": 100, "burst_rate": 8000, "every_secs": 10, "burst_secs": 2 }
+    }
+  ]
+}

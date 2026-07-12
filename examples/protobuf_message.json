@@ -1,0 +1,23 @@
+{
+  "targets": [
+    { "address": "/tmp/pb_out.bin", "transport": "file" }
+  ],
+  "phases": [
+    {
+      "name": "protobuf_demo",
+      "total_messages": 3,
+      "messages_per_second": 100,
+      "seed": 42,
+      "format": "protobuf",
+      "templates": ["ignored-for-protobuf"],
+      "protobuf_schema": {
+        "fields": {
+          "1_host": "1:{{faker.hostname}}",
+          "2_pid": "2:int:{{pid}}",
+          "3_status": "3:uint:{{faker.http_status}}",
+          "4_msg": "4:user {{faker.username}} from {{faker.ipv4}}"
+        }
+      }
+    }
+  ]
+}

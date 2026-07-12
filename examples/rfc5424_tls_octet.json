@@ -1,0 +1,21 @@
+{
+  "targets": [
+    { "address": "127.0.0.1:6514", "transport": "tls", "connections": 2, "framing": "octet-counting" }
+  ],
+  "distribution": "round-robin",
+  "shutdown": { "mode": "drain", "drain_timeout_secs": 20 },
+  "phases": [
+    {
+      "name": "secure-feed",
+      "format": "rfc5424",
+      "messages_per_second": 5000,
+      "duration_secs": 60,
+      "templates": ["audit event={{sequence}} user={{faker.username}}"],
+      "syslog": {
+        "facility": 10, "severity": 5,
+        "hostname": "{{hostname}}", "app_name": "auditd",
+        "msgid": "AUDIT", "bom": true
+      }
+    }
+  ]
+}

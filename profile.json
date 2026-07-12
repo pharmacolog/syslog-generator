@@ -1,0 +1,33 @@
+{
+  "distribution": "weighted",
+  "targets": [
+    {"address": "127.0.0.1:514", "transport": "tcp", "connections": 2},
+    {"address": "127.0.0.1:515", "transport": "udp", "connections": 1}
+  ],
+  "phases": [
+    {
+      "name": "mixed",
+      "duration_secs": 60,
+      "messages_per_second": 1000,
+      "format": "rfc5424",
+      "templates_file": "templates.json",
+      "seed": 42
+    },
+    {
+      "name": "auth",
+      "duration_secs": 30,
+      "messages_per_second": 500,
+      "format": "rfc5424",
+      "schema_file": "auth_schema.json",
+      "seed": 42
+    },
+    {
+      "name": "nginx",
+      "duration_secs": 30,
+      "messages_per_second": 2000,
+      "format": "rfc3164",
+      "schema_file": "nginx_schema.json",
+      "seed": 42
+    }
+  ]
+}

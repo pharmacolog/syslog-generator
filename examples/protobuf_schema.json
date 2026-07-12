@@ -1,0 +1,7 @@
+{
+  "fields": {
+    "hostname": "{{real_hostname}}",
+    "app_name": "{{real_app}}",
+    "message": "{{real_command}}"
+  }
+}

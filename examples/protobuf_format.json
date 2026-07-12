@@ -1,0 +1,29 @@
+{
+  "targets": [
+    {
+      "address": "./protobuf.log",
+      "transport": "file",
+      "weight": 1
+    }
+  ],
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "protobuf",
+      "format": "protobuf",
+      "protobuf_schema": {
+        "fields": {
+          "app_name": "{{real_app}}",
+          "message": "{{real_command}}"
+        }
+      },
+      "templates": [
+        "ignored"
+      ]
+    }
+  ]
+}

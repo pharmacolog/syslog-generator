@@ -1,0 +1,20 @@
+{
+  "targets": [{ "address": "127.0.0.1:514", "transport": "udp" }],
+  "distribution": "round-robin",
+  "phases": [
+    {
+      "name": "reproducible-mix",
+      "format": "rfc5424",
+      "seed": 777,
+      "messages_per_second": 500,
+      "total_messages": 10000,
+      "templates": [
+        "kind=login user={{faker.username}} src={{faker.ipv4}} ua={{faker.user_agent}}",
+        "kind=auth mac={{faker.mac}} host={{faker.hostname}} sid={{faker.uuid}}",
+        "kind=egress dst={{faker.ipv6}} url={{faker.url}}"
+      ],
+      "template_weights": [3, 2, 1],
+      "syslog": { "facility": 4, "severity": 6, "hostname": "gw-1", "app_name": "authsvc", "msgid": "MIX" }
+    }
+  ]
+}

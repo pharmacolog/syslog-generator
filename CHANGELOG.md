@@ -1,6 +1,68 @@
 
 # Changelog
 
+## v8.3.0 - 2026-07-12
+
+Продолжение вехи D («Промышленная готовность», P1). Закрыта задача
+**N7 — типизированные ошибки рантайма**: вместо `.unwrap()`/`.expect()`
+в рантайм-путях теперь используется доменная система ошибок через `thiserror`
+с пробросом через `?` в `anyhow::Error` для CLI-границы.
+
+### Added
+- **N7 — типизированные ошибки рантайма.** Новый модуль `src/error.rs` с
+  четырьмя доменными enum'ами:
+  - `MetricsError` — ошибки инициализации/экспорта Prometheus-метрик
+    (варианты `Construct{kind,name,source}`, `Register{name,source}`,
+    `Encode(#[from] prometheus::Error)`, `Utf8(#[from] FromUtf8Error)`);
+  - `ConfigError` — ошибки загрузки/парсинга профиля (`Io{path,source}`,
+    `Json{path,source}`; YAML-вариант отложен до v8.5.0);
+  - `DrainError` — ошибки graceful-drain (`TaskJoin(#[from] JoinError)`,
+    `Timeout{timeout_secs}`, `Sender(#[from] anyhow::Error)`);
+  - `RuntimeError` — общий агрегирующий enum рантайма с `#[from]`-вариантами
+    для доменных ошибок, плюс `Cancelled` и `TaskJoin`.
+
+### Changed
+- `metrics::create_metrics()` теперь возвращает `Result<Metrics, MetricsError>`
+  вместо `Metrics`. Внутренние хелперы `make_counter_vec`/`make_gauge`/
+  `make_int_counter`/`make_histogram` сохраняют имя и kind метрики в ошибке;
+  цикл `register(...)` хранит имя рядом с каждой метрикой для информативного
+  сообщения при конфликте.
+- `metrics::gather_metrics()` теперь возвращает `Result<String, MetricsError>`
+  вместо `String`. `TextEncoder::encode` и `String::from_utf8` проходят через `?`.
+- `shutdown::graceful_drain_wait()` теперь возвращает `Result<(), DrainError>`
+  с тремя типизированными вариантами (TaskJoin / Timeout / Sender) вместо
+  произвольного `anyhow::Error`.
+- `metrics_server::route()` обрабатывает `Result` от `gather_metrics`:
+  при ошибке кодирования возвращает `500 Internal Server Error` с описанием.
+- `main.rs` обрабатывает `Result` от `create_metrics` через `.context(...)?`
+  и пробрасывает `MetricsError` через `anyhow::Error` в `eprintln` с
+  корректным `ExitCode::FAILURE`.
+- В рантайм-коде (вне `#[cfg(test)] mod tests`) устранены все `.unwrap()`
+  и `.expect()` — ранее их было 11 в `metrics.rs` плюс потенциальные точки
+  в `main.rs` и `shutdown.rs`.
+
+### Dependencies
+- Без изменений. Используется уже подключённый `thiserror = "1"`.
+
+### Notes
+- Тесты: **88 unit + 46 + 11 integration = 145**, все зелёные (88 unit
+  было 74 + 11 в `error::tests` + 3 в `metrics::tests`; 11 новых
+  интеграционных в `tests/n7_runtime_errors.rs`).
+- 3 интеграционных теста mixed-target TLS (test_mixed_multi_target_*_end_to_end)
+  падают в текущем окружении из-за несовместимости `rcgen 0.13` с системным
+  OpenSSL (`Unknown format in import`). Падения воспроизводятся на чистом
+  `dev` до N7 и не относятся к этой задаче — будут устранены отдельным
+  коммитом (план: bump `rcgen` до 0.14 или миграция на `rcgen` 0.13 +
+  фиксированная версия OpenSSL).
+- Живая проверка N7: `--version` → rc=0; `--validate` на невалидном профиле
+  → rc=1 + список проблем; `--metrics-addr` на занятом порту → rc=0 + warn
+  (recoverable); `--print-config` → rc=0; несуществующий файл профиля → rc=1
+  + сообщение `ConfigError::Io`.
+- Политика обработки ошибок сохранена: bind-fail на `/metrics` НЕ роняет
+  генератор (метрики — вспомогательный канал), transport-fail sender'ов
+  фиксируется в `metrics.errors_total` и глотается в drain. N7 сделал
+  ошибки типизированными, не изменил политику recoverability.
+
 ## v8.2.0 - 2026-07-11
 
 Продолжение вехи D («Промышленная готовность», P1). Закрыты

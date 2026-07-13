@@ -105,6 +105,8 @@ jobs:
             [ -f "$f" ] || continue
             case "$(basename "$f")" in
               schema_*.json) continue ;;
+              *_schema.json) continue ;;
+              protobuf_schema.json) continue ;;
               *.meta.json) continue ;;
             esac
             echo "checking $f"

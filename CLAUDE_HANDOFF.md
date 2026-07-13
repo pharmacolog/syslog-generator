@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v9.0.0** (compile-verified, milestone release — веха D «Продакшн-готовность» закрыта).
+Дата: 2026-07-13. Текущая версия: **v9.1.0** (compile-verified, N10 trait Format/Transport — первый релиз вехи E «Зрелость»).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -197,7 +197,8 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v8.7.2** — N4.mTLS: 3 новых TargetConfig-поля (tls_client_cert_file, tls_client_key_file, tls_min_protocol_version), 9 новых тестов.
 - **v8.8.0** — N10 рефакторинг слоёв: `src/format/` (RFC 5424/3164/raw/protobuf), `src/transport/` (file/tcp/udp/tls), `src/observability/` (metrics + HTTP), `src/generator/` (orchestration). 0 breaking changes.
 - **v8.8.1** — patch-долг: правки `AUDIT.md` (поставлены ✅ на F7/F8/F9, убраны устаревшие пометки «Отложено» из F13 и N4). Код без изменений. ← текущая.
-- **v9.0.0** — milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА. Major-бамп без breaking changes (0 изменений в API). Публичный API полностью backward-compatible. ← текущая.
+- **v9.0.0** — milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА. Major-бамп без breaking changes (0 изменений в API). Публичный API полностью backward-compatible.
+- **v9.1.0** — N10 trait Format + TransportKind (dyn-dispatch, async fn в trait). 0 breaking changes. Подготовка к F15 (CEF/LEEF/JSON-lines) и F16 (Kafka/Redpanda). ← текущая.
 
 ---
 
@@ -214,7 +215,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 ## 9. Пример стартового промпта для Claude
 
 Скопируй текст ниже в первое сообщение новой сессии Claude, приложив архив
-`syslog-generator-v9.0.0-verified.zip` (или распакованный проект). При работе в Claude Code
+`syslog-generator-v9.1.0-verified.zip` (или распакованный проект). При работе в Claude Code
 достаточно открыть каталог проекта — файл `CLAUDE_HANDOFF.md` уже лежит в корне.
 
 ```text
@@ -236,7 +237,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v9.0.0. **Веха D («Продакшн-готовность») ЗАКРЫТА** — все P0+P1 задачи AUDIT.md §4 выполнены (F1-F10, N1-N11, D3), включая все «отложено»-части кроме cipher_policy (N4.cipher_policy → веха E, native-tls не имеет API для cipher lists). Major-бамп v8.8.1 → 9.0.0 как milestone release без breaking changes. Следующая — веха E (P2 «Зрелость»): F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda), F17 (сценарии аномалий), N10 (transport trait), N12 (Docker/musl). План в `PLAN-v9.0.0.md`.
+Текущее состояние: версия v9.1.0. **Веха E («Зрелость») в процессе** — N10 (v9.1.0) сделано (trait Format/TransportKind), следующая v9.2.0 (F15 CEF/LEEF/JSON-lines), v9.3.0 (F16 Kafka/Redpanda + ротация + reconnect), v9.4.0 (F17 сценарии аномалий), v9.5.0 (N4.cipher_policy), v9.6.0 (N12 Docker). План в `PLAN-v10.0.0.md`. CI полностью функционален. План в `PLAN-v9.0.0.md`.
 Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Следующая — веха E (P2):
 F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda/файловая ротация/reconnect-стратегия),
 F17 (сценарии аномалий/атак), N12 (Docker/musl/docker-compose), N10 (рефакторинг слоёв).

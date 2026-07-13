@@ -2,16 +2,24 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v8.8.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v9.0.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-Версия `v8.8.1` — compile-verified релиз. Модульная архитектура с реальным multi-target
+**Milestone `v9.0.0` — веха D «Продакшн-готовность» ЗАКРЫТА.** Все P0/P1 задачи
+выполнены. Публичный API полностью backward-compatible с v8.x (только
+добавлены новые типы, ничего не удалено). Следующая веха — E (P2 «Зрелость»):
+F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda), F17 (сценарии аномалий),
+N10 (transport trait), N12 (Docker/musl). Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v9.0.0:** milestone-релиз — веха D «Продакшн-готовность» ЗАКРЫТА.
+Все P0+P1 задачи AUDIT.md §4 выполнены (F1-F10, N1-N11, D3). Major-бамп
+без breaking changes. Публичный API полностью backward-compatible с v8.x.
 
 **v8.8.1:** патч-долг — правки `AUDIT.md` (поставлены ✅ на F7/F8/F9,
 убраны устаревшие пометки "Отложено" из F13 и N4). Код без изменений.

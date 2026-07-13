@@ -42,13 +42,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}   # pharmacolog/syslog-generator
 
 jobs:
-  # v10.4.3: amd64 build собирается на ВСЕХ push/PR — быстрый smoke-test
-  # для CI (~10-15 мин). arm64 собирается ТОЛЬКО в релизной ветке
-  # (`release/v*.*.*`) или на push тега `v*.*.*` — это multi-arch для
-  # официального релиза, ~30-40 мин через QEMU emulation.
+  # v10.4.4 (фикс): ДВА job'а с conditional `if:` чтобы избежать race condition.
+  #
+  # `docker-amd64`: запускается на non-release push (main, dev, feature/*, PR).
+  # SKIP на release — `docker-multiarch` сделает multi-arch manifest.
+  #
+  # `docker-multiarch`: запускается ТОЛЬКО на release (push в release/v*.*.*
+  # или push tag v*.*.*). Собирает multi-arch manifest через buildx
+  # platforms=linux/amd64,linux/arm64 (QEMU emulation arm64).
+  #
+  # Так гарантируется ОДИН multi-arch manifest в registry на release, а не
+  # race condition между двумя job'ами.
   docker-amd64:
     name: Build & push (amd64)
     runs-on: ubuntu-latest
+    # Skip на release — docker-multiarch сделает multi-arch.
+    if: |
+      !(startsWith(github.ref, 'refs/heads/release/')) &&
+      !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
@@ -116,7 +127,6 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test
-        # Используем tag, который ТОЧНО есть в registry для текущего push.
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             TAG="${{ steps.meta.outputs.VERSION }}"
@@ -128,18 +138,21 @@ jobs:
           echo "Smoke test image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
           docker run --rm "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}" --version
 
-  # v10.4.3: arm64 multi-arch build ТОЛЬКО для релизов.
-  # Триггер: push в release/v*.*.* ИЛИ push tag v*.*.*.
-  docker-arm64:
-    name: Build & push (arm64, release-only)
+  # v10.4.4: multi-arch build ТОЛЬКО для релизов.
+  # Собирает ОДИН manifest с amd64+arm64 через buildx.
+  docker-multiarch:
+    name: Build & push (multi-arch, release-only)
     runs-on: ubuntu-latest
-    needs: docker-amd64
     if: |
       (startsWith(github.ref, 'refs/heads/release/')) ||
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -194,19 +207,17 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build & push (arm64, multi-arch manifest)
-        # multi-arch через buildx platforms=linux/amd64,linux/arm64:
-        # - amd64 собирается нативно (быстро)
-        # - arm64 собирается через QEMU emulation (медленно)
-        # Итог: один manifest с обоими arch, push в registry как multi-arch image.
-        # amd64 build происходит заново (buildx не использует кэш из
-        # docker-amd64 job — разные cache paths), но это дешевле чем
-        # собирать arm64 на каждом push.
+      - name: Build & push (multi-arch manifest)
+        # matrix.platform = linux/amd64 (нативно) + linux/arm64 (через QEMU emulation).
+        # buildx создаёт ОДИН manifest с обоими arch под каждым тегом.
+        # amd64 build дешёвый (нативный), arm64 — дорогой (QEMU ~30-40 мин).
+        # Но это выполняется ТОЛЬКО на release (защита if: выше), не на
+        # каждом push в main/dev.
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha

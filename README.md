@@ -2,20 +2,23 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v9.0.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v9.1.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-**Milestone `v9.0.0` — веха D «Продакшн-готовность» ЗАКРЫТА.** Все P0/P1 задачи
-выполнены. Публичный API полностью backward-compatible с v8.x (только
-добавлены новые типы, ничего не удалено). Следующая веха — E (P2 «Зрелость»):
-F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda), F17 (сценарии аномалий),
-N10 (transport trait), N12 (Docker/musl). Модульная архитектура с реальным multi-target
+**Веха E (P2 «Зрелость») в процессе.** v9.0.0 закрыл веху D. v9.1.0 — N10
+(trait Format + TransportKind + static dispatch). Следующие: v9.2.0 (F15:
+CEF/LEEF/JSON-lines), v9.3.0 (F16: Kafka/Redpanda + ротация + reconnect),
+v9.4.0 (F17: сценарии аномалий), v9.5.0 (N4.cipher_policy), v9.6.0 (N12: Docker). Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v9.1.0:** trait `Format` + `enum FormatKind` (dyn-dispatch) и trait
+`Transport` + `enum TransportKind` — инфраструктура для F15/F16
+вехи E. 0 breaking changes. Использует `async fn` в trait (Rust 1.75+).
 
 **v9.0.0:** milestone-релиз — веха D «Продакшн-готовность» ЗАКРЫТА.
 Все P0+P1 задачи AUDIT.md §4 выполнены (F1-F10, N1-N11, D3). Major-бамп

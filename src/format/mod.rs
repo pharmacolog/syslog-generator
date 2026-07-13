@@ -227,8 +227,14 @@ mod tests {
     #[test]
     fn n10_formatkind_raw_is_passthrough() {
         let h = Header {
-            facility: 0, severity: 0, hostname: "h".into(), app_name: "a".into(),
-            procid: "".into(), msgid: "".into(), structured_data: "-".into(), bom: false,
+            facility: 0,
+            severity: 0,
+            hostname: "h".into(),
+            app_name: "a".into(),
+            procid: "".into(),
+            msgid: "".into(),
+            structured_data: "-".into(),
+            bom: false,
         };
         let out = FormatKind::Raw.render(&h, b"hello world");
         assert_eq!(out, b"hello world");
@@ -246,10 +252,19 @@ mod tests {
     /// N10: `parse("rfc5424")` → `Some(Rfc5424)`, `parse("unknown")` → `None`.
     #[test]
     fn n10_formatkind_parse() {
-        assert!(matches!(FormatKind::parse("rfc5424"), Some(FormatKind::Rfc5424)));
-        assert!(matches!(FormatKind::parse("rfc3164"), Some(FormatKind::Rfc3164)));
+        assert!(matches!(
+            FormatKind::parse("rfc5424"),
+            Some(FormatKind::Rfc5424)
+        ));
+        assert!(matches!(
+            FormatKind::parse("rfc3164"),
+            Some(FormatKind::Rfc3164)
+        ));
         assert!(matches!(FormatKind::parse("raw"), Some(FormatKind::Raw)));
-        assert!(matches!(FormatKind::parse("protobuf"), Some(FormatKind::Protobuf(_))));
+        assert!(matches!(
+            FormatKind::parse("protobuf"),
+            Some(FormatKind::Protobuf(_))
+        ));
         assert!(FormatKind::parse("unknown").is_none());
     }
 }

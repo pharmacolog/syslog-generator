@@ -190,21 +190,49 @@ impl Transport for TransportKind {
     ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
         async move {
             match self {
-                Self::File => file::target_sender_file(
-                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
-                ).await,
-                Self::Tcp => tcp::target_sender_tcp(
-                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
-                    crate::transport::Framing::NonTransparent,
-                ).await,
-                Self::Udp => udp::target_sender_udp(
-                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
-                ).await,
-                Self::Tls => tls::target_sender_tls(
-                    addr.to_string(), crate::transport::tls::TlsParams::default(),
-                    phase_name.to_string(), rx, metrics, shutdown,
-                    crate::transport::Framing::NonTransparent,
-                ).await,
+                Self::File => {
+                    file::target_sender_file(
+                        addr.to_string(),
+                        phase_name.to_string(),
+                        rx,
+                        metrics,
+                        shutdown,
+                    )
+                    .await
+                }
+                Self::Tcp => {
+                    tcp::target_sender_tcp(
+                        addr.to_string(),
+                        phase_name.to_string(),
+                        rx,
+                        metrics,
+                        shutdown,
+                        crate::transport::Framing::NonTransparent,
+                    )
+                    .await
+                }
+                Self::Udp => {
+                    udp::target_sender_udp(
+                        addr.to_string(),
+                        phase_name.to_string(),
+                        rx,
+                        metrics,
+                        shutdown,
+                    )
+                    .await
+                }
+                Self::Tls => {
+                    tls::target_sender_tls(
+                        addr.to_string(),
+                        crate::transport::tls::TlsParams::default(),
+                        phase_name.to_string(),
+                        rx,
+                        metrics,
+                        shutdown,
+                        crate::transport::Framing::NonTransparent,
+                    )
+                    .await
+                }
             }
         }
     }

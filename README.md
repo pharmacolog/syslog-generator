@@ -2,16 +2,20 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v9.6.0-blue)]()
-[![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
+[![Version](https://img.shields.io/badge/version-v10.0.0-blue)]()
+[![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
 
-**Веха E (P2 «Зрелость») ЗАКРЫТА.** v9.0.0 закрыл веху D. Release-train вехи E:
-v9.1.0 — N10 (trait Format + TransportKind + static dispatch), v9.2.0 — F15
-(CEF/LEEF/JSON-lines), v9.3.0 — F16 (Kafka/Redpanda через `rskafka` opt-in + файловая
-ротация + exponential backoff reconnect), v9.5.0 — N4.cipher_policy + rustls
-миграция (BREAKING: native-tls → rustls + `tls_cipher_suites`), v9.5.1 — F17
-(сценарии аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0),
-**v9.6.0 — N12 Docker/musl/docker-compose (закрытие вехи E)**.
+**Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)
+ЗАКРЫТА в v9.6.0 (N12 Docker). v10.0.0 — старт вехи F с breaking cleanup.
+Release-train вехи F (8 релизов, v10.0.0 → v10.7.0):
+v10.0.0 (breaking B1+B2+B6+B7), v10.1.0 (Performance ч.1: LTO, bench-regression gate),
+v10.2.0 (Performance ч.2: lock-free atomics, BytesMut pre-alloc),
+v10.3.0 (Coverage ч.1: cargo-llvm-cov baseline),
+v10.4.0 (Coverage ч.2: ≥ 97% gate + fuzzing),
+v10.5.0 (CI: cargo-deny, cargo-machete, MSRV-blocking, Dependabot),
+v10.6.0 (Usability ч.1: clap_complete, clap_mangen, owo-colors),
+v10.7.0 (Usability ч.2: tracing, indicatif, --dry-run, двойной Ctrl-C + закрытие вехи F).
+План в `PLAN-v10.0.0.md` (контракт приёмки: 21 пункт). История вехи E в `PLAN-веха-E.md`.
 Модульная архитектура с реальным multi-target runtime (`file`, `tcp`, `udp`, `tls`,
 `kafka` через opt-in feature), настоящим TLS client handshake через `rustls` /
 `tokio-rustls` (v9.5.0+), exponential backoff reconnect с jitter, mixed end-to-end
@@ -19,7 +23,7 @@ v9.1.0 — N10 (trait Format + TransportKind + static dispatch), v9.2.0 — F15
 `round-robin`, `weighted`), negative-path тестами и бенчмарками на Criterion.
 Вся сборка и тесты проверены реальной компиляцией (`cargo build`, `cargo test`,
 `cargo bench`, `cargo clippy`) и автоматизированы через GitHub Actions на
-ubuntu-latest + macos-latest. Следующая веха — **v10.0.0** (major milestone).
+ubuntu-latest + macos-latest.
 
 **v9.6.0 (N12):** Docker-поставка — multi-stage `Dockerfile` (rust:1.97-bookworm →
 distroless/cc-debian12, ~25 MB, non-root), `.dockerignore`, `docker-compose.yml`

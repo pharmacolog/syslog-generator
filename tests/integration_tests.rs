@@ -4,11 +4,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use syslog_generator::{
-    apply_overrides, apply_protobuf_schema, create_dispatcher, create_metrics, gather_metrics,
-    generate_message, parse_target, render_template, run_profile, serialize_protobuf,
-    validate_profile, Overrides, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig,
-    TargetConfig, ValidationError,
+    apply_overrides, create_dispatcher, create_metrics, gather_metrics, generate_message,
+    parse_target, render_template, run_profile, validate_profile, Overrides, Phase, Profile,
+    ProtobufSchemaFieldMap, ShutdownConfig, TargetConfig, ValidationError,
 };
+// B2 (v10.0.0): удалён `pub use self::protobuf::{...}` из lib.rs. Используем
+// прямой путь через `syslog_generator::protobuf::*`.
+use syslog_generator::protobuf::{apply_protobuf_schema, serialize_protobuf};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 
@@ -2095,11 +2097,11 @@ fn make_test_cert() -> (Vec<u8>, Vec<u8>) {
 #[test]
 fn test_n4_parse_tls_min_version_accepts_valid() {
     use syslog_generator::{parse_tls_min_version, TlsVersion};
-    assert_eq!(parse_tls_min_version("1.2").unwrap(), TlsVersion::V1_2);
-    assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::V1_3);
+    assert_eq!(parse_tls_min_version("1.2").unwrap(), TlsVersion::Tls12);
+    assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::Tls13);
     // Trim пробелов (валидатор парсит значение как есть, но мы
     // устойчивы к пробелам).
-    assert_eq!(parse_tls_min_version("  1.2  ").unwrap(), TlsVersion::V1_2);
+    assert_eq!(parse_tls_min_version("  1.2  ").unwrap(), TlsVersion::Tls12);
     // Невалидные значения.
     assert!(parse_tls_min_version("1.0").is_err());
     assert!(parse_tls_min_version("1.1").is_err());
@@ -2120,7 +2122,7 @@ fn test_n4_mtls_build_connector_with_client_identity() {
         insecure: false,
         client_cert_pem: Some(cert_pem),
         client_key_pem: Some(key_pem),
-        min_protocol: Some(TlsVersion::V1_2),
+        min_protocol: Some(TlsVersion::Tls12),
         cipher_suites: None,
     };
     let connector = build_tls_connector(&params);
@@ -2131,7 +2133,7 @@ fn test_n4_mtls_build_connector_with_client_identity() {
     );
 }
 
-/// N4.mTLS: `build_tls_connector` принимает `min_protocol = TlsVersion::V1_3`
+/// N4.mTLS: `build_tls_connector` принимает `min_protocol = TlsVersion::Tls13`
 /// (защита от downgrade-атак на TLS 1.2 и ниже). v9.5.0: тип — наш enum.
 #[test]
 fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
@@ -2143,7 +2145,7 @@ fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
         insecure: false,
         client_cert_pem: Some(cert_pem),
         client_key_pem: Some(key_pem),
-        min_protocol: Some(TlsVersion::V1_3),
+        min_protocol: Some(TlsVersion::Tls13),
         cipher_suites: None,
     };
     assert!(build_tls_connector(&params).is_ok());

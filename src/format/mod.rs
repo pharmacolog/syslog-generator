@@ -21,6 +21,7 @@
 
 use crate::generator::config::{CefConfig, LeefConfig};
 use chrono::Utc;
+use std::fmt;
 
 /// Параметры заголовка, уже с подставленными значениями шаблона.
 pub struct Header {
@@ -131,9 +132,6 @@ pub struct FormatContext<'a> {
 pub trait Format {
     /// Собрать полное сообщение в данном формате.
     fn render(&self, ctx: &FormatContext<'_>, msg: &[u8]) -> Vec<u8>;
-    /// Имя формата (rfc5424, rfc3164, raw, protobuf, cef, leef, json_lines)
-    /// — для логирования и метрик (`syslog_messages_by_format_total`).
-    fn name(&self) -> &'static str;
 }
 
 /// Конкретный выбор формата для фазы (N10, v9.1.0; расширен F15 в v9.2.0).
@@ -197,8 +195,13 @@ impl Format for FormatKind {
             Self::JsonLines => json_lines::build(ctx.header, ctx.json_lines_fields, msg),
         }
     }
-    fn name(&self) -> &'static str {
-        match self {
+}
+
+/// B7 (v10.0.0): `Display` вместо `Format::name() -> &'static str`.
+/// Используется для логирования и метрик (`syslog_messages_by_format_total`).
+impl fmt::Display for FormatKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
             Self::Rfc5424 => "rfc5424",
             Self::Rfc3164 => "rfc3164",
             Self::Raw => "raw",
@@ -206,7 +209,8 @@ impl Format for FormatKind {
             Self::Cef => "cef",
             Self::Leef => "leef",
             Self::JsonLines => "json_lines",
-        }
+        };
+        f.write_str(s)
     }
 }
 
@@ -318,13 +322,13 @@ mod tests {
     /// N10: имя формата через `name()`.
     #[test]
     fn n10_formatkind_name() {
-        assert_eq!(FormatKind::Rfc5424.name(), "rfc5424");
-        assert_eq!(FormatKind::Rfc3164.name(), "rfc3164");
-        assert_eq!(FormatKind::Raw.name(), "raw");
-        assert_eq!(FormatKind::Protobuf(None).name(), "protobuf");
-        assert_eq!(FormatKind::Cef.name(), "cef");
-        assert_eq!(FormatKind::Leef.name(), "leef");
-        assert_eq!(FormatKind::JsonLines.name(), "json_lines");
+        assert_eq!(format!("{}", FormatKind::Rfc5424), "rfc5424");
+        assert_eq!(format!("{}", FormatKind::Rfc3164), "rfc3164");
+        assert_eq!(format!("{}", FormatKind::Raw), "raw");
+        assert_eq!(format!("{}", FormatKind::Protobuf(None)), "protobuf");
+        assert_eq!(format!("{}", FormatKind::Cef), "cef");
+        assert_eq!(format!("{}", FormatKind::Leef), "leef");
+        assert_eq!(format!("{}", FormatKind::JsonLines), "json_lines");
     }
 
     /// N10: `parse("rfc5424")` → `Some(Rfc5424)`, `parse("unknown")` → `None`.

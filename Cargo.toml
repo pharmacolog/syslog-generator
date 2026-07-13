@@ -1,8 +1,12 @@
 
 [package]
 name = "syslog-generator"
-version = "9.6.0"
+version = "10.0.0"
 edition = "2021"
+# v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
+# собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
+# фактически код собирается на stable 1.95).
+rust-version = "1.95"
 
 [features]
 ## F16 (v9.3.0): Kafka/Redpanda transport через pure-Rust клиент `rskafka`.
@@ -31,7 +35,6 @@ rustls = { version = "0.23", default-features = false, features = ["std", "loggi
 tokio-rustls = "0.26"
 rustls-pemfile = "2"
 webpki-roots = "0.26"
-rcgen = "0.13"
 governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }

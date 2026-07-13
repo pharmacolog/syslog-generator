@@ -23,6 +23,8 @@ on:
     branches:
       - main
       - dev
+      # v10.4.3: триггерим Docker на release-ветках для arm64 multi-arch build.
+      - "release/v*.*.*"
     tags:
       - "v*.*.*"
   pull_request:

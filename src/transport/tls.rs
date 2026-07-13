@@ -37,16 +37,16 @@ use super::{
 /// TLS 1.2 и TLS 1.3 (1.0/1.1 deprecated NIST SP 800-52).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TlsVersion {
-    V1_2,
-    V1_3,
+    Tls12,
+    Tls13,
 }
 
 impl TlsVersion {
     /// Слайс `&'static` для совместимости с rustls API.
     fn as_protocol_versions(&self) -> &'static [&'static rustls::SupportedProtocolVersion] {
         match self {
-            TlsVersion::V1_2 => TLS12_AND_13,
-            TlsVersion::V1_3 => TLS13_ONLY,
+            TlsVersion::Tls12 => TLS12_AND_13,
+            TlsVersion::Tls13 => TLS13_ONLY,
         }
     }
 }
@@ -287,8 +287,8 @@ impl ServerCertVerifier for NoCertVerifier {
 /// Парсит "1.2" или "1.3" в `TlsVersion`. Иные значения → Err.
 pub fn parse_tls_min_version(s: &str) -> Result<TlsVersion, String> {
     match s.trim() {
-        "1.2" => Ok(TlsVersion::V1_2),
-        "1.3" => Ok(TlsVersion::V1_3),
+        "1.2" => Ok(TlsVersion::Tls12),
+        "1.3" => Ok(TlsVersion::Tls13),
         other => Err(format!(
             "допустимые значения: \"1.2\", \"1.3\"; получено: {:?}",
             other
@@ -490,9 +490,9 @@ mod tests {
 
     #[test]
     fn parse_tls_version_accepts_valid() {
-        assert_eq!(parse_tls_min_version("1.2").unwrap(), TlsVersion::V1_2);
-        assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::V1_3);
-        assert_eq!(parse_tls_min_version("  1.3  ").unwrap(), TlsVersion::V1_3);
+        assert_eq!(parse_tls_min_version("1.2").unwrap(), TlsVersion::Tls12);
+        assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::Tls13);
+        assert_eq!(parse_tls_min_version("  1.3  ").unwrap(), TlsVersion::Tls13);
     }
 
     #[test]

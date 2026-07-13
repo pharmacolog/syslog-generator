@@ -1,6 +1,124 @@
 
 # Changelog
 
+## v10.0.0 - 2026-07-13
+
+**Веха F «Production-hardened» — старт.** Major-релиз с breaking changes
+(B1, B2, B6, B7). B3, B4, B5 перенесены в v10.1.0.
+
+Начало вехи F: оптимизация производительности, расширенный CI, покрытие ≥ 97%,
+юзабилити-полировка. 8 релизов в вехе F (v10.0.0 → v10.7.0). Полный план —
+`PLAN-v10.0.0.md`.
+
+### ⚠ BREAKING CHANGES
+
+v10.0.0 вводит breaking changes в публичном API. Это **первый breaking
+release после v9.5.0** (N4.cipher_policy + rustls миграция).
+
+| # | Breaking | Было | Стало | Миграция |
+|---|---|---|---|---|
+| **B1** | `TlsVersion` enum variants | `TlsVersion::V1_2`, `TlsVersion::V1_3` | `TlsVersion::Tls12`, `TlsVersion::Tls13` | Rust naming convention: см. `§ Migration guide B1` ниже. |
+| **B2** | Re-export из `lib.rs` | `syslog_generator::apply_protobuf_schema`, `::serialize_protobuf`, `::serialize_protobuf_like`, `::PbType` | Удалены; прямой путь: `syslog_generator::protobuf::*` | Замените импорт. |
+| **B6** | Cargo.toml | `rcgen = "0.13"` (неиспользуемая зависимость) | Удалена | Никаких действий. |
+| **B6** | Cargo.toml | `rust-version` не задан | `rust-version = "1.95"` (явный MSRV) | Никаких действий. |
+| **B7** | `Format` trait | `fn name(&self) -> &'static str` (метод trait) | Удалён; `impl Display for FormatKind` | `format.kind.name()` → `format!("{}", format.kind)`. |
+
+### Added
+
+- **`rust-version = "1.95"`** в `Cargo.toml` — явный MSRV (B6).
+- **`impl Display for FormatKind`** в `src/format/mod.rs` — замена `Format::name()` (B7).
+- **Веха F план** в новом файле `PLAN-v10.0.0.md` (8 релизов, контракт приёмки
+  сохранён без изменений из `PLAN-веха-E.md` §4). Старый план вехи E
+  перенесён в `PLAN-веха-E.md` (rename).
+- **Cleanup**: удалены redirect-stub'ы `docs/docs-developer.md` и
+  `docs/docs-user.md` (заменены на `docs/DEVELOPER_GUIDE.md` и
+  `docs/USER_GUIDE.md`).
+
+### Removed
+
+- **`pub use self::protobuf::{apply_protobuf_schema, serialize_protobuf,
+  serialize_protobuf_like, PbType}`** из `lib.rs` (B2). Используйте
+  `syslog_generator::protobuf::apply_protobuf_schema` и т.д.
+- **`rcgen` зависимость** из `Cargo.toml` (B6, не использовалась —
+  TLS-сертификаты в тестах генерируются через `openssl req`, см.
+  `tests/integration_tests.rs::openssl_self_signed`).
+- **`Format::name(&self) -> &'static str`** метод trait (B7). Заменён на
+  `impl Display for FormatKind`.
+
+### Changed
+
+- **`TlsVersion::V1_2` → `TlsVersion::Tls12`** (B1, Rust naming convention).
+  `TlsVersion::V1_3` → `TlsVersion::Tls13`.
+- **Internal doc cleanup**: `lib.rs` comments обновлены под новую структуру
+  (PLAN split на вехи E и F).
+
+### Migration guide
+
+#### B1: `TlsVersion` variants
+
+```rust
+// БЫЛО (v9.6.0):
+use syslog_generator::TlsVersion;
+let v = TlsVersion::V1_2;
+
+// СТАЛО (v10.0.0):
+use syslog_generator::TlsVersion;
+let v = TlsVersion::Tls12;
+```
+
+Все места в коде, использующие `TlsVersion::V1_2`/`V1_3`, обновлены
+(включая `src/transport/tls.rs` и `tests/integration_tests.rs`).
+
+#### B2: protobuf re-exports
+
+```rust
+// БЫЛО (v9.6.0):
+use syslog_generator::{apply_protobuf_schema, serialize_protobuf, PbType};
+
+// СТАЛО (v10.0.0):
+use syslog_generator::protobuf::{apply_protobuf_schema, serialize_protobuf, PbType};
+```
+
+Затронутые файлы: только `tests/integration_tests.rs` (внутреннее
+использование `crate::protobuf::*` не меняется — это приватный API).
+
+#### B7: Format::name() → Display
+
+```rust
+// БЫЛО (v9.6.0):
+let name: &'static str = format.kind.name();
+
+// СТАЛО (v10.0.0):
+use std::fmt::Display;
+let name = format!("{}", format.kind);  // String
+// или
+write!(f, "{}", format.kind)?;          // fmt::Write
+```
+
+Тесты в `src/format/mod.rs::n10_formatkind_name` обновлены.
+
+### Notes
+
+- **314 тестов** (215 unit + 88 integration + 11 n7) — все зелёные.
+  `cargo bench --no-run --locked` clean.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **Полная очистка backward-compat shim'ов** (`pub mod config;`, `pub mod core;`,
+  `pub mod metrics;`, `pub mod metrics_server;`, `pub mod protobuf;`,
+  `pub mod sender;`, `pub mod syslog;`) **перенесена в v10.1.0** — слишком
+  большой объём для одного breaking-релиза. См. PLAN-v10.0.0.md §3 (B3, B4, B5).
+- **`B8` (binary rename `syslog-generator` → `syslog-gen`) — отклонён** как
+  неоправданно ломающий CI/скрипты.
+
+### Следующие релизы
+
+- **v10.1.0** — Performance (часть 1): LTO + codegen-units=1, bench-regression gate.
+- **v10.2.0** — Performance (часть 2): lock-free atomic counters, BytesMut pre-alloc.
+- **v10.3.0** — Coverage (часть 1): cargo-llvm-cov baseline.
+- **v10.4.0** — Coverage (часть 2): покрытие ≥ 97%, fuzzing.
+- **v10.5.0** — CI расширение: cargo-deny, cargo-machete, MSRV-blocking, Dependabot.
+- **v10.6.0** — Usability (часть 1): clap_complete, clap_mangen, owo-colors.
+- **v10.7.0** — Usability (часть 2) + **закрытие вехи F**.
+
 ## v9.6.0 - 2026-07-13
 
 **N12: Docker/musl/docker-compose — последний релиз вехи E.**

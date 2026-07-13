@@ -67,6 +67,15 @@
           "type": ["string", "null"],
           "enum": ["1.2", "1.3", null],
           "description": "N4.mTLS: минимально допустимая версия TLS-протокола. Защита от downgrade-атак (None = системная, обычно 1.0)."
+        },
+        "tls_cipher_suites": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "N4.cipher_policy (v9.5.0): IANA-имена cipher suites (напр. [\"TLS_AES_256_GCM_SHA384\", \"TLS_CHACHA20_POLY1305_SHA256\"]). None → дефолтный набор rustls. Семантика (известность rustls) проверяется в validate.rs.",
+          "examples": [
+            ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"],
+            ["TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"]
+          ]
         }
       }
     },

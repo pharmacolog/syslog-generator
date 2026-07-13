@@ -233,6 +233,20 @@ pub enum ValidationError {
         name: String,
         field: String,
     },
+
+    // ===== N4.cipher_policy (v9.5.0) =====
+    /// N4.cipher_policy: IANA-имя cipher suite не известно rustls.
+    /// `name` — имя из profile.yaml, `allowed` — список поддерживаемых rustls suites.
+    #[error(
+        "target[{index}] (address={address:?}): tls_cipher_suites содержит неизвестное имя {name:?}; \
+         допустимо: {allowed}"
+    )]
+    InvalidCipherSuite {
+        index: usize,
+        address: String,
+        name: String,
+        allowed: String,
+    },
 }
 
 /// Проверяет профиль и возвращает список **всех** обнаруженных ошибок.
@@ -352,6 +366,21 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
                 address: t.address.clone(),
                 value: value.clone(),
             });
+        }
+    }
+    // N4.cipher_policy (v9.5.0): каждое IANA-имя должно быть известно rustls.
+    // Проверяем через `parse_cipher_suite` — это fail-fast, иначе ошибка
+    // всплыла бы только в рантайме с непонятным rustls::Error.
+    if let Some(names) = &t.tls_cipher_suites {
+        for name in names {
+            if crate::transport::tls::parse_cipher_suite(name).is_err() {
+                errors.push(ValidationError::InvalidCipherSuite {
+                    index,
+                    address: t.address.clone(),
+                    name: name.clone(),
+                    allowed: crate::transport::tls::SUPPORTED_CIPHER_SUITE_NAMES.join(", "),
+                });
+            }
         }
     }
 }

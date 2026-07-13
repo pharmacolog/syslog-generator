@@ -2,20 +2,37 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v9.5.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v9.6.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-**Веха E (P2 «Зрелость») в процессе.** v9.0.0 закрыл веху D. v9.1.0 — N10
-(trait Format + TransportKind + static dispatch), v9.2.0 — F15 (CEF/LEEF/JSON-lines),
-v9.5.0 — N4.cipher_policy + rustls миграция (BREAKING), v9.5.1 — F17 (сценарии
-аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0).
-Следующие: v9.6.0 (N12: Docker). Модульная архитектура с реальным multi-target
-runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
-`rustls` / `tokio-rustls` (v9.5.0+), mixed end-to-end тестами для `file + tcp + udp + tls`
-по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
-тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
-(`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
-GitHub Actions на ubuntu-latest + macos-latest.
+**Веха E (P2 «Зрелость») ЗАКРЫТА.** v9.0.0 закрыл веху D. Release-train вехи E:
+v9.1.0 — N10 (trait Format + TransportKind + static dispatch), v9.2.0 — F15
+(CEF/LEEF/JSON-lines), v9.3.0 — F16 (Kafka/Redpanda через `rskafka` opt-in + файловая
+ротация + exponential backoff reconnect), v9.5.0 — N4.cipher_policy + rustls
+миграция (BREAKING: native-tls → rustls + `tls_cipher_suites`), v9.5.1 — F17
+(сценарии аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0),
+**v9.6.0 — N12 Docker/musl/docker-compose (закрытие вехи E)**.
+Модульная архитектура с реальным multi-target runtime (`file`, `tcp`, `udp`, `tls`,
+`kafka` через opt-in feature), настоящим TLS client handshake через `rustls` /
+`tokio-rustls` (v9.5.0+), exponential backoff reconnect с jitter, mixed end-to-end
+тестами для `file + tcp + udp + tls` по всем режимам диспетчеризации (`broadcast`,
+`round-robin`, `weighted`), negative-path тестами и бенчмарками на Criterion.
+Вся сборка и тесты проверены реальной компиляцией (`cargo build`, `cargo test`,
+`cargo bench`, `cargo clippy`) и автоматизированы через GitHub Actions на
+ubuntu-latest + macos-latest. Следующая веха — **v10.0.0** (major milestone).
+
+**v9.6.0 (N12):** Docker-поставка — multi-stage `Dockerfile` (rust:1.97-bookworm →
+distroless/cc-debian12, ~25 MB, non-root), `.dockerignore`, `docker-compose.yml`
+(4 сервиса: syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf`,
+`docker/prometheus.yml`, `examples/profile-docker.yaml` (3 фазы warmup/burst/steady),
+`.github/workflows/docker.yml` (multi-arch linux/amd64 + linux/arm64, push в ghcr.io).
+
+**v9.3.0 (F16):** Kafka/Redpanda transport через `rskafka` 0.5 (opt-in feature `kafka`,
+compression gzip/lz4/snappy/zstd), файловая ротация (size/time/max_files с LRU cleanup),
+exponential backoff reconnect с jitter для TCP/TLS. `TargetConfig.transport: kafka` +
+`broker_addrs` + `topic`. Примеры: `examples/kafka_redpanda.yaml`, `examples/file_rotation.yaml`,
+`examples/reconnect_tcp.yaml`. 10 unit-тестов в `src/transport/reconnect.rs::tests` покрывают
+логику exponential backoff. CI: отдельный `test-kafka` job. 0 breaking changes.
 
 **v9.5.1 (F17):** сценарии аномалий нагрузки — `burst-injection` (×M каждые
 `interval_secs` в течение `duration_secs`), `slow-drip` (÷D первые

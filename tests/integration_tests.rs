@@ -1734,9 +1734,14 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
     let run = tokio::spawn(async move { run_profile(&profile, metrics).await });
 
     // Дадим серверу время привязаться и опрашиваем /metrics с ретраями.
+    // На загруженных CI runner'ах spawn+bind HTTP-сервера может занять
+    // несколько секунд (особенно под macOS). Раньше было 50×20ms=1s —
+    // недостаточно при contention. Увеличено до 100×100ms=10s для
+    // стабильного прохождения на CI (см. PR review notes).
     let mut body = String::new();
-    for _ in 0..50 {
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let mut got_200 = false;
+    for _ in 0..100 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         if let Ok(mut c) = TcpStream::connect(&addr_str).await {
             c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
                 .await
@@ -1745,11 +1750,12 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
             let _ = c.read_to_end(&mut buf).await;
             body = String::from_utf8_lossy(&buf).to_string();
             if body.contains("HTTP/1.1 200") {
+                got_200 = true;
                 break;
             }
         }
     }
-    assert!(body.contains("HTTP/1.1 200 OK"), "нет 200 OK: {body}");
+    assert!(got_200, "нет 200 OK от /metrics после 10s ретраев: {body}");
     assert!(
         body.contains("text/plain; version=0.0.4"),
         "нет prometheus content-type: {body}"

@@ -6,6 +6,8 @@ pub mod load_shape;
 pub mod metrics;
 pub mod metrics_server;
 pub mod payload;
+#[cfg(test)]
+mod payload_proptests;
 pub mod protobuf;
 pub mod schema;
 pub mod schema_check;

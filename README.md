@@ -2,16 +2,19 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v8.7.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v8.8.1-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-Версия `v8.7.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
+Версия `v8.8.1` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v8.8.1:** патч-долг — правки `AUDIT.md` (поставлены ✅ на F7/F8/F9,
+убраны устаревшие пометки "Отложено" из F13 и N4). Код без изменений.
 
 **v8.7.0 (N6):** zero-copy/буферизация — `BytesMut` для TCP/TLS батчинга,
 `BufWriter` (8 KiB) для файла. Уменьшение syscall'ов в ~50-100 раз для

@@ -103,8 +103,13 @@ jobs:
           status=0
           for f in examples/*.json examples/*.yaml examples/*.yml; do
             [ -f "$f" ] || continue
+            # Пропускаем schema-файлы (они НЕ являются валидными Profile —
+            # не предназначены для --validate) и служебные .meta.json.
+            # - schema_*.json: schema_auth, schema_http_access, schema_nginx
+            # - *_schema.json: variable_payload_schema, protobuf_schema
+            # - *.meta.json: UI metadata
             case "$(basename "$f")" in
-              schema_*.json) continue ;;
+              schema_*.json|proto*_schema.json|*_schema.json) continue ;;
               *.meta.json) continue ;;
             esac
             echo "checking $f"
@@ -120,25 +125,39 @@ jobs:
     # MSRV (Minimum Supported Rust Version). Этот job — best effort:
     # падение здесь не блокирует merge, но сигнализирует о росте MSRV.
     # Активируется только если в репозитории есть rust-toolchain.toml
-    # с полем `channel` — иначе шаг skipped.
+    # с полем `channel` — иначе весь job skipped (continue-on-error: true
+    # на job всё равно делает skip невозможным, но мы используем
+    # `needs: test` чтобы он запускался параллельно и проваливался тихо).
+    #
+    # ВАЖНО: на уровне `jobs.<job_id>.if` доступны только specific contexts
+    # (например `github.event_name`), но НЕ `hashFiles` (доступен только
+    # внутри steps). Поэтому невозможно условно запустить весь job только
+    # когда файл существует. Workaround: job всегда запускается, но
+    # step Install MSRV сам проверяет наличие файла и выходит success'ом
+    # если файла нет (через `if: always() && file_exists`). В результате:
+    # - если rust-toolchain.toml есть → читаем channel → ставим toolchain
+    #   → билдим → MSRV-test проходит или падает (continue-on-error).
+    # - если нет → Install MSRV skip'ает (file_exists == false), и job
+    #   автоматически проходит (continue-on-error: true).
     name: MSRV check (best effort)
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: hashFiles('rust-toolchain.toml') != ''
     steps:
       - uses: actions/checkout@v4
+
       - name: Read MSRV from rust-toolchain.toml
         id: msrv
+        if: hashFiles('rust-toolchain.toml') != ''
         run: |
-          if [ -f rust-toolchain.toml ]; then
-            channel=$(grep -E '^channel' rust-toolchain.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-            echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          fi
+          channel=$(grep -E '^channel' rust-toolchain.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
       - name: Install MSRV toolchain
         if: steps.msrv.outputs.channel != ''
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.channel }}
+
       - name: Build with MSRV
         if: steps.msrv.outputs.channel != ''
         run: cargo build --locked

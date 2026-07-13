@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v8.8.0** (compile-verified, N10 рефакторинг слоёв — minor-релиз по плану v9.0.0).
+Дата: 2026-07-13. Текущая версия: **v8.8.1** (compile-verified, patch-долг AUDIT.md — финальный релиз перед major v9.0.0).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -195,7 +195,8 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v8.7.0** — N6 zero-copy/буферизация (BytesMut, BufWriter, уменьшение syscall'ов в ~50-100 раз).
 - **v8.7.1** — N8 proptest: 6 property-based тестов для payload (int/seed/pad/faker IPv4/faker UUID).
 - **v8.7.2** — N4.mTLS: 3 новых TargetConfig-поля (tls_client_cert_file, tls_client_key_file, tls_min_protocol_version), 9 новых тестов.
-- **v8.8.0** — N10 рефакторинг слоёв: `src/format/` (RFC 5424/3164/raw/protobuf), `src/transport/` (file/tcp/udp/tls), `src/observability/` (metrics + HTTP), `src/generator/` (orchestration). 0 breaking changes. ← текущая.
+- **v8.8.0** — N10 рефакторинг слоёв: `src/format/` (RFC 5424/3164/raw/protobuf), `src/transport/` (file/tcp/udp/tls), `src/observability/` (metrics + HTTP), `src/generator/` (orchestration). 0 breaking changes.
+- **v8.8.1** — patch-долг: правки `AUDIT.md` (поставлены ✅ на F7/F8/F9, убраны устаревшие пометки «Отложено» из F13 и N4). Код без изменений. ← текущая.
 - **v9.0.0 (отложено)** — milestone release: веха D «Продакшн-готовность» ЗАКРЫТА. (Ждёт v8.7.1/v8.7.2/v8.8.0/v8.8.1.)
 
 ---
@@ -213,7 +214,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 ## 9. Пример стартового промпта для Claude
 
 Скопируй текст ниже в первое сообщение новой сессии Claude, приложив архив
-`syslog-generator-v8.8.0-verified.zip` (или распакованный проект). При работе в Claude Code
+`syslog-generator-v8.8.1-verified.zip` (или распакованный проект). При работе в Claude Code
 достаточно открыть каталог проекта — файл `CLAUDE_HANDOFF.md` уже лежит в корне.
 
 ```text
@@ -235,7 +236,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v8.7.1. **Веха D («Продакшн-готовность») в процессе закрытия** — N6 zero-copy (v8.7.0) + N8 proptest (v8.7.1) + N4.mTLS (v8.7.2) + N10 рефакторинг слоёв (v8.8.0) сделано, осталось v8.8.1 (правки AUDIT.md) и v9.0.0 (milestone). План в `PLAN-v9.0.0.md`.
+Текущее состояние: версия v8.8.1. **Веха D («Продакшн-готовность») в процессе закрытия** — N6 zero-copy (v8.7.0) + N8 proptest (v8.7.1) + N4.mTLS (v8.7.2) + N10 рефакторинг слоёв (v8.8.0) + v8.8.1 (правки AUDIT.md — поставлены ✅ на F7/F8/F9, убраны устаревшие «Отложено» из F13 и N4) сделано, осталось v9.0.0 (milestone). План в `PLAN-v9.0.0.md`. CI полностью функционален: `.github/workflows/ci.yml` обновлён (filter schema-файлов в Validate examples), `hashFiles` перенесён с уровня job на step (был broken при push). Все 3 job'а зелёные (Test macos-latest, Test ubuntu-latest, MSRV check).
 Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Следующая — веха E (P2):
 F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda/файловая ротация/reconnect-стратегия),
 F17 (сценарии аномалий/атак), N12 (Docker/musl/docker-compose), N10 (рефакторинг слоёв).

@@ -82,20 +82,30 @@ jobs:
           VERSION="${{ steps.meta.outputs.VERSION }}"
           SHORT_SHA="${{ steps.meta.outputs.SHORT_SHA }}"
           # docker/build-push-action принимает `tags:` как multiline список,
-          # каждый тег — отдельная строка. НЕ префиксуем через `--tag` —
-          # action сам парсит и разделяет по whitespace.
-          TAGS=""
-          # main branch → tag = version (например, "9.6.0")
+          # каждый тег — отдельная строка. Собираем через массив + join.
+          TAG_ARR=()
+          # main branch → tag = version (например, "9.6.0") + latest
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            TAGS="${REGISTRY}/${IMAGE_NAME}:${VERSION}\n${REGISTRY}/${IMAGE_NAME}:latest"
+            TAG_ARR+=("${REGISTRY}/${IMAGE_NAME}:${VERSION}")
+            TAG_ARR+=("${REGISTRY}/${IMAGE_NAME}:latest")
           # tag push (v*.*.*) → tag = версия из тега
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
-            TAGS="${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+            TAG_ARR+=("${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}")
           # dev branch → tag = "dev-{short_sha}" + "dev"
           else
-            TAGS="${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}\n${REGISTRY}/${IMAGE_NAME}:dev"
+            TAG_ARR+=("${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}")
+            TAG_ARR+=("${REGISTRY}/${IMAGE_NAME}:dev")
           fi
+          # Склеиваем массив через newline в single string для GHA output.
+          # bash $'\n' — это ANSI-C quoting, превращает \n в реальный newline.
+          TAGS=""
+          for t in "${TAG_ARR[@]}"; do
+            if [[ -n "$TAGS" ]]; then
+              TAGS+=$'\n'
+            fi
+            TAGS+="$t"
+          done
           # GHA output через heredoc — ОБЯЗАТЕЛЬНО многострочный вариант.
           # Однострочный `echo "tags<<EOF${TAGS}EOF"` подставляет ${TAGS} в echo,
           # а не в heredoc, и парсер GHA не находит маркер EOF.

@@ -74,6 +74,38 @@ pub enum ValidationError {
         path: String,
     },
 
+    /// N4.mTLS (v8.7.2): `tls_client_cert_file` задан, но файл не существует.
+    #[error(
+        "target[{index}] (address={address:?}): tls_client_cert_file {path:?} не существует или недоступен"
+    )]
+    TlsClientCertFileNotFound {
+        index: usize,
+        address: String,
+        path: String,
+    },
+
+    /// N4.mTLS: `tls_client_key_file` задан, но файл не существует.
+    #[error(
+        "target[{index}] (address={address:?}): tls_client_key_file {path:?} не существует или недоступен"
+    )]
+    TlsClientKeyFileNotFound {
+        index: usize,
+        address: String,
+        path: String,
+    },
+
+    /// N4.mTLS: `tls_min_protocol_version` имеет недопустимое значение
+    /// (не "1.2" или "1.3"). Проверка fail-fast — иначе connector
+    /// соберётся с системной минимальной версией (1.0), что небезопасно.
+    #[error(
+        "target[{index}] (address={address:?}): tls_min_protocol_version {value:?} недопустим; ожидается \"1.2\" или \"1.3\""
+    )]
+    InvalidTlsMinProtocolVersion {
+        index: usize,
+        address: String,
+        value: String,
+    },
+
     #[error("недопустимый distribution {value:?}; допустимо: {allowed}")]
     InvalidDistribution { value: String, allowed: String },
 
@@ -241,6 +273,40 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
                 index,
                 address: t.address.clone(),
                 path: path.clone(),
+            });
+        }
+    }
+    // N4.mTLS (v8.7.2): если задан `tls_client_cert_file` — файл должен
+    // существовать (fail-fast — иначе handshake упадёт в рантайме с неясной
+    // ошибкой).
+    if let Some(path) = &t.tls_client_cert_file {
+        if !std::path::Path::new(path).is_file() {
+            errors.push(ValidationError::TlsClientCertFileNotFound {
+                index,
+                address: t.address.clone(),
+                path: path.clone(),
+            });
+        }
+    }
+    // N4.mTLS: `tls_client_key_file` — аналогично.
+    if let Some(path) = &t.tls_client_key_file {
+        if !std::path::Path::new(path).is_file() {
+            errors.push(ValidationError::TlsClientKeyFileNotFound {
+                index,
+                address: t.address.clone(),
+                path: path.clone(),
+            });
+        }
+    }
+    // N4.mTLS: `tls_min_protocol_version` — допустимы только "1.2" и "1.3".
+    // Невалидное значение → fail-fast, чтобы не собрать connector с
+    // системным min=1.0 (небезопасно).
+    if let Some(value) = &t.tls_min_protocol_version {
+        if value != "1.2" && value != "1.3" {
+            errors.push(ValidationError::InvalidTlsMinProtocolVersion {
+                index,
+                address: t.address.clone(),
+                value: value.clone(),
             });
         }
     }

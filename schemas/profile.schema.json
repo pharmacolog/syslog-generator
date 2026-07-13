@@ -52,6 +52,21 @@
           "type": "boolean",
           "default": false,
           "description": "N4: opt-in в небезопасный режим (отключить проверку)."
+        },
+        "tls_client_cert_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4.mTLS (v8.7.2): путь к клиентскому PEM-сертификату для mTLS. Если задан, TLS-handshake предъявляет этот сертификат серверу. Парный файл — tls_client_key_file."
+        },
+        "tls_client_key_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4.mTLS: путь к клиентскому PEM-ключу (PKCS#8). Должен соответствовать сертификату из tls_client_cert_file."
+        },
+        "tls_min_protocol_version": {
+          "type": ["string", "null"],
+          "enum": ["1.2", "1.3", null],
+          "description": "N4.mTLS: минимально допустимая версия TLS-протокола. Защита от downgrade-атак (None = системная, обычно 1.0)."
         }
       }
     },

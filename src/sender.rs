@@ -268,7 +268,7 @@ pub async fn target_sender_udp(
 }
 
 /// N4: параметры TLS-подключения для одного target'а.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TlsParams {
     /// Имя хоста для SNI и проверки имени в сертификате.
     pub domain: String,
@@ -276,11 +276,39 @@ pub struct TlsParams {
     pub ca_pem: Option<Vec<u8>>,
     /// Небезопасный режим: принять любой сертификат.
     pub insecure: bool,
+    /// N4.mTLS (v8.7.2): PEM-содержимое клиентского сертификата. None →
+    /// клиент не предъявляет сертификат (one-way TLS).
+    pub client_cert_pem: Option<Vec<u8>>,
+    /// N4.mTLS: PEM-содержимое клиентского ключа (PKCS#8). Парный к
+    /// `client_cert_pem`. None → mTLS не используется.
+    pub client_key_pem: Option<Vec<u8>>,
+    /// N4.mTLS: минимальная допустимая версия TLS-протокола. None →
+    /// системная по умолчанию (обычно TLS 1.0). Защита от downgrade-атак.
+    pub min_protocol: Option<native_tls::Protocol>,
+}
+
+// `Default` написан вручную (а не через `#[derive(Default)]`) потому что
+// `native_tls::Protocol` не реализует `Default`. clippy предлагает derive
+// (`derivable_impls` lint), но derive не сработает без обёртки.
+#[allow(clippy::derivable_impls)]
+impl Default for TlsParams {
+    fn default() -> Self {
+        Self {
+            domain: String::new(),
+            ca_pem: None,
+            insecure: false,
+            client_cert_pem: None,
+            client_key_pem: None,
+            min_protocol: None,
+        }
+    }
 }
 
 /// N4: строит TLS-connector с проверкой сертификатов по умолчанию.
 /// Если задан `ca_pem` — добавляет его к корням доверия. Если `insecure`
-/// — отключает проверку (явный opt-in).
+/// — отключает проверку (явный opt-in). N4.mTLS: если `client_cert_pem` и
+/// `client_key_pem` заданы — загружает клиентский identity (mTLS). Если
+/// `min_protocol` задан — устанавливает минимально допустимую версию TLS.
 pub fn build_tls_connector(params: &TlsParams) -> Result<tokio_native_tls::TlsConnector> {
     let mut builder = native_tls::TlsConnector::builder();
     if params.insecure {
@@ -290,8 +318,32 @@ pub fn build_tls_connector(params: &TlsParams) -> Result<tokio_native_tls::TlsCo
         let cert = native_tls::Certificate::from_pem(pem)?;
         builder.add_root_certificate(cert);
     }
+    // N4.mTLS: загрузить клиентский identity, если оба заданы.
+    // Identity::from_pkcs8 принимает PEM cert + PEM key (PKCS#8).
+    if let (Some(cert_pem), Some(key_pem)) = (&params.client_cert_pem, &params.client_key_pem) {
+        let identity = native_tls::Identity::from_pkcs8(cert_pem, key_pem)?;
+        builder.identity(identity);
+    }
+    // N4.mTLS: минимальная версия TLS-протокола.
+    if let Some(proto) = params.min_protocol {
+        builder.min_protocol_version(Some(proto));
+    }
     let connector = builder.build()?;
     Ok(tokio_native_tls::TlsConnector::from(connector))
+}
+
+/// N4.mTLS (v8.7.2): парсит строку `"1.2"` или `"1.3"` в
+/// `native_tls::Protocol`. Принимает только эти два значения (1.0/1.1
+/// не рекомендуются NIST SP 800-52 и deprecated в большинстве ОС).
+pub fn parse_tls_min_version(s: &str) -> Result<native_tls::Protocol, String> {
+    match s.trim() {
+        "1.2" => Ok(native_tls::Protocol::Tlsv12),
+        "1.3" => Ok(native_tls::Protocol::Tlsv13),
+        other => Err(format!(
+            "допустимые значения: \"1.2\", \"1.3\"; получено: {:?}",
+            other
+        )),
+    }
 }
 
 pub async fn target_sender_tls(
@@ -400,6 +452,9 @@ mod tests {
             domain: "example.com".into(),
             ca_pem: None,
             insecure: false,
+            client_cert_pem: None,
+            client_key_pem: None,
+            min_protocol: None,
         };
         assert!(build_tls_connector(&params).is_ok());
     }
@@ -411,6 +466,9 @@ mod tests {
             domain: "example.com".into(),
             ca_pem: None,
             insecure: true,
+            client_cert_pem: None,
+            client_key_pem: None,
+            min_protocol: None,
         };
         assert!(build_tls_connector(&params).is_ok());
     }
@@ -422,6 +480,9 @@ mod tests {
             domain: "example.com".into(),
             ca_pem: Some(b"not a real certificate".to_vec()),
             insecure: false,
+            client_cert_pem: None,
+            client_key_pem: None,
+            min_protocol: None,
         };
         assert!(build_tls_connector(&params).is_err());
     }

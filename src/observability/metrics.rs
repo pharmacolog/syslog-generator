@@ -38,10 +38,36 @@ pub struct Metrics {
     pub send_duration: Histogram,
     pub message_size_bytes: Histogram,
     pub reconnects_total: CounterVec,
+    /// F16 (v9.3.0): латентность produce в Kafka (только при включённой
+    /// feature `kafka`). Histogram — основной источник p50/p95/p99 для
+    /// Kafka-эндпоинта.
+    #[cfg(feature = "kafka")]
+    pub kafka_produce_duration_seconds: Histogram,
+    /// F16: размер payload'а в одном Kafka-сообщении (record value).
+    /// Совпадает с `message_size_bytes`, но отдельная метрика удобна для
+    /// отслеживания именно Kafka-трафика в Grafana.
+    #[cfg(feature = "kafka")]
+    pub kafka_produce_batch_bytes: Histogram,
+    /// F16: счётчик ошибок produce (label: target, kind).
+    /// `kind` — тип ошибки (`produce`, `flush`, ...).
+    #[cfg(feature = "kafka")]
+    pub kafka_produce_errors_total: CounterVec,
+    /// F16 (v9.3.0): счётчик ротаций файлов (по size или time).
+    /// Labels: phase, target. Полезен для мониторинга "создаётся ли
+    /// слишком много файлов" или "не слишком ли часто ротация".
+    pub file_rotations_total: CounterVec,
     pub shutdowns_total: IntCounter,
     pub drain_duration: Histogram,
     pub drain_timeouts_total: IntCounter,
     pub messages_drained_total: CounterVec,
+    /// F17 (v9.4.0): число применений аномалии в фазе (для каждой аномалии —
+    /// насколько часто её rate_multiplier был != 1.0). Полезно для понимания,
+    /// какие сценарии реально сработали в прогоне.
+    pub anomalies_applied_total: CounterVec,
+    /// F17 (v9.4.0): число сообщений, дропнутых packet-loss-аномалией
+    /// (не дошли до транспорта). Дополняет `syslog_messages_total` —
+    /// сумма = общее число сгенерированных.
+    pub anomalies_dropped_total: CounterVec,
 }
 
 /// Создать набор Prometheus-метрик и зарегистрировать их в собственном registry.
@@ -129,6 +155,36 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "Total transport reconnection attempts after a write failure",
         &["transport", "target"],
     )?;
+    // F16 (v9.3.0): Kafka-метрики. Регистрируются только при feature `kafka`
+    // (compile-time gating — без feature flag этих метрик нет в /metrics).
+    #[cfg(feature = "kafka")]
+    let kafka_produce_duration_seconds = make_histogram(
+        "syslog_kafka_produce_duration_seconds",
+        "Kafka produce latency in seconds (rskafka BatchProducer::produce)",
+        Some(vec![
+            0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+        ]),
+    )?;
+    #[cfg(feature = "kafka")]
+    let kafka_produce_batch_bytes = make_histogram(
+        "syslog_kafka_produce_batch_bytes",
+        "Kafka record payload size in bytes (single message)",
+        Some(vec![
+            64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0,
+        ]),
+    )?;
+    #[cfg(feature = "kafka")]
+    let kafka_produce_errors_total = make_counter_vec(
+        "syslog_kafka_produce_errors_total",
+        "Kafka produce errors by target and error kind",
+        &["target", "kind"],
+    )?;
+    // F16: ротации файлов.
+    let file_rotations_total = make_counter_vec(
+        "syslog_file_rotations_total",
+        "File rotation events (by size or time trigger)",
+        &["phase", "target"],
+    )?;
     // N2 (v8.6.0): cpu_usage/memory_usage удалены — Gauge'ы были объявлены,
     // но никогда не обновлялись (нет реального сбора), поэтому в /metrics
     // всегда показывали 0, а в дашборде — пустые графики. Честный подход —
@@ -145,6 +201,20 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "syslog_messages_drained_total",
         "Messages drained during shutdown",
         &["target"],
+    )?;
+    // F17 (v9.4.0): счётчик применений аномалий. Лейблы phase + type
+    // (burst-injection/slow-drip/packet-loss) — для дашборда "anomalies by phase/type".
+    let anomalies_applied_total = make_counter_vec(
+        "syslog_anomalies_applied_total",
+        "Anomaly rule applications (each tick where the multiplier != 1.0)",
+        &["phase", "type"],
+    )?;
+    // F17 (v9.4.0): счётчик дропов по packet-loss. Дополняет
+    // syslog_messages_total — сумма обоих = общее число сгенерированных.
+    let anomalies_dropped_total = make_counter_vec(
+        "syslog_anomalies_dropped_total",
+        "Messages dropped by packet-loss anomalies before transport send",
+        &["phase", "type"],
     )?;
 
     // Регистрируем все метрики. Имя для каждой позиции хранится рядом, чтобы
@@ -191,6 +261,25 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
             "syslog_reconnects_total",
             Box::new(reconnects_total.clone()),
         ),
+        #[cfg(feature = "kafka")]
+        (
+            "syslog_kafka_produce_duration_seconds",
+            Box::new(kafka_produce_duration_seconds.clone()),
+        ),
+        #[cfg(feature = "kafka")]
+        (
+            "syslog_kafka_produce_batch_bytes",
+            Box::new(kafka_produce_batch_bytes.clone()),
+        ),
+        #[cfg(feature = "kafka")]
+        (
+            "syslog_kafka_produce_errors_total",
+            Box::new(kafka_produce_errors_total.clone()),
+        ),
+        (
+            "syslog_file_rotations_total",
+            Box::new(file_rotations_total.clone()),
+        ),
         ("syslog_shutdowns_total", Box::new(shutdowns_total.clone())),
         (
             "syslog_drain_duration_seconds",
@@ -203,6 +292,14 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         (
             "syslog_messages_drained_total",
             Box::new(messages_drained_total.clone()),
+        ),
+        (
+            "syslog_anomalies_applied_total",
+            Box::new(anomalies_applied_total.clone()),
+        ),
+        (
+            "syslog_anomalies_dropped_total",
+            Box::new(anomalies_dropped_total.clone()),
         ),
     ];
     for (name, c) in pairs {
@@ -226,10 +323,19 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         send_duration,
         message_size_bytes,
         reconnects_total,
+        #[cfg(feature = "kafka")]
+        kafka_produce_duration_seconds,
+        #[cfg(feature = "kafka")]
+        kafka_produce_batch_bytes,
+        #[cfg(feature = "kafka")]
+        kafka_produce_errors_total,
+        file_rotations_total,
         shutdowns_total,
         drain_duration,
         drain_timeouts_total,
         messages_drained_total,
+        anomalies_applied_total,
+        anomalies_dropped_total,
     })
 }
 
@@ -368,6 +474,53 @@ mod tests {
                     && l.trim_end().ends_with(" 3")
             }),
             "raw должно быть = 3, got:\n{s}"
+        );
+    }
+
+    /// F17 (v9.4.0): `syslog_anomalies_applied_total` экспортируется с
+    /// правильными лейблами phase/type после `inc()`.
+    #[test]
+    fn f17_anomalies_applied_total_after_inc() {
+        let m = create_metrics().expect("create_metrics ok");
+        m.anomalies_applied_total
+            .with_label_values(&["p1", "burst-injection"])
+            .inc_by(7.0);
+        m.anomalies_applied_total
+            .with_label_values(&["p1", "slow-drip"])
+            .inc_by(3.0);
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with(
+                    "syslog_anomalies_applied_total{phase=\"p1\",type=\"burst-injection\"}",
+                ) && l.trim_end().ends_with(" 7")
+            }),
+            "burst-injection должно быть = 7, got:\n{s}"
+        );
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_anomalies_applied_total{phase=\"p1\",type=\"slow-drip\"}")
+                    && l.trim_end().ends_with(" 3")
+            }),
+            "slow-drip должно быть = 3, got:\n{s}"
+        );
+    }
+
+    /// F17 (v9.4.0): `syslog_anomalies_dropped_total` экспортируется с
+    /// правильными лейблами phase/type.
+    #[test]
+    fn f17_anomalies_dropped_total_after_inc() {
+        let m = create_metrics().expect("create_metrics ok");
+        m.anomalies_dropped_total
+            .with_label_values(&["p1", "packet-loss"])
+            .inc_by(42.0);
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_anomalies_dropped_total{phase=\"p1\",type=\"packet-loss\"}")
+                    && l.trim_end().ends_with(" 42")
+            }),
+            "packet-loss должно быть = 42, got:\n{s}"
         );
     }
 }

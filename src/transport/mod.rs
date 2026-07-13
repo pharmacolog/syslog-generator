@@ -155,7 +155,12 @@ pub trait Transport: Send + Sync {
 /// Используется в `run_phase_multi` для static dispatch через enum —
 /// 0 heap-аллокаций, 0 vtable lookups.
 ///
-/// В v9.3.0: добавим `Kafka(KafkaConfig)` (F16 — Kafka/Redpanda transport).
+/// F16 (v9.3.0): Kafka-транспорт НЕ включён в `TransportKind` — он
+/// обрабатывается отдельной веткой в `run_phase_multi` через прямой
+/// вызов `kafka::target_sender_kafka`, потому что требует отдельной
+/// `KafkaConfig` (feature-gated). Это упрощает тип `TransportKind`
+/// (все варианты — теги без данных) и избавляет от cfg-ветвлений
+/// внутри `Transport::run`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKind {
     File,
@@ -179,8 +184,11 @@ impl Transport for TransportKind {
     /// `addr`/`phase_name`. Это даёт static dispatch (0 vtable lookups).
     /// Send bound автоматически выводится из captures (все наши типы Send).
     ///
-    /// В v9.3.0: добавим `Kafka(KafkaConfig)` вариант с новой
-    /// `target_sender_kafka` функцией.
+    /// F16 (v9.3.0): `Self::Kafka` диспатчит `kafka::target_sender_kafka`.
+    /// Конфиг (`KafkaConfig`) не хранится в варианте enum (чтобы не
+    /// требовать feature `kafka` для пользователей без Kafka) — он
+    /// собирается в `run_phase_multi` из полей `TargetConfig.kafka_*`
+    /// и передаётся явно.
     async fn run(
         &self,
         addr: &str,
@@ -208,6 +216,7 @@ impl Transport for TransportKind {
                     metrics,
                     shutdown,
                     crate::transport::Framing::NonTransparent,
+                    None, // default reconnect
                 )
                 .await
             }
@@ -230,6 +239,7 @@ impl Transport for TransportKind {
                     metrics,
                     shutdown,
                     crate::transport::Framing::NonTransparent,
+                    None, // default reconnect
                 )
                 .await
             }
@@ -239,6 +249,9 @@ impl Transport for TransportKind {
 
 // Подмодули реализации конкретных транспортов.
 pub mod file;
+#[cfg(feature = "kafka")]
+pub mod kafka;
+pub(crate) mod reconnect;
 pub mod tcp;
 pub mod tls;
 pub mod udp;
@@ -250,7 +263,10 @@ pub mod udp;
 // Обёртки для backward-compat: `syslog_generator::target_sender_file` и т.д.
 pub use file::target_sender_file;
 pub use tcp::target_sender_tcp;
-pub use tls::{build_tls_connector, parse_tls_min_version, target_sender_tls, TlsParams};
+pub use tls::{
+    build_tls_connector, parse_cipher_suite, parse_tls_min_version, target_sender_tls, TlsParams,
+    TlsVersion,
+};
 pub use udp::target_sender_udp;
 
 // ===== N10 (v9.1.0): тесты trait Transport =====

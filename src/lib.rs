@@ -4,7 +4,7 @@
 //! - `cli` — парсинг аргументов командной строки (clap).
 //! - `validate` — F13 семантическая валидация профиля.
 //! - `schema_check` — D3 структурная JSON Schema валидация.
-//! - `format` — форматы (RFC 5424, RFC 3164, raw, protobuf).
+//! - `format` — форматы (RFC 5424, RFC 3164, raw, protobuf, cef, leef, json_lines).
 //! - `transport` — транспорты (file, tcp, udp, tls).
 //! - `generator` — оркестрация (run_profile, run_phase_multi, generate_message,
 //!   конфиг Profile/Phase/TargetConfig, загрузка профиля).
@@ -14,11 +14,33 @@
 //! - `template` — рендеринг `{{placeholder}}` (CompiledTemplate, F5).
 //! - `schema` — загрузка schema.json для F5 schema-per-phase.
 //! - `load_shape` — F3 профили нагрузки во времени.
+//! - `anomaly` — F17 сценарии аномалий нагрузки (burst-injection, slow-drip, packet-loss).
 //! - `shutdown` — graceful drain и shutdown listener.
 //!
 //! Старые модули `core`, `config`, `sender`, `syslog`, `metrics`,
 //! `metrics_server`, `protobuf` сохранены как backward-compat обёртки
 //! (thin re-export из новых слоёв). Сигнатура публичного API не меняется.
+
+pub mod anomaly;
+
+// N4.cipher_policy (v9.5.0): rustls 0.23 требует явной установки
+// crypto provider'а (мы используем ring). Делаем лениво через Once —
+// вызывается при первом обращении к TLS API. Если пользователь вызывает
+// только non-TLS функции — provider не нужен.
+static RUSTLS_PROVIDER_INIT: std::sync::Once = std::sync::Once::new();
+
+pub(crate) fn ensure_rustls_provider() {
+    RUSTLS_PROVIDER_INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+/// Публичный wrapper для интеграционных тестов, которые строят TLS-сервер
+/// напрямую через rustls (минуя наш `build_tls_connector`). Безопасный к
+/// множественным вызовам.
+pub fn ensure_rustls_provider_for_tests() {
+    ensure_rustls_provider();
+}
 
 pub mod cli;
 pub mod error;
@@ -48,6 +70,7 @@ pub mod syslog; // → src/syslog.rs: pub use crate::format::* // → src/protob
 
 // === Re-exports: новые слои (предпочтительные пути для нового кода) ===
 
+pub use anomaly::{rate_multiplier, should_drop_packet, Anomaly, AnomalyKind, AnomalyPlanner};
 pub use cli::{apply_overrides, parse_target, Args, Overrides};
 pub use error::{ConfigError, DrainError, MetricsError, RuntimeError};
 pub use format::{
@@ -75,8 +98,18 @@ pub use schema_check::{
 pub use shutdown::{graceful_drain_wait, shutdown_listener};
 pub use template::render_template;
 pub use transport::{
-    build_tls_connector, parse_tls_min_version, record_send, target_sender_file, target_sender_tcp,
-    target_sender_tls, target_sender_udp, Framing, SharedRx, TlsParams,
+    build_tls_connector, parse_cipher_suite, parse_tls_min_version, record_send,
+    target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing, SharedRx,
+    TlsParams, TlsVersion,
+};
+// F16 (v9.3.0): новые типы transport-слоя — file rotation, reconnect config.
+pub use transport::file::{target_sender_file_with_rotation, RotationConfig};
+pub use transport::reconnect::{reconnect_with_backoff, ReconnectConfig};
+// F16: Kafka transport (доступен только при feature `kafka`).
+#[cfg(feature = "kafka")]
+pub use transport::kafka::{
+    parse_bootstrap_servers, parse_kafka_acks, parse_kafka_compression, target_sender_kafka,
+    KafkaConfig,
 };
 pub use validate::{format_errors, validate_profile, ValidationError};
 

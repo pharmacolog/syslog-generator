@@ -34,6 +34,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
 
+    env:
+      # F16 (v9.3.0): без feature `kafka` — базовый набор (file/tcp/udp/tls).
+      # Kafka-ветка тестируется отдельным job `test-kafka`.
+      SKIP_KAFKA_EXAMPLE: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -161,3 +166,53 @@ jobs:
       - name: Build with MSRV
         if: steps.msrv.outputs.channel != ''
         run: cargo build --locked
+
+  # F16 (v9.3.0): отдельный job для проверки feature flag `kafka` —
+  # гарантирует что Kafka/Redpanda транспорт через `rskafka` компилируется
+  # и тесты проходят (включая F16 unit/integration тесты под cfg(feature="kafka")).
+  # Базовый job `test` работает без feature (default), `test-kafka` —
+  # с feature (--features kafka). Это покрывает оба режима сборки.
+  test-kafka:
+    name: Test kafka feature (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-kafka
+
+      - name: Install OpenSSL dev headers (rskafka не использует, но libssl нужен для native-tls в CI build cache)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings, --features kafka)
+        run: cargo clippy --all-targets --features kafka -- -D warnings
+
+      - name: Build release (--features kafka)
+        run: cargo build --release --locked --features kafka
+
+      - name: Compile tests (--features kafka)
+        run: cargo test --no-run --locked --features kafka
+
+      - name: Run tests (--features kafka)
+        run: cargo test --locked --features kafka
+
+      - name: Compile benches (--features kafka)
+        run: cargo bench --no-run --locked --features kafka
+
+      - name: Validate kafka example
+        run: |
+          cargo run --quiet --bin syslog-generator --features kafka -- \
+            --validate --schema-strict --profile examples/kafka_redpanda.yaml

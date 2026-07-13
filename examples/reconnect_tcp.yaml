@@ -1,0 +1,45 @@
+# F16 (v9.3.0): пример профиля для TCP с exponential backoff reconnect.
+#
+# Демонстрирует:
+# - reconnect_max_attempts: 10 попыток (None → бесконечно).
+# - reconnect_initial_backoff_ms: 100 мс начальная задержка.
+# - reconnect_max_backoff_ms: 5 000 мс (5 секунд) максимум.
+# - reconnect_multiplier: 2.0 (×2 каждую попытку).
+#
+# Расписание backoff (без jitter):
+#   попытка 1: сразу
+#   попытка 2: ~100 мс
+#   попытка 3: ~200 мс
+#   попытка 4: ~400 мс
+#   попытка 5: ~800 мс
+#   попытка 6: ~1.6 с
+#   попытка 7: ~3.2 с
+#   попытка 8: ~5.0 с (cap)
+#   попытка 9+: ~5.0 с (cap)
+#
+# С jitter [0.5, 1.5) реальные задержки — в этом диапазоне.
+#
+# Запуск:
+#   ./target/release/syslog-generator --profile examples/reconnect_tcp.yaml
+
+targets:
+  - address: "127.0.0.1:5140"
+    transport: tcp
+    connections: 1
+    reconnect_max_attempts: 10
+    reconnect_initial_backoff_ms: 100
+    reconnect_max_backoff_ms: 5000
+    reconnect_multiplier: 2.0
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 30
+
+phases:
+  - name: reconnect-test
+    duration_secs: 30
+    messages_per_second: 50
+    templates:
+      - "<165>1 {{timestamp}} host01 myapp 1234 ID47 - reconnect-test seq={{sequence}}"

@@ -9,12 +9,13 @@
 //! Валидация — чисто структурная и семантическая проверка полей `Profile`; она
 //! не открывает сокеты и не читает `*_file`-ресурсы (это делает рантайм).
 
+use crate::anomaly::AnomalyKind;
 use crate::config::{Phase, Profile, SyslogConfig, TargetConfig};
 use crate::load_shape::LoadShape;
 use thiserror::Error;
 
 /// Допустимые значения `transport` у цели.
-pub const VALID_TRANSPORTS: &[&str] = &["tcp", "udp", "tls", "file"];
+pub const VALID_TRANSPORTS: &[&str] = &["tcp", "udp", "tls", "file", "kafka"];
 /// Допустимые значения `format` фазы (F15: добавлены cef/leef/json_lines).
 pub const VALID_FORMATS: &[&str] = &[
     "rfc5424",
@@ -233,6 +234,148 @@ pub enum ValidationError {
         name: String,
         field: String,
     },
+
+    // ===== N4.cipher_policy (v9.5.0) =====
+    /// N4.cipher_policy: IANA-имя cipher suite не известно rustls.
+    /// `name` — имя из profile.yaml, `allowed` — список поддерживаемых rustls suites.
+    #[error(
+        "target[{index}] (address={address:?}): tls_cipher_suites содержит неизвестное имя {name:?}; \
+         допустимо: {allowed}"
+    )]
+    InvalidCipherSuite {
+        index: usize,
+        address: String,
+        name: String,
+        allowed: String,
+    },
+
+    // ===== F17 (v9.5.1): сценарии аномалий =====
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.rate_multiplier={value} должно быть > 0")]
+    InvalidAnomalyBurstMultiplier {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.interval_secs={value} должно быть > 0")]
+    InvalidAnomalyBurstInterval {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.duration_secs={value} должно быть >= 0")]
+    InvalidAnomalyBurstDuration {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].slow-drip.rate_divisor={value} должно быть > 1 (rate_divisor=1 даст отсутствие эффекта, <1 — ускорение вместо замедления)")]
+    InvalidAnomalySlowDripDivisor {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].slow-drip.duration_secs={value} должно быть > 0")]
+    InvalidAnomalySlowDripDuration {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].packet-loss.loss_percent={value} вне диапазона 0..=100")]
+    InvalidAnomalyPacketLossPercent {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    // === F16 (v9.3.0): Kafka/ротация/reconnect ===
+    /// F16: `transport: "kafka"` указан, но `kafka_topic` не задан.
+    /// Для Kafka-target'а topic обязателен (нет дефолта — broker не
+    /// принимает "куда попало").
+    #[error(
+        "target[{index}] (address={address:?}): transport=\"kafka\" требует kafka_topic (поле обязательно)"
+    )]
+    KafkaTopicRequired { index: usize, address: String },
+
+    /// F16: `transport: "kafka"` указан, но feature flag `kafka` не включён
+    /// при компиляции. Нужно пересобрать с `--features kafka`.
+    #[error(
+        "target[{index}] (address={address:?}): transport=\"kafka\" требует cargo build --features kafka"
+    )]
+    KafkaFeatureDisabled { index: usize, address: String },
+
+    /// F16: параметр ротации файла вырожденный (size/interval=0 при
+    /// включённой ротации).
+    #[error(
+        "target[{index}] (address={address:?}): {field}={value} — должно быть > 0 при включённой ротации"
+    )]
+    InvalidFileRotation {
+        index: usize,
+        address: String,
+        field: String,
+        value: u64,
+    },
+
+    /// F16: file_rotation_max_files=0 (минимум 1).
+    #[error("target[{index}] (address={address:?}): file_rotation_max_files=0 — должно быть >= 1")]
+    ZeroFileRotationMaxFiles { index: usize, address: String },
+
+    /// F16: reconnect_max_backoff_ms < reconnect_initial_backoff_ms.
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_max_backoff_ms ({max}) должно быть >= reconnect_initial_backoff_ms ({initial})"
+    )]
+    InvalidReconnectBackoffRange {
+        index: usize,
+        address: String,
+        initial: u64,
+        max: u64,
+    },
+
+    /// F16: reconnect_multiplier < 1.0 или NaN.
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_multiplier={value} — должно быть >= 1.0 и конечным"
+    )]
+    InvalidReconnectMultiplier {
+        index: usize,
+        address: String,
+        value: f64,
+    },
+
+    /// F16: reconnect_initial_backoff_ms=0 (минимум 1).
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_initial_backoff_ms=0 — должно быть > 0"
+    )]
+    ZeroReconnectInitialBackoff { index: usize, address: String },
+
+    /// F16: `kafka_compression` имеет недопустимое значение.
+    #[error(
+        "target[{index}] (address={address:?}): kafka_compression={value:?} — ожидается одно из: none, gzip, snappy, lz4, zstd"
+    )]
+    InvalidKafkaCompression {
+        index: usize,
+        address: String,
+        value: String,
+    },
+
+    /// F16: `kafka_acks` имеет недопустимое значение.
+    #[error(
+        "target[{index}] (address={address:?}): kafka_acks={value:?} — ожидается одно из: \"0\", \"1\", \"all\""
+    )]
+    InvalidKafkaAcks {
+        index: usize,
+        address: String,
+        value: String,
+    },
 }
 
 /// Проверяет профиль и возвращает список **всех** обнаруженных ошибок.
@@ -354,6 +497,123 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
             });
         }
     }
+    // N4.cipher_policy (v9.5.0): каждое IANA-имя должно быть известно rustls.
+    // Проверяем через `parse_cipher_suite` — это fail-fast, иначе ошибка
+    // всплыла бы только в рантайме с непонятным rustls::Error.
+    if let Some(names) = &t.tls_cipher_suites {
+        for name in names {
+            if crate::transport::tls::parse_cipher_suite(name).is_err() {
+                errors.push(ValidationError::InvalidCipherSuite {
+                    index,
+                    address: t.address.clone(),
+                    name: name.clone(),
+                    allowed: crate::transport::tls::SUPPORTED_CIPHER_SUITE_NAMES.join(", "),
+                });
+            }
+        }
+    }
+
+    // F16: файловая ротация — параметры должны быть валидны.
+    let rotation_enabled =
+        t.file_rotation_size_mb.is_some() || t.file_rotation_interval_secs.is_some();
+    if rotation_enabled {
+        if let Some(mb) = t.file_rotation_size_mb {
+            if mb == 0 {
+                errors.push(ValidationError::InvalidFileRotation {
+                    index,
+                    address: t.address.clone(),
+                    field: "file_rotation_size_mb".to_string(),
+                    value: 0,
+                });
+            }
+        }
+        if let Some(s) = t.file_rotation_interval_secs {
+            if s == 0 {
+                errors.push(ValidationError::InvalidFileRotation {
+                    index,
+                    address: t.address.clone(),
+                    field: "file_rotation_interval_secs".to_string(),
+                    value: 0,
+                });
+            }
+        }
+        if let Some(m) = t.file_rotation_max_files {
+            if m == 0 {
+                errors.push(ValidationError::ZeroFileRotationMaxFiles {
+                    index,
+                    address: t.address.clone(),
+                });
+            }
+        }
+    }
+
+    // F16: reconnect-стратегия — параметры должны быть валидны.
+    if let Some(initial) = t.reconnect_initial_backoff_ms {
+        if initial == 0 {
+            errors.push(ValidationError::ZeroReconnectInitialBackoff {
+                index,
+                address: t.address.clone(),
+            });
+        }
+    }
+    if let Some(m) = t.reconnect_multiplier {
+        if !m.is_finite() || m < 1.0 {
+            errors.push(ValidationError::InvalidReconnectMultiplier {
+                index,
+                address: t.address.clone(),
+                value: m,
+            });
+        }
+    }
+    if let (Some(initial), Some(max)) = (t.reconnect_initial_backoff_ms, t.reconnect_max_backoff_ms)
+    {
+        if max < initial {
+            errors.push(ValidationError::InvalidReconnectBackoffRange {
+                index,
+                address: t.address.clone(),
+                initial,
+                max,
+            });
+        }
+    }
+
+    // === F16 (v9.3.0): Kafka/ротация/reconnect ===
+
+    // F16: Kafka-специфичная валидация (только при feature flag).
+    #[cfg(feature = "kafka")]
+    if t.transport == "kafka" {
+        // topic обязателен.
+        if t.kafka_topic.as_deref().unwrap_or("").is_empty() {
+            errors.push(ValidationError::KafkaTopicRequired {
+                index,
+                address: t.address.clone(),
+            });
+        }
+        // compression — допустимые значения.
+        if let Some(s) = &t.kafka_compression {
+            let s_lower = s.trim().to_ascii_lowercase();
+            if !matches!(
+                s_lower.as_str(),
+                "none" | "no" | "" | "gzip" | "snappy" | "lz4" | "zstd"
+            ) {
+                errors.push(ValidationError::InvalidKafkaCompression {
+                    index,
+                    address: t.address.clone(),
+                    value: s.clone(),
+                });
+            }
+        }
+        // acks — допустимые значения.
+        if let Some(s) = &t.kafka_acks {
+            if !matches!(s.trim(), "0" | "1" | "all") {
+                errors.push(ValidationError::InvalidKafkaAcks {
+                    index,
+                    address: t.address.clone(),
+                    value: s.clone(),
+                });
+            }
+        }
+    }
 }
 
 fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
@@ -438,6 +698,88 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
     // load_shape
     if let Some(ls) = &p.load_shape {
         validate_load_shape(index, &name, ls, errors);
+    }
+
+    // F17 (v9.4.0): сценарии аномалий.
+    if let Some(anomalies) = &p.anomalies {
+        for (a_index, a) in anomalies.iter().enumerate() {
+            validate_anomaly_kind(index, &name, a_index, &a.kind, errors);
+        }
+    }
+}
+
+fn validate_anomaly_kind(
+    index: usize,
+    name: &str,
+    a_index: usize,
+    kind: &AnomalyKind,
+    errors: &mut Vec<ValidationError>,
+) {
+    match kind {
+        AnomalyKind::BurstInjection {
+            rate_multiplier,
+            interval_secs,
+            duration_secs,
+        } => {
+            if !rate_multiplier.is_finite() || *rate_multiplier <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstMultiplier {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *rate_multiplier,
+                });
+            }
+            if !interval_secs.is_finite() || *interval_secs <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstInterval {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *interval_secs,
+                });
+            }
+            if !duration_secs.is_finite() || *duration_secs < 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstDuration {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *duration_secs,
+                });
+            }
+        }
+        AnomalyKind::SlowDrip {
+            rate_divisor,
+            duration_secs,
+        } => {
+            // divisor > 1 (иначе нет смысла в "drip" — divisor=1 даст rate*=1,
+            // divisor<1 ускорит фазу, что не slow-drip по семантике).
+            if !rate_divisor.is_finite() || *rate_divisor <= 1.0 {
+                errors.push(ValidationError::InvalidAnomalySlowDripDivisor {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *rate_divisor,
+                });
+            }
+            if !duration_secs.is_finite() || *duration_secs <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalySlowDripDuration {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *duration_secs,
+                });
+            }
+        }
+        AnomalyKind::PacketLoss { loss_percent } => {
+            // 0..=100. NaN тоже отклоняем.
+            if !loss_percent.is_finite() || *loss_percent < 0.0 || *loss_percent > 100.0 {
+                errors.push(ValidationError::InvalidAnomalyPacketLossPercent {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *loss_percent,
+                });
+            }
+        }
     }
 }
 
@@ -783,5 +1125,196 @@ mod tests {
         p.phases.clear();
         let errs = validate_profile(&p);
         assert!(errs.len() >= 3);
+    }
+
+    // ===== F17 (v9.4.0): сценарии аномалий =====
+
+    fn anomaly_phase_with(kind: crate::anomaly::AnomalyKind) -> Phase {
+        let mut p = valid_phase();
+        p.anomalies = Some(vec![crate::anomaly::Anomaly { kind }]);
+        p
+    }
+
+    #[test]
+    fn f17_accepts_valid_burst_injection() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_accepts_valid_slow_drip() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 10.0,
+            duration_secs: 60.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_accepts_valid_packet_loss() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: 30.0 });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_rejects_burst_zero_multiplier() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 0.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_negative_multiplier() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: -1.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_zero_interval() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 0.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstInterval { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_negative_duration() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 30.0,
+            duration_secs: -1.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstDuration { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_slow_drip_divisor_le_one() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 1.0,
+            duration_secs: 10.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalySlowDripDivisor { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_slow_drip_zero_duration() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 5.0,
+            duration_secs: 0.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalySlowDripDuration { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_packet_loss_out_of_range() {
+        for bad in [-1.0, 100.5, f64::NAN] {
+            let p =
+                anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: bad });
+            let mut profile = valid_profile();
+            profile.phases = vec![p];
+            let errs = validate_profile(&profile);
+            assert!(
+                errs.iter()
+                    .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })),
+                "loss_percent={bad} должно быть отклонено"
+            );
+        }
+    }
+
+    #[test]
+    fn f17_accepts_packet_loss_boundary_values() {
+        for ok in [0.0, 100.0] {
+            let p =
+                anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: ok });
+            let mut profile = valid_profile();
+            profile.phases = vec![p];
+            let errs = validate_profile(&profile);
+            assert!(
+                !errs
+                    .iter()
+                    .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })),
+                "loss_percent={ok} на границе должно быть принято"
+            );
+        }
+    }
+
+    #[test]
+    fn f17_collects_multiple_anomaly_errors() {
+        let mut p = valid_phase();
+        p.anomalies = Some(vec![
+            crate::anomaly::Anomaly {
+                kind: crate::anomaly::AnomalyKind::BurstInjection {
+                    rate_multiplier: 0.0, // ошибка
+                    interval_secs: 0.0,   // тоже ошибка
+                    duration_secs: 2.0,
+                },
+            },
+            crate::anomaly::Anomaly {
+                kind: crate::anomaly::AnomalyKind::PacketLoss {
+                    loss_percent: 150.0, // ошибка
+                },
+            },
+        ]);
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstInterval { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })));
     }
 }

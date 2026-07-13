@@ -1,0 +1,33 @@
+# F16 (v9.3.0): пример профиля для файлового транспорта с ротацией.
+#
+# Демонстрирует:
+# - file_rotation_size_mb: ротация по размеру (10 МБ).
+# - file_rotation_interval_secs: ротация по времени (60 сек).
+# - file_rotation_max_files: максимум 5 файлов (текущий + 4 ротированных).
+#
+# При ротации файл переименовывается в `<path>.<unix_ts>.log`, лишние
+# старые файлы сверх max_files удаляются (LRU).
+#
+# Запуск:
+#   ./target/release/syslog-generator --profile examples/file_rotation.yaml
+
+targets:
+  - address: "/tmp/sg-f16-rotation.log"
+    transport: file
+    connections: 1
+    file_rotation_size_mb: 10
+    file_rotation_interval_secs: 60
+    file_rotation_max_files: 5
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 10
+
+phases:
+  - name: rotated-load
+    duration_secs: 90
+    messages_per_second: 500
+    templates:
+      - "<165>1 {{timestamp}} host01 myapp 1234 ID47 - rotation-test seq={{sequence}} {{faker.ipv4}} {{faker.uuid}}"

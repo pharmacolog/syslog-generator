@@ -1,10 +1,10 @@
 # PLAN: v9.x — Веха E «Зрелость» (P2)
 
-> Статус: **середина вехи E**. v9.2.0 (F15) **выпущен** ✅.
-> v9.1.0 (N10) и v9.0.0 (закрытие вехи D) выпущены ранее.
-> Все P0+P1 задачи AUDIT.md §4 выполнены. Реализуем P2: F16, F17, N4, N12.
+> Статус: **конец вехи E**. v9.6.0 (N12 Docker) **выпущен** ✅.
+> Веха E полностью закрыта: N10, F15, F16, F17, N4, N12.
+> Следующий — **v10.0.0** (major milestone release).
 
-Дата: 2026-07-13. Цель: v9.3.0 (F16) → v9.4.0 (F17) → v9.5.0 (N4) → v9.6.0 (N12).
+Дата: 2026-07-13. Цель: v10.0.0.
 
 ## Зафиксированные стратегические решения
 
@@ -24,9 +24,9 @@
 | **N10 (gap)** ✅ | `src/generator/core.rs::wrap_syslog` — match на `phase.format_type()` обходит `FormatKind` | **DONE (v9.2.0)** | Переведён на `FormatKind`-диспатч с кешированием через `generate_message_with_format`. |
 | **F15** ✅ | `src/format/{cef,leef,json_lines}.rs` через расширенный trait `Format` (`FormatContext`) | **DONE (v9.2.0)** | Реализованы CEF (ArcSight), LEEF v2.0 (QRadar), JSON-lines (NDJSON). |
 | **F16** | `src/transport/{file,tcp,udp,tls}.rs` — sender'ы. Нет Kafka. | pending | `src/transport/kafka.rs` через `rskafka` (feature flag). Расширение `file` rotation. Reconnect: exponential backoff + jitter (см. §3.3). |
-| **F17** | Не реализован. | pending | `phases.anomalies: Option<Vec<Anomaly>>` в `Phase` — BurstInjection/SlowDrip/PacketLoss (расширенные сигнатуры, см. §3.4). |
-| **N4.cipher_policy** | Не реализован. Текущий TLS-стек — `native-tls` (Linux-only cipher selection). | pending | **D2**: миграция на `rustls` + `tls_cipher_suites: Option<Vec<String>>` в `TargetConfig` (см. §3.5). |
-| **N12** | Не реализован. | pending | `Dockerfile` (multi-stage, distroless/cc-debian12) + `.dockerignore` + `docker-compose.yml` (см. §3.6). |
+| **F17** ✅ | `src/anomaly.rs` (новый модуль) | **DONE (v9.5.1, patch поверх v9.5.0)** | Tagged enum `AnomalyKind` (BurstInjection/SlowDrip/PacketLoss), `Phase.anomalies: Option<Vec<Anomaly>>`, `AnomalyPlanner` (compositional), 6 новых `ValidationError`, 2 Prometheus-метрики, JSON Schema `Anomaly`. 0 breaking changes относительно v9.5.0. 21 новый тест. Реализован как patch v9.5.1, не v9.4.0, потому что release-train v9.5.0 (N4.cipher_policy) уже был выпущен к моменту готовности F17. |
+| **N4.cipher_policy** ✅ | `src/transport/tls.rs` — `build_tls_connector` + `TlsParams` + `parse_cipher_suite` | **DONE (v9.5.0, BREAKING)** | Миграция `native-tls → rustls` 0.23 (c `ring` crypto provider, `webpki-roots`). Новое поле `tls_cipher_suites: Option<Vec<String>>` в `TargetConfig`. `parse_cipher_suite` парсит IANA-имена в `rustls::SupportedCipherSuite`. F13 валидация: `InvalidCipherSuite`. `TlsVersion` enum заменил `native_tls::Protocol`. |
+| **N12** ✅ | `Dockerfile` (multi-stage) + `.dockerignore` + `docker-compose.yml` + `docker/syslog-ng.conf` + `examples/profile-docker.yaml` + `.github/workflows/docker.yml` | **DONE (v9.6.0)** | Distroless/cc-debian12 runtime (~25 MB), syslog-ng вместо rsyslog (лучше для контейнеров), multi-arch build (linux/amd64 + linux/arm64), push в ghcr.io. |
 
 ---
 
@@ -37,9 +37,10 @@
 | **v9.1.0** ✅ | minor | **N10**: trait `Format` + trait `Transport` (static dispatch через enum). Без breaking changes. | — |
 | **v9.2.0** ✅ | minor | **Шаг 0 (N10 gap)**: перевести `wrap_syslog` на `FormatKind`. **F15**: CEF + LEEF + JSON-lines через расширенный trait `Format`. | v9.1.0 |
 | **v9.3.0** | minor | **F16**: Kafka transport (`rskafka`, `feature = "kafka"`) + файловая ротация (расширение `file`, не новый вариант) + reconnect exponential backoff с jitter | v9.2.0 (FormatKind) |
-| **v9.4.0** | minor | **F17**: сценарии аномалий (`phases.anomalies: BurstInjection/SlowDrip/PacketLoss`, расширенные сигнатуры) + интеграционные тесты | — |
-| **v9.5.0** | minor | **N4.cipher_policy** + **миграция `native-tls → rustls`**: добавление `tls_cipher_suites: Option<Vec<String>>` через `rustls::ClientConfig::with_cipher_suites` | — |
-| **v9.6.0** | minor | **N12 (Docker)**: `Dockerfile` (multi-stage, distroless/cc-debian12) + `.dockerignore` + multi-arch buildx + `docker-compose.yml` | — |
+| **v9.4.0** | — | **Отменён**: v9.5.0 (N4.cipher_policy) был выпущен раньше готовности F17. | — |
+| **v9.5.0** ✅ | minor | **N4.cipher_policy** + **миграция `native-tls → rustls`** (BREAKING CHANGE): добавление `tls_cipher_suites: Option<Vec<String>>` через `rustls::ClientConfig`. | — |
+| **v9.5.1** ✅ | patch | **F17**: сценарии аномалий (`phases.anomalies: BurstInjection/SlowDrip/PacketLoss`). Patch-релиз, 0 breaking changes относительно v9.5.0. Реализован в `feature/v9.4.0-f17`, merged в dev через 2 sync-коммита (после F15 v9.2.0 и после v9.5.0). | — |
+| **v9.6.0** ✅ | minor | **N12 (Docker)**: `Dockerfile` (multi-stage) + `.dockerignore` + multi-arch buildx + `docker-compose.yml` (generator + syslog-ng + prometheus + grafana). | — |
 
 ---
 
@@ -120,7 +121,11 @@ pub trait Format: Send + Sync {
 - Faker-поля (`{{faker.ipv4}}`, `{{faker.user_agent}}`) в extensions.
 - Escaping edge cases: `|` `=` `\` в значениях.
 
-### 3.3 v9.3.0 (F16 — Kafka/Redpanda/файловая ротация/reconnect)
+### 3.3 v9.3.0 (F16 — Kafka/Redpanda/файловая ротация/reconnect) — ✅ СДЕЛАНО
+
+> Все 3 подзадачи выполнены: D1 (Kafka через `rskafka` feature flag),
+> файловая ротация (расширение `file`), reconnect (exponential backoff
+> с jitter для TCP/TLS). 0 breaking changes.
 
 #### D1: Kafka через `rskafka` (feature flag)
 

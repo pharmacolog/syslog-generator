@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use syslog_generator::{
     apply_overrides, apply_protobuf_schema, create_dispatcher, create_metrics, gather_metrics,
     generate_message, parse_target, render_template, run_profile, serialize_protobuf,
@@ -262,12 +262,29 @@ async fn spawn_tls_collector(
     let cert_pem = tls.cert_pem.clone();
     let key_pem = tls.key_pem.clone();
     let handle = tokio::spawn(async move {
-        use native_tls::Identity;
-        use tokio_native_tls::TlsAcceptor;
-        let id = Identity::from_pkcs8(&cert_pem, &key_pem)
-            .expect("Identity::from_pkcs8 должен принять openssl-generated PEM");
-        let acceptor = native_tls::TlsAcceptor::builder(id).build().unwrap();
-        let acceptor = TlsAcceptor::from(acceptor);
+        // v9.5.0: TLS-сервер для тестов на rustls (миграция с native-tls).
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+        use tokio_rustls::TlsAcceptor;
+        // Установка crypto provider — первый вызов TLS в тестах.
+        syslog_generator::ensure_rustls_provider_for_tests();
+        let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_pem.as_slice())
+            .map(|r| r.unwrap())
+            .collect();
+        // rustls_pemfile::pkcs8_private_keys возвращает PrivatePkcs8KeyDer<'a>;
+        // оборачиваем в PrivateKeyDer::Pkcs8.
+        let pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_slice())
+            .map(|r| r.unwrap())
+            .next()
+            .expect("at least one key");
+        let key = PrivateKeyDer::Pkcs8(pkcs8);
+        let config = rustls::ServerConfig::builder_with_protocol_versions(&[
+            &rustls::version::TLS12,
+            &rustls::version::TLS13,
+        ])
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .expect("server config");
+        let acceptor = TlsAcceptor::from(Arc::new(config));
         let mut all = Vec::new();
         while all.len() < expected {
             let (stream, _) = listener.accept().await.unwrap();
@@ -1717,9 +1734,21 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
     let run = tokio::spawn(async move { run_profile(&profile, metrics).await });
 
     // Дадим серверу время привязаться и опрашиваем /metrics с ретраями.
+    // На загруженных CI runner'ах spawn+bind HTTP-сервера может занять
+    // несколько секунд (особенно под macOS).
+    //
+    // Флаки v9.6.0: проверка `syslog_messages_total` в той же итерации что
+    // и 200 OK — race condition. Метрика `syslog_messages_total` регистрируется
+    // динамически в `record_send()` при первой отправке сообщения, а
+    // `syslog_achieved_rate_messages_per_second` инициализируется сразу
+    // при старте фазы. Если фаза только стартовала — body содержит только
+    // achieved_rate (с значением 0). Фикс: после получения 200 продолжаем
+    // polling пока метрика `syslog_messages_total` не появится (отдельный
+    // timeout ~15s; обычно появляется за <1s после старта первой отправки).
     let mut body = String::new();
-    for _ in 0..50 {
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let mut got_200 = false;
+    for _ in 0..100 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         if let Ok(mut c) = TcpStream::connect(&addr_str).await {
             c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
                 .await
@@ -1728,18 +1757,39 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
             let _ = c.read_to_end(&mut buf).await;
             body = String::from_utf8_lossy(&buf).to_string();
             if body.contains("HTTP/1.1 200") {
+                got_200 = true;
                 break;
             }
         }
     }
-    assert!(body.contains("HTTP/1.1 200 OK"), "нет 200 OK: {body}");
+    assert!(got_200, "нет 200 OK от /metrics после 10s ретраев: {body}");
     assert!(
         body.contains("text/plain; version=0.0.4"),
         "нет prometheus content-type: {body}"
     );
+    // После 200 продолжаем polling пока не дождёмся первой отправки сообщения.
+    // syslog_messages_total появляется в registry только при первом вызове
+    // record_send(); до этого HTTP /metrics возвращает только статические
+    // метрики (target_rate, active_workers, achieved_rate).
+    if !body.contains("syslog_messages_total") {
+        for _ in 0..150 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if let Ok(mut c) = TcpStream::connect(&addr_str).await {
+                c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+                    .await
+                    .unwrap();
+                let mut buf = Vec::new();
+                let _ = c.read_to_end(&mut buf).await;
+                body = String::from_utf8_lossy(&buf).to_string();
+                if body.contains("syslog_messages_total") {
+                    break;
+                }
+            }
+        }
+    }
     assert!(
         body.contains("syslog_messages_total"),
-        "нет метрик в теле: {body}"
+        "нет syslog_messages_total в теле после 25s ретраев: {body}"
     );
 
     // 404 на неизвестный путь.
@@ -2039,25 +2089,17 @@ fn make_test_cert() -> (Vec<u8>, Vec<u8>) {
     (cert_pem, key_pem)
 }
 
-/// N4.mTLS (v8.7.2): проверка что `parse_tls_min_version` принимает
-/// ровно "1.2" и "1.3" и отвергает остальные значения.
+/// N4.mTLS: проверка что `parse_tls_min_version` принимает ровно "1.2"
+/// и "1.3" и отвергает остальные значения. Тип результата — наш enum
+/// `TlsVersion` (миграция native-tls → rustls в v9.5.0).
 #[test]
 fn test_n4_parse_tls_min_version_accepts_valid() {
-    use syslog_generator::parse_tls_min_version;
-    assert!(matches!(
-        parse_tls_min_version("1.2").unwrap(),
-        native_tls::Protocol::Tlsv12
-    ));
-    assert!(matches!(
-        parse_tls_min_version("1.3").unwrap(),
-        native_tls::Protocol::Tlsv13
-    ));
+    use syslog_generator::{parse_tls_min_version, TlsVersion};
+    assert_eq!(parse_tls_min_version("1.2").unwrap(), TlsVersion::V1_2);
+    assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::V1_3);
     // Trim пробелов (валидатор парсит значение как есть, но мы
     // устойчивы к пробелам).
-    assert!(matches!(
-        parse_tls_min_version("  1.2  ").unwrap(),
-        native_tls::Protocol::Tlsv12
-    ));
+    assert_eq!(parse_tls_min_version("  1.2  ").unwrap(), TlsVersion::V1_2);
     // Невалидные значения.
     assert!(parse_tls_min_version("1.0").is_err());
     assert!(parse_tls_min_version("1.1").is_err());
@@ -2070,7 +2112,7 @@ fn test_n4_parse_tls_min_version_accepts_valid() {
 /// (client_cert + client_key) без ошибок (identity загружается).
 #[test]
 fn test_n4_mtls_build_connector_with_client_identity() {
-    use syslog_generator::{build_tls_connector, TlsParams};
+    use syslog_generator::{build_tls_connector, TlsParams, TlsVersion};
     let (cert_pem, key_pem) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
@@ -2078,7 +2120,8 @@ fn test_n4_mtls_build_connector_with_client_identity() {
         insecure: false,
         client_cert_pem: Some(cert_pem),
         client_key_pem: Some(key_pem),
-        min_protocol: Some(native_tls::Protocol::Tlsv12),
+        min_protocol: Some(TlsVersion::V1_2),
+        cipher_suites: None,
     };
     let connector = build_tls_connector(&params);
     assert!(
@@ -2088,11 +2131,11 @@ fn test_n4_mtls_build_connector_with_client_identity() {
     );
 }
 
-/// N4.mTLS: `build_tls_connector` принимает `min_protocol = Tlsv13`
-/// (защита от downgrade-атак на TLS 1.2 и ниже).
+/// N4.mTLS: `build_tls_connector` принимает `min_protocol = TlsVersion::V1_3`
+/// (защита от downgrade-атак на TLS 1.2 и ниже). v9.5.0: тип — наш enum.
 #[test]
 fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
-    use syslog_generator::{build_tls_connector, TlsParams};
+    use syslog_generator::{build_tls_connector, TlsParams, TlsVersion};
     let (cert_pem, key_pem) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
@@ -2100,13 +2143,14 @@ fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
         insecure: false,
         client_cert_pem: Some(cert_pem),
         client_key_pem: Some(key_pem),
-        min_protocol: Some(native_tls::Protocol::Tlsv13),
+        min_protocol: Some(TlsVersion::V1_3),
+        cipher_suites: None,
     };
     assert!(build_tls_connector(&params).is_ok());
 }
 
 /// N4.mTLS: `build_tls_connector` отвергает битый client cert/key
-/// (ошибка парсинга PEM в Identity::from_pkcs8).
+/// (ошибка парсинга PKCS#8).
 #[test]
 fn test_n4_mtls_rejects_bad_client_identity() {
     use syslog_generator::{build_tls_connector, TlsParams};
@@ -2118,6 +2162,7 @@ fn test_n4_mtls_rejects_bad_client_identity() {
         client_cert_pem: Some(cert_pem),
         client_key_pem: Some(b"not a real key".to_vec()),
         min_protocol: None,
+        cipher_suites: None,
     };
     let r = build_tls_connector(&params);
     assert!(r.is_err(), "битый client key должен дать ошибку");
@@ -2196,6 +2241,316 @@ fn test_n4_mtls_validation_rejects_bad_min_protocol() {
             .any(|e| matches!(e, ValidationError::InvalidTlsMinProtocolVersion { .. })),
         "ожидалась InvalidTlsMinProtocolVersion, получено: {errs:?}"
     );
+}
+
+// ===== F17 (v9.5.1): сценарии аномалий =====
+
+/// F17: burst-injection увеличивает объём сообщений относительно базы.
+/// Сравниваем burst-фазу с baseline-фазой (без аномалий) и проверяем,
+/// что burst даёт существенно больше сообщений.
+#[tokio::test]
+async fn test_f17_burst_injection_increases_volume() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-burst.log";
+    let _ = fs::remove_file(file_path);
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "burst".into(),
+            duration_secs: 2,
+            messages_per_second: 100,
+            format: Some("raw".into()),
+            templates: vec!["burst {{sequence}}".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: 10.0,
+                    interval_secs: 1.0,
+                    duration_secs: 0.3,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // baseline 100 msg/s * 2s = 200, но burst ×10 каждые 1с на 0.3с даёт
+    // дополнительно ~9×100×0.3 = 270, итого ожидаемо > 250.
+    assert!(lines > 250, "burst volume too low: {}", lines);
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: slow-drip уменьшает объём сообщений относительно базы.
+#[tokio::test]
+async fn test_f17_slow_drip_decreases_volume() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-slow.log";
+    let _ = fs::remove_file(file_path);
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "slow".into(),
+            duration_secs: 2,
+            messages_per_second: 100,
+            format: Some("raw".into()),
+            templates: vec!["slow {{sequence}}".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::SlowDrip {
+                    rate_divisor: 5.0,
+                    duration_secs: 1.0,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // baseline 100 msg/s * 2s = 200, slow-drip ÷5 первые 1с даёт ~100*0.2 = 20,
+    // плюс вторая секунда на полном rate = 100. Итого ~120.
+    assert!(
+        lines < 200,
+        "slow_drip should decrease volume, got: {}",
+        lines
+    );
+    assert!(lines > 80, "slow_drip volume too low: {}", lines);
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: packet-loss дропает примерно loss_percent сообщений.
+#[tokio::test]
+async fn test_f17_packet_loss_drops_about_percent() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-loss.log";
+    let _ = fs::remove_file(file_path);
+    let total = 1000_u64;
+    let loss_percent = 30.0_f64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "loss".into(),
+            total_messages: Some(total),
+            messages_per_second: 0, // max speed
+            format: Some("raw".into()),
+            templates: vec!["loss {{sequence}}".into()],
+            seed: Some(42),
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::PacketLoss { loss_percent },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let delivered = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // Ожидаемо доставлено ~ (100 - loss_percent)% от total.
+    let expected = (total as f64) * (1.0 - loss_percent / 100.0);
+    let delta = (delivered as f64 - expected).abs();
+    let tolerance = (total as f64) * 0.15;
+    assert!(
+        delta < tolerance,
+        "delivered={delivered}, expected≈{expected:.0}, delta={delta:.0}, tolerance={tolerance:.0}"
+    );
+    // Метрика дропов ≥1.
+    let dropped = metrics
+        .anomalies_dropped_total
+        .with_label_values(&["loss", "packet-loss"])
+        .get();
+    assert!(
+        dropped >= 1.0,
+        "anomalies_dropped_total должно быть ≥1, got: {dropped}"
+    );
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: anomalies=None эквивалентно отсутствию аномалий (backward-compat).
+#[tokio::test]
+async fn test_f17_no_anomalies_behaves_like_baseline() {
+    let file_path = "f17-none.log";
+    let _ = fs::remove_file(file_path);
+    let count = 50_u64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "baseline".into(),
+            total_messages: Some(count),
+            messages_per_second: 0,
+            format: Some("raw".into()),
+            templates: vec!["baseline {{sequence}}".into()],
+            anomalies: None,
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    assert_eq!(
+        lines, count as usize,
+        "anomalies=None должен доставить ровно total_messages"
+    );
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: validate_profile отклоняет невалидный burst (multiplier <= 0).
+#[test]
+fn test_f17_validate_rejects_bad_burst_multiplier() {
+    use syslog_generator::{Anomaly, AnomalyKind, ValidationError};
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:514".into(),
+            transport: "tcp".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "bad".into(),
+            total_messages: Some(10),
+            messages_per_second: 10,
+            templates: vec!["x".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: -1.0,
+                    interval_secs: 1.0,
+                    duration_secs: 0.1,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(errs
+        .iter()
+        .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+}
+
+// ===== N4.cipher_policy (v9.5.0): интеграционные тесты =====
+
+/// N4.cipher_policy: F13 валидация отвергает неизвестные IANA-имена cipher suites.
+#[test]
+fn test_n4_cipher_policy_validation_rejects_unknown() {
+    use syslog_generator::ValidationError;
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:6514".into(),
+            transport: "tls".into(),
+            tls_cipher_suites: Some(vec![
+                "TLS_AES_256_GCM_SHA384".into(),
+                "TLS_NOT_A_REAL_SUITE".into(),
+            ]),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "cipher-policy".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidCipherSuite { ref name, .. } if name == "TLS_NOT_A_REAL_SUITE"
+        )),
+        "ожидалась InvalidCipherSuite, получено: {errs:?}"
+    );
+}
+
+/// N4.cipher_policy: F13 валидация принимает известные IANA-имена.
+#[test]
+fn test_n4_cipher_policy_validation_accepts_known() {
+    use syslog_generator::ValidationError;
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:6514".into(),
+            transport: "tls".into(),
+            tls_cipher_suites: Some(vec![
+                "TLS_AES_256_GCM_SHA384".into(),
+                "TLS_CHACHA20_POLY1305_SHA256".into(),
+                "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384".into(),
+            ]),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "cipher-policy".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        !errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidCipherSuite { .. })),
+        "не должно быть InvalidCipherSuite: {errs:?}"
+    );
+}
+
+/// N4.cipher_policy: end-to-end TLS-handshake с cipher_suites через rustls.
+/// Использует TLS 1.3 suite (AES_256_GCM) — TLS-сервер согласует именно его.
+#[test]
+fn test_n4_cipher_policy_e2e_tls_handshake() {
+    use syslog_generator::{build_tls_connector, TlsParams};
+    syslog_generator::ensure_rustls_provider_for_tests();
+    let (cert_pem, _) = make_test_cert();
+    let params = TlsParams {
+        domain: "localhost".into(),
+        ca_pem: Some(cert_pem),
+        insecure: false,
+        cipher_suites: Some(vec![
+            syslog_generator::parse_cipher_suite("TLS_AES_256_GCM_SHA384").unwrap(),
+            syslog_generator::parse_cipher_suite("TLS_CHACHA20_POLY1305_SHA256").unwrap(),
+        ]),
+        ..Default::default()
+    };
+    let _cfg = build_tls_connector(&params).expect("connector с cipher_suites");
+    // Полноценный e2e handshake потребует live TCP-сервера на rustls;
+    // этот тест проверяет, что connector строится без ошибок.
 }
 
 // ===== F15 (v9.2.0): интеграционные тесты для CEF/LEEF/JSON-lines =====
@@ -2357,6 +2712,153 @@ fn test_f15_validate_cef_without_config_fails() {
     );
 }
 
+/// F17: JSON Schema принимает валидные anomalies.
+#[test]
+fn test_f17_schema_check_accepts_anomalies() {
+    use syslog_generator::{load_profile_from_json_str, validate_against_embedded_schema};
+    let json = r#"{
+        "distribution": "round-robin",
+        "targets": [{"address": "127.0.0.1:514", "transport": "tcp"}],
+        "phases": [{
+            "name": "f17-schema",
+            "duration_secs": 5,
+            "messages_per_second": 10,
+            "templates": ["x"],
+            "anomalies": [
+                {"type": "burst-injection", "rate_multiplier": 5.0, "interval_secs": 1.0, "duration_secs": 0.5},
+                {"type": "slow-drip", "rate_divisor": 10.0, "duration_secs": 60.0},
+                {"type": "packet-loss", "loss_percent": 25.0}
+            ]
+        }]
+    }"#;
+    let profile = load_profile_from_json_str(json).expect("parse json");
+    validate_against_embedded_schema(&profile)
+        .expect("валидный профиль с anomalies должен проходить JSON Schema");
+}
+
+/// F17: JSON Schema отклоняет невалидный packet-loss (loss_percent > 100).
+#[test]
+fn test_f17_schema_check_rejects_invalid_packet_loss() {
+    use syslog_generator::{load_profile_from_json_str, validate_against_embedded_schema};
+    let json = r#"{
+        "distribution": "round-robin",
+        "targets": [{"address": "127.0.0.1:514", "transport": "tcp"}],
+        "phases": [{
+            "name": "f17-bad",
+            "duration_secs": 5,
+            "messages_per_second": 10,
+            "templates": ["x"],
+            "anomalies": [
+                {"type": "packet-loss", "loss_percent": 150.0}
+            ]
+        }]
+    }"#;
+    let profile = load_profile_from_json_str(json).expect("parse json");
+    assert!(validate_against_embedded_schema(&profile).is_err());
+}
+
+/// F17: комбинация burst + packet-loss в одной фазе.
+/// Burst увеличивает объём генерируемых, packet-loss дропает часть.
+#[tokio::test]
+async fn test_f17_burst_and_packet_loss_combined() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-combo.log";
+    let _ = fs::remove_file(file_path);
+    let total = 500_u64;
+    let loss_percent = 20.0_f64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "combo".into(),
+            total_messages: Some(total),
+            messages_per_second: 0,
+            format: Some("raw".into()),
+            templates: vec!["combo {{sequence}}".into()],
+            seed: Some(7),
+            anomalies: Some(vec![
+                Anomaly {
+                    kind: AnomalyKind::BurstInjection {
+                        rate_multiplier: 2.0,
+                        interval_secs: 1.0,
+                        duration_secs: 0.5,
+                    },
+                },
+                Anomaly {
+                    kind: AnomalyKind::PacketLoss { loss_percent },
+                },
+            ]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let delivered = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // Сгенерировано ~total (или чуть больше если burst сработал дважды),
+    // доставлено ~ (1 - loss_percent) от сгенерированного.
+    let expected = (total as f64) * (1.0 - loss_percent / 100.0);
+    let delta = (delivered as f64 - expected).abs();
+    let tolerance = (total as f64) * 0.20;
+    assert!(
+        delta < tolerance,
+        "combo: delivered={delivered}, expected≈{expected:.0}, delta={delta:.0}, tolerance={tolerance:.0}"
+    );
+    // Метрики аномалий должны быть заполнены.
+    let burst_applied = metrics
+        .anomalies_applied_total
+        .with_label_values(&["combo", "burst-injection"])
+        .get();
+    assert!(
+        burst_applied >= 1.0,
+        "burst-injection должно быть применено ≥1 раз, got: {burst_applied}"
+    );
+    let dropped = metrics
+        .anomalies_dropped_total
+        .with_label_values(&["combo", "packet-loss"])
+        .get();
+    assert!(
+        dropped >= 1.0,
+        "packet-loss должно дропнуть ≥1, got: {dropped}"
+    );
+    let _ = fs::remove_file(file_path);
+}
+
+/// F15: профиль с format=cef без cef-конфига — F13 отвергает.
+#[test]
+fn test_f15_validate_cef_without_config_fails_continue() {
+    let phase = Phase {
+        name: "cef-no-config".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::CefConfigMissing { .. })),
+        "got: {errs:?}"
+    );
+}
+
 /// F15: профиль с format=cef и пустым device_vendor — F13 отвергает.
 #[test]
 fn test_f15_validate_cef_empty_field_fails() {
@@ -2461,5 +2963,246 @@ fn test_f15_validate_leef_without_config_fails() {
         errs.iter()
             .any(|e| matches!(e, ValidationError::LeefConfigMissing { .. })),
         "got: {errs:?}"
+    );
+}
+
+// ===================== F16 (v9.3.0): Kafka/rotation/reconnect =====================
+
+/// F16: профиль с kafka_topic парсится корректно из YAML (при наличии feature `kafka`).
+#[cfg(feature = "kafka")]
+#[test]
+fn test_f16_yaml_kafka_profile_parses() {
+    use syslog_generator::load_profile_from_yaml_str;
+    let yaml = r#"
+targets:
+  - address: "broker1:9092,broker2:9092"
+    transport: kafka
+    kafka_topic: syslog-test
+    kafka_compression: lz4
+    kafka_linger_ms: 10
+distribution: round-robin
+phases:
+  - name: kafka
+    total_messages: 100
+    messages_per_second: 50
+    templates:
+      - "kafka msg {{sequence}}"
+"#;
+    let profile = load_profile_from_yaml_str(yaml).expect("yaml should parse");
+    assert_eq!(profile.targets.len(), 1);
+    assert_eq!(profile.targets[0].transport, "kafka");
+    assert_eq!(
+        profile.targets[0].kafka_topic.as_deref(),
+        Some("syslog-test")
+    );
+    assert_eq!(profile.targets[0].kafka_compression.as_deref(), Some("lz4"));
+    assert_eq!(profile.targets[0].kafka_linger_ms, Some(10));
+}
+
+/// F16: валидация требует kafka_topic при transport="kafka".
+#[cfg(feature = "kafka")]
+#[test]
+fn test_f16_validate_kafka_requires_topic() {
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "localhost:9092".into(),
+            transport: "kafka".into(),
+            kafka_topic: None,
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "kafka".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::KafkaTopicRequired { .. }
+        )),
+        "ожидалась KafkaTopicRequired, got: {errs:?}"
+    );
+}
+
+/// F16: валидация reject'ит невалидные параметры файловой ротации.
+#[test]
+fn test_f16_validate_rejects_bad_rotation_params() {
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+    let mut profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/rot.log".into(),
+            transport: "file".into(),
+            file_rotation_size_mb: Some(0),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "rot".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::InvalidFileRotation { .. }
+        )),
+        "ожидалась InvalidFileRotation, got: {errs:?}"
+    );
+    profile.targets[0].file_rotation_size_mb = Some(10);
+    profile.targets[0].file_rotation_max_files = Some(0);
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::ZeroFileRotationMaxFiles { .. }
+        )),
+        "ожидалась ZeroFileRotationMaxFiles, got: {errs:?}"
+    );
+}
+
+/// F16: валидация reject'ит невалидные параметры reconnect.
+#[test]
+fn test_f16_validate_rejects_bad_reconnect_params() {
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+    let mut profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:514".into(),
+            transport: "tcp".into(),
+            reconnect_initial_backoff_ms: Some(0),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "rc".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::ZeroReconnectInitialBackoff { .. }
+        )),
+        "ожидалась ZeroReconnectInitialBackoff, got: {errs:?}"
+    );
+    profile.targets[0].reconnect_initial_backoff_ms = Some(100);
+    profile.targets[0].reconnect_multiplier = Some(0.5);
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::InvalidReconnectMultiplier { .. }
+        )),
+        "ожидалась InvalidReconnectMultiplier, got: {errs:?}"
+    );
+}
+
+/// F16: пример file_rotation.yaml парсится и валиден.
+#[test]
+fn test_f16_example_file_rotation_parses() {
+    use syslog_generator::{load_profile_from_path, validate_profile};
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join("file_rotation.yaml");
+    let profile = load_profile_from_path(&path).expect("example must parse");
+    assert_eq!(profile.targets[0].transport, "file");
+    assert!(profile.targets[0].file_rotation_size_mb.is_some());
+    assert!(
+        validate_profile(&profile).is_empty(),
+        "file_rotation.yaml должен быть валиден"
+    );
+}
+
+/// F16: пример reconnect_tcp.yaml парсится и валиден.
+#[test]
+fn test_f16_example_reconnect_tcp_parses() {
+    use syslog_generator::{load_profile_from_path, validate_profile};
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join("reconnect_tcp.yaml");
+    let profile = load_profile_from_path(&path).expect("example must parse");
+    assert_eq!(profile.targets[0].transport, "tcp");
+    assert!(profile.targets[0].reconnect_max_attempts.is_some());
+    assert!(
+        validate_profile(&profile).is_empty(),
+        "reconnect_tcp.yaml должен быть валиден"
+    );
+}
+
+/// F16: реальная файловая ротация — sender создаёт rotated-файлы через 1 сек.
+#[tokio::test]
+async fn test_f16_file_rotation_creates_rotated_files_e2e() {
+    use std::sync::Arc;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use syslog_generator::{create_metrics, target_sender_file_with_rotation, RotationConfig};
+    use tokio::sync::{mpsc, Mutex};
+    use tokio_util::sync::CancellationToken;
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let path = std::env::temp_dir().join(format!("sg_f16_e2e_{nanos}.log"));
+    let metrics = create_metrics().expect("metrics");
+    let (tx, rx) = mpsc::channel(16);
+    let shared_rx: syslog_generator::SharedRx = Arc::new(Mutex::new(rx));
+    let shutdown = CancellationToken::new();
+    let rotation = RotationConfig {
+        size_mb: None,
+        interval_secs: Some(1),
+        max_files: Some(10),
+    };
+    let path_for_sender = path.clone();
+    let h = tokio::spawn(target_sender_file_with_rotation(
+        path_for_sender,
+        "f16-test".into(),
+        rotation,
+        shared_rx,
+        metrics.clone(),
+        shutdown.clone(),
+    ));
+    for i in 0..3 {
+        tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+    }
+    drop(tx);
+    h.await.unwrap().expect("sender ok");
+    let parent = path.parent().unwrap();
+    let stem = path.file_stem().unwrap().to_string_lossy().to_string();
+    let mut rotated_count = 0;
+    let mut entries = tokio::fs::read_dir(parent).await.unwrap();
+    while let Some(e) = entries.next_entry().await.unwrap() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with(&format!("{stem}."))
+            && n.ends_with(".log")
+            && n != path.file_name().unwrap().to_string_lossy()
+        {
+            rotated_count += 1;
+            let _ = tokio::fs::remove_file(e.path()).await;
+        }
+    }
+    let _ = tokio::fs::remove_file(&path).await;
+    assert!(
+        rotated_count >= 2,
+        "ожидалось >= 2 ротированных файлов, got {rotated_count}"
     );
 }

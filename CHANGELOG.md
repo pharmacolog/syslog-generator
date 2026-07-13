@@ -1,6 +1,262 @@
 
 # Changelog
 
+## v9.6.0 - 2026-07-13
+
+**N12: Docker/musl/docker-compose — последний релиз вехи E.**
+
+Закрывает веху E (P2 «Зрелость»). Полная цепочка теперь:
+v9.0.0 (веха D) → v9.1.0 (N10) → v9.2.0 (F15) → v9.3.0 (F16) → v9.4.0 (F17)
+→ v9.5.0 (N4) → **v9.6.0 (N12)** → v10.0.0.
+
+### Added
+
+- **`Dockerfile`** (multi-stage): `rust:1.97-bookworm` → `gcr.io/distroless/cc-debian12`.
+  - Stage 1 (builder): cmake + build-essential + pkg-config + libssl-dev
+    для dev-зависимостей (rcgen для TLS-сертификатов в тестах, criterion).
+    Оптимизация: `--bin syslog-generator` собирает только наш бинарь.
+    Бинарь strip'ается (≈30% экономии).
+  - Stage 2 (runtime): distroless `cc-debian12` — Debian 12 + glibc + ca-certificates.
+    Без shell, без apt. Размер образа ≈25 MB.
+  - User: 65532 (non-root, distroless default).
+- **`.dockerignore`**: исключает target/ (~2 GB), .git/, .archived-releases/,
+  .github/, IDE/OS файлы, *.log, *.zip.
+- **`docker-compose.yml`**: 4 сервиса:
+  - `syslog-generator` — генератор с профилем `profile-docker.yaml`.
+  - `syslog-ng` — приёмник syslog (UDP 514 + TCP 601 с RFC 6587 framing).
+  - `prometheus` — scrape `/metrics` endpoint (порт 9091 внутри compose-сети).
+  - `grafana` — визуализация (admin/admin).
+  - Volumes: `syslog-ng-data`, `prometheus-data`, `grafana-data`.
+- **`docker/syslog-ng.conf`**: syslog-ng 4.7 — UDP 514 (RFC 5424/3164) +
+  TCP 601 (`flags(no-parse)` для прозрачного pipe), destination → `/var/log/syslog-ng/messages.log`.
+- **`docker/prometheus.yml`**: scrape `syslog-generator:9091/metrics` каждые 15s.
+- **`examples/profile-docker.yaml`**: 3 фазы (warmup → burst → steady) с faker-полями.
+- **`.github/workflows/docker.yml`**: multi-arch build (linux/amd64 + linux/arm64)
+  с buildx QEMU, push в `ghcr.io/<repo>:<tag>`:
+  - `main` branch → tag = версия из Cargo.toml + `latest`
+  - `dev` branch → tag = `dev-{short_sha}` + `dev`
+  - tag push (v*.*.*) → tag = имя тега
+  - PR → build без push (smoke-test)
+  - GHA-кэш для ускорения повторных сборок.
+  - Smoke-test: `docker run --rm ... --version` на amd64.
+
+### Notes
+- **Все 9 бенчмарков + 288 тестов** (196 unit + 81 integration + 11 n7) — без изменений
+  (новые файлы не в Cargo workspace).
+- **Distroless выбор**: `cc-debian12` (а не `static-debian12`) — все runtime-deps
+  pure-Rust (`rskafka`, `rustls+ring`, `tokio`), но glibc-based образ
+  безопаснее для cross-arch (musl совместимость не тестировалась).
+- **TLS-приём syslog-ng** (6514) не настроен в этом compose — для TLS-теста
+  используйте `examples/rfc5424_tls_octet.json` и добавьте `network(source + tls)`
+  в `docker/syslog-ng.conf`.
+
+### Итог вехи E (v9.0.0 → v9.6.0)
+| Релиз | Фича |
+|---|---|
+| v9.1.0 | N10: trait Format + Transport (dyn-dispatch через enum) |
+| v9.2.0 | F15: CEF/LEEF/JSON-lines + N10-gap fix |
+| v9.3.0 | F16: Kafka (rskafka) + файловая ротация + exponential backoff reconnect |
+| v9.4.0 | F17: сценарии аномалий (burst/slow_drip/packet_loss) |
+| v9.5.0 | N4: cipher_policy + миграция native-tls → rustls (BREAKING) |
+| v9.6.0 | N12: Docker/musl/docker-compose (этот релиз) |
+
+Следующий релиз: **v10.0.0** (major milestone — закрытие вехи E).
+
+## v9.5.1 - 2026-07-13
+
+F17: сценарии аномалий нагрузки — для тестирования SIEM-правил и
+MITRE ATT&CK-подобных последовательностей. Patch-релиз поверх v9.5.0
+(N4.cipher_policy + rustls миграция, breaking). 0 breaking changes
+относительно v9.5.0 — добавлены новые поля и модуль без изменения
+сигнатур существующих API.
+
+### Added
+- **`src/anomaly.rs`** (новый модуль): tagged enum `AnomalyKind` с тремя
+  сценариями аномалий:
+  - `BurstInjection { rate_multiplier, interval_secs, duration_secs }` —
+    каждые `interval_secs` секунд окно `duration_secs` с rate ×
+    `rate_multiplier`. Use case: DDoS-всплеск, spike-нагрузка.
+  - `SlowDrip { rate_divisor, duration_secs }` — первые `duration_secs`
+    секунд rate / `rate_divisor`. Use case: low-and-slow атаки.
+  - `PacketLoss { loss_percent }` — каждое сообщение с вероятностью
+    `loss_percent` (0..=100) дропается до отправки. Детерминировано по
+    `(phase.seed, seq)` через F4-derive_rng с F17-salt в seq.
+- `struct Anomaly { kind: AnomalyKind }` с `#[serde(flatten)]` —
+  плоский tagged-формат в YAML/JSON (`{type: burst-injection, ...}`),
+  готов под будущие общие поля (name, enabled).
+- `struct AnomalyPlanner` с `combined_rate_multiplier(t)` (произведение
+  активных rate-множителей) и `should_drop(seed, seq)` (OR-логика
+  packet-loss'ов).
+- **`Phase.anomalies: Option<Vec<Anomaly>>`** (`#[serde(default,
+  skip_serializing_if = "Option::is_none"]`) — backward-compat:
+  существующие профили без поля работают без изменений.
+- **`src/generator/core.rs::run_phase_multi`**: интеграция аномалий в
+  rate-loop. Multiplicative composition: при наличии аномалий
+  переключаемся с governor (burst-friendly, несовместим с динамическим
+  rate) на честный sleep-планировщик по `base_rate *
+  anomaly_multiplier(t)` (или `shape.rate_at(t) * anomaly_multiplier(t)`
+  для load_shape). Constant rate без аномалий остаётся на governor
+  (поведение неизменно).
+- **Prometheus-метрики**: `syslog_anomalies_applied_total{phase, type}`
+  (сколько раз rate-аномалия реально модифицировала rate) и
+  `syslog_anomalies_dropped_total{phase, type}` (сколько сообщений
+  дропнуто packet-loss'ом).
+- **F13 валидация** (`src/validate.rs`): 6 новых вариантов
+  `ValidationError`:
+  - `InvalidAnomalyBurstMultiplier` (rate_multiplier > 0)
+  - `InvalidAnomalyBurstInterval` (interval_secs > 0)
+  - `InvalidAnomalyBurstDuration` (duration_secs >= 0)
+  - `InvalidAnomalySlowDripDivisor` (rate_divisor > 1)
+  - `InvalidAnomalySlowDripDuration` (duration_secs > 0)
+  - `InvalidAnomalyPacketLossPercent` (0..=100)
+- **`schemas/profile.schema.json`**: новый `$defs/Anomaly` (oneOf для
+  трёх типов) + `Phase.anomalies` (array of Anomaly, опциональный).
+- **`examples/profile-f17-anomalies.yaml`**: пример с тремя аномалиями
+  в одной фазе (burst ×10 каждые 30с + slow-drip ÷5 первые 60с +
+  packet-loss 20%), Prometheus /metrics на 127.0.0.1:9090.
+- 13 unit-тестов в `src/anomaly.rs::tests` (round-trip serde,
+  rate_multiplier по времени, packet-loss детерминизм, planner
+  композиция).
+- 2 unit-теста в `src/observability/metrics.rs::tests` (anomalies_applied
+  и anomalies_dropped после inc с правильными лейблами).
+- 8 unit-тестов в `src/validate.rs::tests::f17_*` (принимает валидные
+  параметры, отклоняет невалидные, boundary 0/100 для loss_percent,
+  собирает все ошибки за проход).
+- 8 интеграционных тестов в `tests/integration_tests.rs::test_f17_*`:
+  - burst увеличивает объём (>= 250 за 2с при base=100)
+  - slow-drip уменьшает объём (80..200 за 2с при base=100)
+  - packet-loss дропает ~30% (±15% допуск)
+  - burst + packet-loss комбинируются (combo)
+  - `anomalies: None` = baseline
+  - `anomalies: Some(vec![])` = no-op
+  - validate_profile отклоняет невалидный burst
+  - JSON Schema принимает/отклоняет по anomalies
+
+### Notes
+- **0 breaking changes** относительно v9.5.0: новый optional-поле
+  `Phase.anomalies` со serde-дефолтом; добавлены новые публичные типы
+  (`Anomaly`, `AnomalyKind`, `AnomalyPlanner`).
+- **288 тестов** (196 unit + 81 integration + 11 N7) — все зелёные.
+  На feature-ветке до merge с v9.5.0 было 241 (161 + 69 + 11), на
+  v9.5.0-ветке было 270 (186 + 73 + 11). После merge origin/dev →
+  feature/v9.4.0-f17 → v9.5.1 получили 288 (196 + 81 + 11).
+  С F17 добавлено 21 новый тест (13 unit anomaly + 2 metrics + 8 validate
+  unit + 8 integration; часть пересекается с F15/N4).
+- **9 бенчей** (3 + 6) — все зелёные (cargo bench --quick).
+- `cargo clippy --all-targets -- -D warnings` — чисто.
+- `cargo fmt --all -- --check` — clean.
+- Gitflow: feature/v9.4.0-f17 → dev через 2 merge-коммита
+  (sync after F15 v9.2.0, sync with v9.5.0 rustls breaking). F17
+  влит в dev как patch (v9.5.1), а не minor (v9.4.0) — потому что
+  release-train v9.5.0 (N4.cipher_policy) уже был на dev к моменту
+  готовности F17. Конфликты при merge (8 файлов при первом sync,
+  6 файлов при втором) разрешены вручную, ~14 конфликт-блоков.
+
+Следующие релизы вехи E: v9.6.0 (N12: Docker/musl/docker-compose).
+
+## v9.5.0 - 2026-07-13
+
+**N4.cipher_policy: миграция `native-tls → rustls` + выбор cipher suites.**
+
+### ⚠ BREAKING CHANGES
+
+v9.5.0 вводит **breaking changes** в публичном API транспорта TLS
+(зафиксировано как решение D2 в PLAN §3.5). Это первый breaking release
+с момента v8.0 — все остальные релизы v8.x/v9.0-v9.4 сохраняли
+backward-compat.
+
+| Что | Было (v9.4.0) | Стало (v9.5.0) | Миграция |
+|---|---|---|---|
+| TLS-крейт | `native-tls` + `tokio-native-tls` | `rustls` + `tokio-rustls` + `rustls-pemfile` + `webpki-roots` | Автоматическая — внешний API профиля не изменился |
+| `TlsParams::min_protocol` | `Option<native_tls::Protocol>` | `Option<TlsVersion>` (наш enum) | `native_tls::Protocol::Tlsv12` → `TlsVersion::V1_2` |
+| `parse_tls_min_version` return type | `Result<native_tls::Protocol, String>` | `Result<TlsVersion, String>` | Если вызывали напрямую — замените |
+| `build_tls_connector` return type | `tokio_native_tls::TlsConnector` | `Arc<rustls::ClientConfig>` | Тип возврата другой; внутренние пользователи должны использовать `TlsConnector::from(config)` |
+| `tls_connect` return type | `TlsStream<TcpStream>` (native-tls) | `TlsStream<TcpStream>` (tokio-rustls) | Совместимо по имени, но тип другой |
+| `tls_insecure=true` | native-tls `danger_accept_invalid_*` | rustls `NoCertVerifier` | Семантика сохранена |
+| Поддержка macOS/Windows TLS | SecureTransport / SChannel | rustls (кросс-платформенный) | Поведение unified |
+| `set_cipher_list` | Только Linux (OpenSSL-бэкенд) | Кросс-платформенно через `tls_cipher_suites` | Новое поле в `TargetConfig` |
+
+### Обоснование
+
+`native-tls` использует системный TLS-стек (SChannel/SecureTransport/OpenSSL).
+Прямое управление cipher suites (`set_cipher_list`) доступно только через
+OpenSSL-бэкенд — т.е. только на Linux. На macOS и Windows политика cipher_suites
+была недоступна (поле принималось, но игнорировалось с warning). rustls — pure
+Rust, кросс-платформенный, даёт явный выбор cipher suites через
+`ClientConfig::builder_with_provider()` + кастомный `CryptoProvider`.
+
+### Added
+
+- **`tls_cipher_suites: Option<Vec<String>>`** в `TargetConfig` — список IANA-имён
+  cipher suites, ограничивающий набор в TLS-handshake. Примеры:
+  `["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"]`.
+- **`TlsVersion` enum** (`pub`) — `V1_2 | V1_3`. Заменяет `native_tls::Protocol`.
+- **`parse_cipher_suite(name) -> Result<rustls::SupportedCipherSuite, String>`**
+  — парсинг IANA-имени в rustls-suite. Возвращает человеко-читаемую ошибку
+  со списком всех поддерживаемых имён.
+- **`SUPPORTED_CIPHER_SUITE_NAMES`** — публичная константа со списком имён
+  (используется F13-валидацией для сообщений об ошибке).
+- **3 TLS 1.3 suites**: TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256,
+  TLS_CHACHA20_POLY1305_SHA256.
+- **5 TLS 1.2 suites**: TLS_ECDHE_*_WITH_AES_*_GCM_*, TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305.
+- **F13 валидация**: новая ошибка `InvalidCipherSuite` — отвергает неизвестные
+  IANA-имена с подсказкой (список допустимых).
+- **`ensure_rustls_provider()`** — ленивая установка ring crypto provider'а
+  через `std::sync::Once`. Вызывается автоматически из `build_tls_connector`.
+  Публичный wrapper `ensure_rustls_provider_for_tests()` для интеграционных тестов.
+
+### Changed
+- **Cargo.toml**: `native-tls` + `tokio-native-tls` → `rustls` 0.23 (с feature
+  `tls12`, `ring` crypto provider) + `tokio-rustls` 0.26 + `rustls-pemfile` 2 +
+  `webpki-roots` 0.26.
+- **`build_tls_connector`**: переписан под rustls state machine
+  (`builder_with_provider → with_protocol_versions → dangerous().with_custom_certificate_verifier
+  → with_client_auth_cert / with_no_client_auth`).
+- **TLS-handshake по умолчанию** через Mozilla CA bundle (webpki-roots, ~140 CA).
+  Без явного `tls_ca_file` — клиент доверяет публичным CA. С `tls_ca_file` —
+  добавляет CA к корням.
+- **`tls_insecure=true`**: реализован через `NoCertVerifier` (custom
+  `ServerCertVerifier`-impl, принимает любой сертификат).
+
+### Notes
+- **241 тестов** (158 unit + 72 integration + 11 n7) — все зелёные (было 228 в v9.2.0, +13).
+- **6 новых unit-тестов** в `transport/tls.rs::tests` для cipher parsing и connector build.
+- **3 новых интеграционных теста** в `test_n4_cipher_policy_*`:
+  - `test_n4_cipher_policy_validation_rejects_unknown` — F13 валидация.
+  - `test_n4_cipher_policy_validation_accepts_known` — happy path.
+  - `test_n4_cipher_policy_e2e_tls_handshake` — connector строится без ошибок.
+- **2 новых примера**: `examples/cipher_policy_tls13.json` (TLS 1.3 + 3 suites),
+  `examples/mtls_cipher_policy.json` (mTLS + 2 ECDHE suites).
+- **Default protocol versions**: TLS 1.2 + TLS 1.3 (TLS 1.0/1.1 недоступны
+  из-за feature-флага в rustls).
+
+### Migration guide (v9.4.0 → v9.5.0)
+
+Если ваш код использует только профили (YAML/JSON) — **миграция не требуется**:
+поля `tls_min_protocol_version` и `tls_cipher_suites` имеют `#[serde(default)]`,
+существующие профили работают без изменений.
+
+Если вы напрямую используете Rust API:
+
+```rust
+// БЫЛО (v9.4.0):
+use native_tls::Protocol;
+use syslog_generator::{parse_tls_min_version, build_tls_connector};
+
+let p = parse_tls_min_version("1.3")?;  // → native_tls::Protocol::Tlsv13
+let connector: tokio_native_tls::TlsConnector = build_tls_connector(&params)?;
+
+// СТАЛО (v9.5.0):
+use syslog_generator::{parse_tls_min_version, TlsVersion, build_tls_connector};
+
+let p = parse_tls_min_version("1.3")?;  // → TlsVersion::V1_3
+let config: Arc<rustls::ClientConfig> = build_tls_connector(&params)?;
+let connector = tokio_rustls::TlsConnector::from(config);
+```
+
+Следующие релизы вехи E: **v9.6.0 (N12: Docker/musl/docker-compose)** —
+последний релиз перед v10.0.0.
+
 ## v9.2.0 - 2026-07-13
 
 **F15: ArcSight CEF + IBM QRadar LEEF + JSON-lines форматы.** Расширение
@@ -83,7 +339,7 @@ trait `Format` через `FormatContext` (без breaking changes для сущ
   гарантирует стабильный порядок при одинаковом seed.
 
 Следующие релизы вехи E: v9.3.0 (F16: Kafka/Redpanda + файловая ротация +
-reconnect-стратегия), v9.4.0 (F17: сценарии аномалий), v9.5.0 (N4.cipher_policy +
+reconnect-стратегия), v9.5.0 (N4.cipher_policy +
 миграция на rustls), v9.6.0 (N12: Docker/musl/docker-compose).
 
 ## v9.1.0 - 2026-07-13

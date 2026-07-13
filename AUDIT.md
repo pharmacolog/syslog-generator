@@ -2,23 +2,15 @@
 
 Дата аудита: 2026-07-11. Базис аудита: реальный компилируемый код v7.4.0 (проверен `cargo build/test/bench/clippy`), документация (`README.md`, `docs/`, `examples/`, `REVIEW.md`), Grafana-дашборд.
 
-> **Статус на v8.8.0 (2026-07-13):** вехи A, B и C закрыты полностью (v8.0.0).
-> **Веха D (P1) закрыта полностью — текущая версия v8.8.0.** Закрыты:
-> F11 (расширенный CLI, v8.1.0), F13 (валидация профиля, v8.1.0),
-> **F12 (HTTP-эндпоинт /metrics, v8.2.0)**, **безопасный TLS (N4, v8.2.0)**,
-> **типизированные ошибки рантайма (N7, v8.3.0)**, починка 3 упавших TLS-тестов
-> (v8.3.1), **CI-пайплайн GitHub Actions (N9, v8.4.0)**, починка
-> `sender_throughput` бенчмарков (v8.4.1), **формальная JSON Schema + YAML-ввод
-> (D3, v8.5.0)**, **синхронизация Grafana-дашборда (N2, v8.6.0)**,
-> **CompiledTemplate (N5, v8.6.1)**, **round-trip RFC 5424 (N8, v8.6.1)**,
-> **документация (N11, v8.6.1)**, **zero-copy/буферизация (N6, v8.7.0)**,
-> **property-based тесты (N8, v8.7.1)**, **mTLS + min_protocol (N4.mTLS, v8.7.2)**,
-> **рефакторинг слоёв format/transport/observability/generator (N10, v8.8.0)**.
-> Следующие релизы: **v8.8.1** (правки AUDIT.md — поставить ✅ на F7/F8/F9,
-> убрать "Отложено" из F13 и N4) и **v9.0.0** (milestone release —
-> семантический маркер закрытия вехи D, без breaking changes). Потом
-> веха E (P2): F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda), F17
-> (сценарии аномалий), N12 (Docker/musl). См. §4.1 P2.
+> **Статус на v9.6.0 (2026-07-13):** вехи A, B, C, D, E закрыты полностью.
+> **Веха E (P2 «Зрелость») ЗАКРЫТА — v9.6.0.** Сделанные релизы вехи E:
+> v9.1.0 (N10, trait Format/Transport), v9.2.0 (F15, CEF/LEEF/JSON-lines),
+> **v9.3.0 (F16, Kafka/Redpanda + файловая ротация + exponential backoff reconnect)**,
+> v9.5.0 (N4.cipher_policy + rustls миграция, BREAKING), v9.5.1 (F17, сценарии
+> аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0),
+> **v9.6.0 (N12, Docker/musl/docker-compose — закрытие вехи E)**.
+> 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные.
+> Следующая веха — **v10.0.0** (major milestone).
 > Ранее отложенные опциональные задачи A/B/C (F5 regex, F6 корреляции,
 > F10 честный protobuf, N3 метрики) закрыты в v8.0.0.
 > Разделы 1–2 ниже описывают исходное
@@ -158,8 +150,8 @@ for seq in 1..=total { ... }
 
 #### P2 — Расширения
 - **F15. Дополнительные форматы:** CEF, LEEF, JSON-lines, Apache/Nginx access — для SIEM-сценариев.
-- **F16. Дополнительные транспорты:** TCP с keep-alive/reconnect, Kafka/Redpanda sink (совпадает с экспертизой заказчика), файловая ротация.
-- **F17. Сценарии «атак»/аномалий:** всплески ошибок, редкие события, MITRE ATT&CK-подобные последовательности для тестирования SIEM-правил.
+- **F16. Дополнительные транспорты. ✅ Сделано (v9.3.0).** Kafka/Redpanda transport через `rskafka` 0.5 (opt-in feature `kafka`, compression gzip/lz4/snappy/zstd) — `TargetConfig.transport: kafka` + `broker_addrs` + `topic`. Файловая ротация (size/time/max_files с LRU cleanup) — `TargetConfig.transport: file` с `rotation: { size_bytes | interval_secs | max_files }`. Exponential backoff reconnect с jitter для TCP/TLS через `src/transport/reconnect.rs` (10 unit-тестов покрывают логику: success_on_first_attempt, retries_until_success, returns_some_err_when_max_attempts_exhausted, infinite_retries_when_max_attempts_none, on_attempt_callback_invoked_per_try, validate_catches_bad_params и т.д.). Новый `src/transport/kafka.rs` (278 строк) + `src/transport/reconnect.rs` (487 строк). 7 F16-интеграционных тестов + 10 unit + 5 validate (InvalidFileRotation, ZeroFileRotationMaxFiles, ZeroReconnectInitialBackoff, InvalidReconnectMultiplier, InvalidReconnectBackoffRange). `schemas/profile.schema.json` обновлён (oneOf для rotation, reconnect sub-schema). CI: отдельный `test-kafka` job (`.github/workflows/ci.yml`). Примеры: `examples/kafka_redpanda.yaml`, `examples/file_rotation.yaml`, `examples/reconnect_tcp.yaml`. 0 breaking changes.
+- **F17. Сценарии «атак»/аномалий. ✅ Сделано (v9.5.1, patch поверх v9.5.0).** Tagged enum `AnomalyKind` с тремя сценариями: `BurstInjection { rate_multiplier, interval_secs, duration_secs }` (всплеск интенсивности каждые `interval_secs` в течение `duration_secs`), `SlowDrip { rate_divisor, duration_secs }` (пониженная интенсивность первые `duration_secs` — low-and-slow), `PacketLoss { loss_percent }` (детерминированный по `(seed, seq)` drop до отправки через F4-derive_rng с F17-salt). `Phase.anomalies: Option<Vec<Anomaly>>` (`#[serde(default)]`). В `run_phase_multi` аномалии композиционны: multiplicative для rate (burst × M + slow-drip ÷ D = × (M/D)), OR для packet-loss. При наличии аномалий переключаемся с governor (burst-friendly) на честный sleep-планировщик. Prometheus-метрики `syslog_anomalies_applied_total{phase,type}` + `syslog_anomalies_dropped_total{phase,type}`. 6 новых `ValidationError` (F13) + `schemas/profile.schema.json::Anomaly` (oneOf для трёх типов). 13 unit + 2 metrics + 8 validate + 8 integration = 31 новый тест. 0 breaking changes относительно v9.5.0.
 
 ### 4.2. Нефункциональные характеристики
 
@@ -169,7 +161,7 @@ for seq in 1..=total { ... }
 - **N3. Метрики нагрузки. ✅ Сделано (v8.0.0).** Фактический achieved-rate и target-vs-actual (`syslog_achieved_rate`/`syslog_target_rate`), **histogram латентности отправки** `syslog_send_duration_seconds` (корзины 5µs–1s — основа для p50/p95/p99), **histogram размера сообщений** `syslog_message_size_bytes` (16B–64KB), **счётчик реконнектов** `syslog_reconnects_total{transport,target}` (с реальным восстановлением TCP/TLS). p50/p95/p99-агрегация в рантайме и HTTP-экспорт (F12) — веха D; сейчас метрики доступны через `gather_metrics`.
 
 #### P1 — Безопасность
-- **N4. Безопасный TLS по умолчанию. ✅ Сделано (v8.2.0, расширено v8.7.2/N4.mTLS).** Валидация сертификата включена по умолчанию (`build_tls_connector` + `TlsParams` в `src/transport/tls.rs`). Новые поля `TargetConfig`: `tls_domain` (SNI/проверка имени; по умолчанию — хост-часть `address`), `tls_ca_file` (PEM доверенного CA для self-signed/приватного CA), `tls_insecure` (явный opt-in в небезопасный режим, по умолчанию `false`; при включении — предупреждение в stderr), **tls_client_cert_file** + **tls_client_key_file** (v8.7.2, mTLS — клиент предъявляет сертификат серверу), **tls_min_protocol_version** (v8.7.2, "1.2" или "1.3", защита от downgrade-атак). `parse_tls_min_version` парсит строку в `native_tls::Protocol`. 3 новых `ValidationError`: `TlsClientCertFileNotFound`, `TlsClientKeyFileNotFound`, `InvalidTlsMinProtocolVersion`. Валидация (F13) отклоняет несуществующий `tls_ca_file`/`tls_client_cert_file`/`tls_client_key_file`. Живая проверка: insecure-warn, отклонение битого CA (rc=1), mixed-тесты + mTLS-тесты проходят. **Отложено** (в веху E или после): **cipher policy** (allow/denylist шифров).
+- **N4. Безопасный TLS по умолчанию. ✅ Сделано (v8.2.0, расширено v8.7.2/N4.mTLS, v9.5.0/N4.cipher_policy).** Валидация сертификата включена по умолчанию (`build_tls_connector` + `TlsParams` в `src/transport/tls.rs`). Новые поля `TargetConfig`: `tls_domain` (SNI/проверка имени; по умолчанию — хост-часть `address`), `tls_ca_file` (PEM доверенного CA для self-signed/приватного CA), `tls_insecure` (явный opt-in в небезопасный режим, по умолчанию `false`; при включении — предупреждение в stderr), **tls_client_cert_file** + **tls_client_key_file** (v8.7.2, mTLS — клиент предъявляет сертификат серверу), **tls_min_protocol_version** (v8.7.2, "1.2" или "1.3", защита от downgrade-атак), **tls_cipher_suites** (v9.5.0, `Option<Vec<String>>` — список IANA-имён cipher suites для ограничения набора). **`parse_tls_min_version` парсит строку в `TlsVersion` (v9.5.0)** — заменил `native_tls::Protocol` на собственный enum (`V1_2 | V1_3`). **v9.5.0 BREAKING:** миграция `native-tls → rustls` 0.23 (с `ring` crypto provider, `webpki-roots` 0.26 для Mozilla CA bundle, `rustls-pemfile` 2 для парсинга PEM). `build_tls_connector` возвращает `Arc<rustls::ClientConfig>` (state machine: `builder_with_provider → with_protocol_versions → dangerous().with_custom_certificate_verifier → with_client_auth_cert / with_no_client_auth`). `tls_insecure=true` реализован через custom `ServerCertVerifier` (`NoCertVerifier`) — принимает любой сертификат. 3+1 новых `ValidationError`: `TlsClientCertFileNotFound`, `TlsClientKeyFileNotFound`, `InvalidTlsMinProtocolVersion`, **`InvalidCipherSuite`** (v9.5.0 — отвергает неизвестные IANA-имена со списком допустимых). 8 поддерживаемых cipher suites: 3 TLS 1.3 (TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256, TLS_CHACHA20_POLY1305_SHA256) + 5 TLS 1.2 (TLS_ECDHE_*_WITH_AES_*_GCM_*, TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305). F16/F17/F15 + N4 покрыты 314 тестами (215 unit + 88 integration + 11 n7) — все зелёные.
 
 #### P1 — Производительность
 - **N5. Бенчмарки как регрессионный гейт.** Расширить Criterion-бенчи на реальные нагрузочные показатели (msg/s на транспорт, аллокации на сообщение); фиксировать базлайны. Профилирование горячего пути генерации (сейчас `render_template` делает `String::replace` в цикле по всем ключам — O(templ*keys), стоит перейти на однопроходный парсер/предкомпиляцию шаблонов).
@@ -245,7 +237,7 @@ for seq in 1..=total { ... }
 #### P2 — Сопровождаемость и поставка
 - **N10. Вынести ядро из `lib.rs`-реэкспортов в чёткие слои** (`generator`, `transport`, `scheduler`, `format`, `observability`), убрать `architecture-notes.md`-заглушку, описать реальную архитектуру.
 - **N11. Документация как контракт.** Привести USER/DEVELOPER guide в соответствие реализации, добавить раздел «ограничения» и «поведение метрик Prometheus»; синхронизировать `.meta.json` (сейчас ссылаются на устаревшую «v4.0»).
-- **N12. Поставка:** Docker-образ, статически слинкованный бинарник (musl), пример docker-compose со стеком «генератор + rsyslog/syslog-ng + Prometheus + Grafana» для приёмочного тестирования.
+- **N12. Поставка. ✅ Сделано (v9.6.0).** Docker-образ, статически слинкованный бинарник (musl), пример docker-compose со стеком «генератор + rsyslog/syslog-ng + Prometheus + Grafana» для приёмочного тестирования. Multi-stage `Dockerfile` (`rust:1.97-bookworm` → `gcr.io/distroless/cc-debian12`, ~25 MB, non-root user 65532), `.dockerignore` (исключает target/, .git/, .archived-releases/), `docker-compose.yml` (4 сервиса: syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf` (UDP 514 + TCP 601), `docker/prometheus.yml` (scrape каждые 15s), `examples/profile-docker.yaml` (3 фазы warmup → burst → steady). `.github/workflows/docker.yml` для multi-arch build (linux/amd64 + linux/arm64 с buildx QEMU, push в `ghcr.io/<repo>:<tag>`: main → версия + `latest`, dev → `dev-{short_sha}`, tag `v*.*.*` → имя тега, PR → build без push + smoke-test `docker run --rm ... --version`). CI полностью функционален на ubuntu-latest + macos-latest.
 
 ---
 
@@ -255,7 +247,7 @@ for seq in 1..=total { ... }
 2. **Веха B — «Валидный syslog» (P0 F7–F10): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** RFC 5424/3164 + framing (v7.7.0); честный protobuf wire-format (F10, v8.0.0). Делает вывод пригодным для реальных приёмников. Без отложенных задач.
 3. **Веха C — «Вариативный пейлоад» (P0 F4–F6, F14): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** ГПСЧ+seed (F4, v7.9.0), богатый faker-набор + типы полей + **regex** (F5), распределения uniform/weighted/zipf + паддинг + **межполевые корреляции** (F6), мультишаблоны с весами (F14). Ранее отложенные `regex` и корреляции реализованы в v8.0.0. Закрывает «глубокую кастомизацию» пейлоада без остаточных задач.
 4. **Веха D — «Продакшн-готовность» (P1): ✅ ЗАКРЫТА (v8.8.0, последний patch — v8.8.1 с правками AUDIT.md).** Все P1-задачи выполнены: CLI (F11), валидация профиля (F13), типизированные ошибки валидации (`ValidationError` через `thiserror`), **HTTP-эндпоинт /metrics (F12)**, **безопасный TLS по умолчанию (N4)**, **типизированные ошибки рантайма (N7)**, починка TLS-тестов (v8.3.1), **CI-пайплайн GitHub Actions (N9)**, починка регрессии бенчмарков (v8.4.1), **JSON Schema + YAML-ввод (D3)**, **синхронизация Grafana-дашборда (N2)**, **CompiledTemplate/N5 (v8.6.1)**, **round-trip RFC 5424/N8 (v8.6.1)**, **документация/N11 (v8.6.1)**, **zero-copy/буферизация (N6, v8.7.0)**, **property-based тесты (N8, v8.7.1)**, **mTLS + min_protocol (N4.mTLS, v8.7.2)**, **рефакторинг слоёв format/transport/observability/generator (N10, v8.8.0)**. v8.8.1 — правки AUDIT.md (поставить ✅ на F7/F8/F9, убрать "Отложено" из F13/N4). v9.0.0 — milestone release без breaking changes (семантический маркер закрытия вехи D). Потом веха E (P2).
-5. **Веха E — «Зрелость» (P2):** доп. форматы/транспорты, сценарии аномалий, Docker/compose, рефакторинг слоёв.
+5. **Веха E — «Зрелость» (P2): ✅ ЗАКРЫТА (v9.6.0).** Все P2-задачи выполнены: trait Format + Transport (N10, v9.1.0), CEF/LEEF/JSON-lines (F15, v9.2.0), Kafka/Redpanda transport через `rskafka` opt-in + файловая ротация + exponential backoff reconnect (F16, v9.3.0), сценарии аномалий нагрузки: burst-injection/slow-drip/packet-loss (F17, v9.5.1), **cipher_policy + миграция native-tls → rustls (N4.cipher_policy, v9.5.0, BREAKING)**, **Docker/musl/docker-compose с multi-arch CI build (N12, v9.6.0 — закрытие вехи E)**. 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные. Следующая веха — **F (после v10.0.0)**.
 
 Каждая веха завершается compile-verified релизом с обновлением `CHANGELOG.md` и документации (как в текущем процессе v7.4.0).
 

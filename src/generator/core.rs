@@ -1,9 +1,16 @@
+use crate::anomaly::AnomalyPlanner;
 use crate::format::{protobuf::serialize_protobuf_like, Format, FormatContext, FormatKind, Header};
 use crate::generator::config::{Phase, Profile, TargetConfig};
 use crate::observability::metrics::Metrics;
 use crate::schema::Schema;
 use crate::shutdown::{graceful_drain_wait, shutdown_listener};
 use crate::template::render_template;
+use crate::transport::file::{target_sender_file_with_rotation, RotationConfig};
+#[cfg(feature = "kafka")]
+use crate::transport::kafka::{
+    parse_kafka_acks, parse_kafka_compression, target_sender_kafka, KafkaConfig,
+};
+use crate::transport::reconnect::ReconnectConfig;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
     target_sender_udp, Framing,
@@ -376,6 +383,18 @@ pub async fn run_phase_multi(
         let pool_size = target.connections.max(1);
         total_workers += pool_size as u64;
         let framing = Framing::parse(&target.framing);
+        // F16: собираем RotationConfig и ReconnectConfig из TargetConfig.
+        let rotation = RotationConfig {
+            size_mb: target.file_rotation_size_mb,
+            interval_secs: target.file_rotation_interval_secs,
+            max_files: target.file_rotation_max_files,
+        };
+        let rcfg = ReconnectConfig::resolve(
+            target.reconnect_max_attempts,
+            target.reconnect_initial_backoff_ms,
+            target.reconnect_max_backoff_ms,
+            target.reconnect_multiplier,
+        );
         for _ in 0..pool_size {
             let rx = shared_rx.clone();
             let addr = target.address.clone();
@@ -383,8 +402,22 @@ pub async fn run_phase_multi(
             let m = metrics.clone();
             let sd = shutdown.clone();
             let h = match target.transport.as_str() {
-                "tcp" => tokio::spawn(target_sender_tcp(addr, phase_name, rx, m, sd, framing)),
-                "udp" => tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd)),
+                "tcp" => {
+                    // F16: передаём reconnect_config в TCP sender.
+                    tokio::spawn(target_sender_tcp(
+                        addr,
+                        phase_name,
+                        rx,
+                        m,
+                        sd,
+                        framing,
+                        Some(rcfg.clone()),
+                    ))
+                }
+                "udp" => {
+                    // UDP без reconnect (connectionless).
+                    tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd))
+                }
                 "tls" => {
                     // N4: SNI/проверка имени — из tls_domain или хост-части address.
                     let domain = target.tls_domain.clone().unwrap_or_else(|| {
@@ -423,14 +456,14 @@ pub async fn run_phase_multi(
                             (Some(cert_path), None) => {
                                 eprintln!(
                                     "TLS ({addr}): задан tls_client_cert_file={cert_path}, \
-                                 но tls_client_key_file не задан — mTLS отключён"
+                                     но tls_client_key_file не задан — mTLS отключён"
                                 );
                                 (None, None)
                             }
                             (None, Some(key_path)) => {
                                 eprintln!(
                                     "TLS ({addr}): задан tls_client_key_file={key_path}, \
-                                 но tls_client_cert_file не задан — mTLS отключён"
+                                     но tls_client_cert_file не задан — mTLS отключён"
                                 );
                                 (None, None)
                             }
@@ -460,12 +493,111 @@ pub async fn run_phase_multi(
                         client_cert_pem,
                         client_key_pem,
                         min_protocol,
+                        // N4.cipher_policy (v9.5.0): парсинг IANA-имён →
+                        // rustls::SupportedCipherSuite. Парсинг идёт здесь
+                        // (а не в build_tls_connector) чтобы при ошибке имя
+                        // файла/фазы было в логе. None → дефолтные suites.
+                        cipher_suites: match &target.tls_cipher_suites {
+                            Some(names) => {
+                                let mut out = Vec::with_capacity(names.len());
+                                for name in names {
+                                    match crate::transport::tls::parse_cipher_suite(name) {
+                                        Ok(s) => out.push(s),
+                                        Err(e) => {
+                                            eprintln!(
+                                                "TLS ({addr}): не удалось распарсить cipher_suites={name:?}: {e}; \
+                                                 используется дефолтный набор"
+                                            );
+                                            out.clear();
+                                            break;
+                                        }
+                                    }
+                                }
+                                if out.is_empty() {
+                                    None
+                                } else {
+                                    Some(out)
+                                }
+                            }
+                            None => None,
+                        },
                     };
+                    // F16: reconnect config для TLS.
                     tokio::spawn(target_sender_tls(
-                        addr, tls_params, phase_name, rx, m, sd, framing,
+                        addr,
+                        tls_params,
+                        phase_name,
+                        rx,
+                        m,
+                        sd,
+                        framing,
+                        Some(rcfg.clone()),
                     ))
                 }
-                _ => tokio::spawn(target_sender_file(addr, phase_name, rx, m, sd)),
+                #[cfg(feature = "kafka")]
+                "kafka" => {
+                    // F16: Kafka target. Собираем KafkaConfig из полей target'а.
+                    let bootstrap = crate::transport::kafka::parse_bootstrap_servers(&addr);
+                    let topic = target.kafka_topic.clone().unwrap_or_default();
+                    let client_id = target
+                        .kafka_client_id
+                        .clone()
+                        .unwrap_or_else(|| "syslog-generator".to_string());
+                    let compression = match target.kafka_compression.as_deref() {
+                        Some(s) => match parse_kafka_compression(s) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                eprintln!(
+                                    "Kafka ({addr}): не удалось распарсить kafka_compression={s:?}: {e}; \
+                                     используется NoCompression"
+                                );
+                                rskafka::client::partition::Compression::NoCompression
+                            }
+                        },
+                        None => rskafka::client::partition::Compression::NoCompression,
+                    };
+                    let acks = match target.kafka_acks.as_deref() {
+                        Some(s) => match parse_kafka_acks(s) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                eprintln!(
+                                    "Kafka ({addr}): не удалось распарсить kafka_acks={s:?}: {e}; \
+                                     поле игнорируется"
+                                );
+                                None
+                            }
+                        },
+                        None => None,
+                    };
+                    let linger =
+                        std::time::Duration::from_millis(target.kafka_linger_ms.unwrap_or(5));
+                    let max_batch_size = target.kafka_max_batch_size.unwrap_or(1024);
+                    let kafka_cfg = KafkaConfig {
+                        bootstrap_servers: bootstrap,
+                        topic,
+                        client_id,
+                        compression,
+                        acks,
+                        linger,
+                        max_batch_size,
+                    };
+                    tokio::spawn(target_sender_kafka(kafka_cfg, addr, phase_name, rx, m, sd))
+                }
+                _ => {
+                    // F16: file с ротацией (если задана) или без (default).
+                    if rotation.is_enabled() {
+                        tokio::spawn(target_sender_file_with_rotation(
+                            std::path::PathBuf::from(addr),
+                            phase_name,
+                            rotation.clone(),
+                            rx,
+                            m,
+                            sd,
+                        ))
+                    } else {
+                        tokio::spawn(target_sender_file(addr, phase_name, rx, m, sd))
+                    }
+                }
             };
             handles.push(h);
         }
@@ -484,12 +616,26 @@ pub async fn run_phase_multi(
     let format_kind = FormatKind::parse(phase.format_type()).unwrap_or(FormatKind::Raw);
 
     // Целевая интенсивность.
-    // Два режима:
-    //  1) Постоянный rate (load_shape не задан) — токен-бакет `governor`,
-    //     messages_per_second == 0 => “без ограничения скорости”.
-    //  2) Кривая нагрузки (load_shape задан, F3) — sleep-планировщик по
-    //     мгновенному rate_at(t); говернор не используется.
-    let limiter = if phase.load_shape.is_none() {
+    // Режимы (выбираются в порядке приоритета):
+    //  1) Кривая нагрузки (load_shape задан, F3) — sleep-планировщик по
+    //     мгновенному rate_at(t). F17: дополнительно умножается на
+    //     anomaly_multiplier(t).
+    //  2) Постоянный rate с аномалиями (F17) — sleep-планировщик по
+    //     base_rate * anomaly_multiplier(t).
+    //  3) Постоянный rate без аномалий — токен-бакет `governor`,
+    //     messages_per_second == 0 => "без ограничения скорости".
+    //
+    // Governor несовместим с динамическим rate (он burst-friendly и
+    // рассчитан на постоянный bucket-size), поэтому при наличии аномалий
+    // мы переключаемся на честный sleep-планировщик (как в load_shape).
+    let has_anomalies = phase
+        .anomalies
+        .as_ref()
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+    let planner = AnomalyPlanner::new(phase.anomalies.as_deref().unwrap_or(&[]));
+    let use_governor = phase.load_shape.is_none() && !has_anomalies;
+    let limiter = if use_governor {
         NonZeroU32::new(phase.messages_per_second.min(u32::MAX as u64) as u32)
             .map(|r| RateLimiter::direct(Quota::per_second(r)))
     } else {
@@ -534,11 +680,18 @@ pub async fn run_phase_multi(
             break;
         }
 
+        // F17 (v9.4.0): anomaly multiplier в текущий момент. Сначала
+        // вычисляем базовый rate (load_shape или constant), затем домножаем
+        // на anomaly_multiplier(t). Это интуитивно: «всплеск поверх
+        // медленной утечки» даёт X-кратный всплеск относительно пониженной
+        // базы.
+        let t_now = started.elapsed().as_secs_f64();
+        let anomaly_m = planner.combined_rate_multiplier(t_now);
+
         // Ограничение скорости.
         if let Some(shape) = &phase.load_shape {
             // Режим кривой: вычисляем мгновенный rate и выдерживаем интервал.
-            let t = started.elapsed().as_secs_f64();
-            let rate = shape.rate_at(t, shape_duration, base_rate);
+            let rate = shape.rate_at(t_now, shape_duration, base_rate) * anomaly_m;
             if rate > 0.0 {
                 let interval = Duration::from_secs_f64(1.0 / rate);
                 tokio::select! {
@@ -546,12 +699,27 @@ pub async fn run_phase_multi(
                     _ = shutdown.cancelled() => { break; }
                 }
             }
-            // rate <= 0 => мгновенно без паузы (эквивалент “без ограничения”).
+            // rate <= 0 => мгновенно без паузы (эквивалент "без ограничения").
         } else if let Some(lim) = &limiter {
-            // Режим постоянного rate: ждём токен-бакет, прерываемся на shutdown.
+            // Режим постоянного rate (без аномалий): ждём токен-бакет,
+            // прерываемся на shutdown.
             tokio::select! {
                 _ = lim.until_ready() => {}
                 _ = shutdown.cancelled() => { break; }
+            }
+        } else {
+            // Режим постоянного rate + аномалии (F17): sleep по
+            // base_rate * anomaly_multiplier(t). Это даёт точный контроль
+            // над динамическим rate (governor не подходит для аномалий —
+            // он burst-friendly и не реагирует на изменения мгновенного
+            // значения).
+            let rate = base_rate * anomaly_m;
+            if rate > 0.0 {
+                let interval = Duration::from_secs_f64(1.0 / rate);
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {}
+                    _ = shutdown.cancelled() => { break; }
+                }
             }
         }
 
@@ -571,6 +739,41 @@ pub async fn run_phase_multi(
             .messages_by_format_total
             .with_label_values(&[phase.format_type()])
             .inc();
+
+        // F17: учёт применения rate-аномалий. Если multiplier != 1.0 —
+        // хотя бы одна rate-аномалия активна. Считаем по каждой аномалии,
+        // чтобы можно было разделить burst и slow-drip в метриках.
+        if has_anomalies {
+            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                let m = crate::anomaly::rate_multiplier(&a.kind, t_now);
+                if (m - 1.0).abs() > f64::EPSILON {
+                    metrics
+                        .anomalies_applied_total
+                        .with_label_values(&[&phase.name, a.type_name()])
+                        .inc();
+                }
+            }
+        }
+
+        // F17: packet-loss — drop до отправки. Детерминирован по
+        // (phase.seed, seq) — см. anomaly::should_drop_packet.
+        if planner.should_drop(phase.seed, seq) {
+            // Учитываем дроп в метрике (по типу первой сработавшей
+            // аномалии — для остальных не инкрементируем, чтобы не было
+            // двойного счёта при нескольких packet-loss в фазе).
+            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                if let crate::anomaly::AnomalyKind::PacketLoss { .. } = &a.kind {
+                    metrics
+                        .anomalies_dropped_total
+                        .with_label_values(&[&phase.name, a.type_name()])
+                        .inc();
+                    break;
+                }
+            }
+            // Пропускаем tx.send для дропнутого сообщения.
+            continue;
+        }
+
         if distribution == "broadcast" {
             for tx in &txs {
                 let _ = tx.send(msg.clone()).await;

@@ -1,21 +1,25 @@
-//! N10 (v8.8.0): слой форматов (RFC 5424, RFC 3164, raw, protobuf).
+//! N10 (v8.8.0): слой форматов (RFC 5424, RFC 3164, raw, protobuf, cef, leef, json-lines).
 //!
 //! Это абстракция над типами syslog-сообщений, которые мы умеем генерировать.
 //! До N10 вся логика была в одном `src/syslog.rs` (RFC 5424/3164) и
 //! `src/protobuf.rs` (wire-format). После рефакторинга:
 //!
 //! - `mod.rs` — общие утилиты: `Header`, `prival`, `escape_sd_value`,
-//!   `BOM`, `NILVALUE`, `sanitize_header` (private).
-//! - `rfc5424` — `build_rfc5424(&Header, &[u8]) -> Vec<u8>` (RFC 5424 §6.4).
-//! - `rfc3164` — `build_rfc3164(&Header, &[u8]) -> Vec<u8>` (RFC 3164).
-//! - `raw` — passthrough: `build_raw(&Header, &[u8]) -> Vec<u8>` (копия).
+//!   `BOM`, `NILVALUE`, `sanitize_header` (private), `FormatContext` (F15).
+//! - `rfc5424` — `build(&Header, &[u8]) -> Vec<u8>` (RFC 5424 §6.4).
+//! - `rfc3164` — `build(&Header, &[u8]) -> Vec<u8>` (RFC 3164).
+//! - `raw` — passthrough: `build(&Header, &[u8]) -> Vec<u8>` (копия).
 //! - `protobuf` — `apply_protobuf_schema`, `serialize_protobuf`,
 //!   `serialize_protobuf_like` (wire-format varint + length-delimited).
+//! - `cef` (F15) — ArcSight Common Event Format.
+//! - `leef` (F15) — IBM QRadar LEEF.
+//! - `json_lines` (F15) — newline-delimited JSON.
 //!
 //! Старые пути `syslog_generator::build_rfc5424` и
 //! `syslog_generator::serialize_protobuf` сохранены как backward-compat
 //! re-exports в `src/syslog.rs` и `src/protobuf.rs`.
 
+use crate::generator::config::{CefConfig, LeefConfig};
 use chrono::Utc;
 
 /// Параметры заголовка, уже с подставленными значениями шаблона.
@@ -83,31 +87,65 @@ pub fn escape_sd_value(value: &str) -> String {
 }
 
 // Подмодули реализации конкретных форматов. Каждый предоставляет функцию
-// `build_<format>(&Header, &[u8]) -> Vec<u8>`.
+// `build(&Header|Config, &[u8]) -> Vec<u8>` (для cef/leef — своя сигнатура).
+pub mod cef;
+pub mod json_lines;
+pub mod leef;
 pub mod protobuf;
 pub mod raw;
 pub mod rfc3164;
 pub mod rfc5424;
 
-/// Trait `Format` (N10, v9.1.0) — абстракция для динамического выбора
-/// формата. Реализуется в [`FormatKind`] для dyn-dispatch через enum
-/// (вместо `Box<dyn Format>` — экономия heap-аллокаций на горячем пути).
-/// Используется в `run_phase_multi` через `FormatKind::from(phase)`.
+/// Контекст рендеринга сообщения (F15, v9.2.0).
+///
+/// Содержит всё, что может понадобиться разным форматам:
+/// - `header` — общий syslog-заголовок (facility/severity/hostname/...)
+///   для rfc5424, rfc3164, raw и как источник severity для json_lines.
+/// - `cef` / `leef` / `json_lines_fields` — конфигурации соответствующих
+///   форматов; `None` для форматов, которым они не нужны.
+///
+/// Поля сделаны `Option` чтобы не плодить разные trait-методы под каждый
+/// формат. Использование единого `FormatContext` даёт static dispatch
+/// через enum без vtable lookups и без аллокаций на сообщение.
+pub struct FormatContext<'a> {
+    pub header: &'a Header,
+    pub cef: Option<&'a CefConfig>,
+    pub leef: Option<&'a LeefConfig>,
+    /// Доп. поля верхнего уровня для json_lines: ключ→значение (значения
+    /// могут содержать `{{...}}` для подстановки шаблона).
+    pub json_lines_fields: Option<&'a std::collections::BTreeMap<String, String>>,
+}
+
+/// Trait `Format` (N10, v9.1.0; расширен F15 в v9.2.0) — абстракция для
+/// динамического выбора формата. Реализуется в [`FormatKind`] для
+/// static dispatch через enum (вместо `Box<dyn Format>` — экономия
+/// heap-аллокаций на горячем пути).
+///
+/// До v9.2.0 сигнатура была `fn render(&self, &Header, &[u8]) -> Vec<u8>`.
+/// В v9.2.0 добавлены CEF/LEEF/JSON-lines форматы — для них нужны
+/// дополнительные поля (extensions, vendor/product, ...). Вместо
+/// раздувания сигнатуры (или введения отдельных методов) введён
+/// `FormatContext` — каждая реализация берёт из него только то, что
+/// ей нужно. Existing форматы (rfc5424/rfc3164/raw/protobuf) используют
+/// только `ctx.header` — обратная совместимость сохранена.
 pub trait Format {
     /// Собрать полное сообщение в данном формате.
-    fn render(&self, h: &Header, msg: &[u8]) -> Vec<u8>;
-    /// Имя формата (rfc5424, rfc3164, raw, protobuf, ...) — для логирования
-    /// и метрик (`syslog_messages_by_format_total`).
+    fn render(&self, ctx: &FormatContext<'_>, msg: &[u8]) -> Vec<u8>;
+    /// Имя формата (rfc5424, rfc3164, raw, protobuf, cef, leef, json_lines)
+    /// — для логирования и метрик (`syslog_messages_by_format_total`).
     fn name(&self) -> &'static str;
 }
 
-/// Конкретный выбор формата для фазы (N10, v9.1.0).
+/// Конкретный выбор формата для фазы (N10, v9.1.0; расширен F15 в v9.2.0).
 ///
 /// Используется в `run_phase_multi` для dyn-dispatch — `match self { ... }`
 /// в `render` компилируется в branchless jumps. Стоимость: 0 heap-аллокаций
 /// на сообщение, 0 vtable lookups (в отличие от `Box<dyn Format>`).
 ///
-/// v9.2.0+: добавим `Cef`, `Leef`, `JsonLines` варианты (F15).
+/// В v9.2.0 добавлены варианты `Cef`, `Leef`, `JsonLines`. Конфигурации
+/// этих форматов (`CefConfig`/`LeefConfig`/`json_lines_fields`) живут в
+/// `Phase` и передаются через `FormatContext` при вызове `render` —
+/// здесь они не нужны (варианты без параметров — данные идут в ctx).
 pub enum FormatKind {
     Rfc5424,
     Rfc3164,
@@ -115,29 +153,48 @@ pub enum FormatKind {
     /// Protobuf с опциональной схемой. `None` — пустое сообщение
     /// (валидный пустой protobuf-блоб).
     Protobuf(Option<crate::generator::config::ProtobufSchemaFieldMap>),
+    /// F15: ArcSight CEF. Конфигурация — в `Phase::cef`, передаётся через `FormatContext`.
+    Cef,
+    /// F15: IBM QRadar LEEF. Конфигурация — в `Phase::leef`, передаётся через `FormatContext`.
+    Leef,
+    /// F15: newline-delimited JSON. Доп. поля — в `Phase::json_lines_fields`,
+    /// передаются через `FormatContext`.
+    JsonLines,
 }
 
 impl Format for FormatKind {
-    fn render(&self, h: &Header, msg: &[u8]) -> Vec<u8> {
+    fn render(&self, ctx: &FormatContext<'_>, msg: &[u8]) -> Vec<u8> {
         match self {
-            Self::Rfc5424 => rfc5424::build(h, msg),
-            Self::Rfc3164 => rfc3164::build(h, msg),
+            Self::Rfc5424 => rfc5424::build(ctx.header, msg),
+            Self::Rfc3164 => rfc3164::build(ctx.header, msg),
             Self::Raw => msg.to_vec(),
             Self::Protobuf(map) => {
                 // Преобразуем текущий `Header` в `HashMap<String, String>` для
                 // совместимости с существующим API `serialize_protobuf`.
-                // TODO v9.5.0: явное поле protobuf_schema в Header.
                 let values: std::collections::HashMap<String, String> = [
-                    ("hostname", h.hostname.clone()),
-                    ("app_name", h.app_name.clone()),
-                    ("procid", h.procid.clone()),
-                    ("msgid", h.msgid.clone()),
+                    ("hostname", ctx.header.hostname.clone()),
+                    ("app_name", ctx.header.app_name.clone()),
+                    ("procid", ctx.header.procid.clone()),
+                    ("msgid", ctx.header.msgid.clone()),
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect();
                 protobuf::serialize_protobuf(map.as_ref(), &values)
             }
+            Self::Cef => {
+                let cef = ctx.cef.expect(
+                    "FormatKind::Cef требует ctx.cef (F13 валидация должна была это обеспечить)",
+                );
+                cef::build(cef, msg)
+            }
+            Self::Leef => {
+                let leef = ctx.leef.expect(
+                    "FormatKind::Leef требует ctx.leef (F13 валидация должна была это обеспечить)",
+                );
+                leef::build(leef, msg)
+            }
+            Self::JsonLines => json_lines::build(ctx.header, ctx.json_lines_fields, msg),
         }
     }
     fn name(&self) -> &'static str {
@@ -146,6 +203,9 @@ impl Format for FormatKind {
             Self::Rfc3164 => "rfc3164",
             Self::Raw => "raw",
             Self::Protobuf(_) => "protobuf",
+            Self::Cef => "cef",
+            Self::Leef => "leef",
+            Self::JsonLines => "json_lines",
         }
     }
 }
@@ -159,6 +219,9 @@ impl FormatKind {
             "rfc3164" => Some(Self::Rfc3164),
             "raw" => Some(Self::Raw),
             "protobuf" => Some(Self::Protobuf(None)),
+            "cef" => Some(Self::Cef),
+            "leef" => Some(Self::Leef),
+            "json_lines" => Some(Self::JsonLines),
             _ => None,
         }
     }
@@ -217,7 +280,13 @@ mod tests {
             structured_data: "-".into(),
             bom: false,
         };
-        let out = FormatKind::Rfc5424.render(&h, b"hello");
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Rfc5424.render(&ctx, b"hello");
         assert!(out.starts_with(b"<12>1 "));
         assert!(out.ends_with(b" hello"));
         assert_eq!(out[out.len() - 1], b'o');
@@ -236,7 +305,13 @@ mod tests {
             structured_data: "-".into(),
             bom: false,
         };
-        let out = FormatKind::Raw.render(&h, b"hello world");
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Raw.render(&ctx, b"hello world");
         assert_eq!(out, b"hello world");
     }
 
@@ -247,6 +322,9 @@ mod tests {
         assert_eq!(FormatKind::Rfc3164.name(), "rfc3164");
         assert_eq!(FormatKind::Raw.name(), "raw");
         assert_eq!(FormatKind::Protobuf(None).name(), "protobuf");
+        assert_eq!(FormatKind::Cef.name(), "cef");
+        assert_eq!(FormatKind::Leef.name(), "leef");
+        assert_eq!(FormatKind::JsonLines.name(), "json_lines");
     }
 
     /// N10: `parse("rfc5424")` → `Some(Rfc5424)`, `parse("unknown")` → `None`.
@@ -264,6 +342,12 @@ mod tests {
         assert!(matches!(
             FormatKind::parse("protobuf"),
             Some(FormatKind::Protobuf(_))
+        ));
+        assert!(matches!(FormatKind::parse("cef"), Some(FormatKind::Cef)));
+        assert!(matches!(FormatKind::parse("leef"), Some(FormatKind::Leef)));
+        assert!(matches!(
+            FormatKind::parse("json_lines"),
+            Some(FormatKind::JsonLines)
         ));
         assert!(FormatKind::parse("unknown").is_none());
     }

@@ -2200,6 +2200,7 @@ fn test_n4_mtls_validation_rejects_bad_min_protocol() {
 
 // ===== F17 (v9.4.0): сценарии аномалий =====
 
+
 /// F17: burst-injection увеличивает объём сообщений относительно базы.
 /// Сравниваем burst-фазу с baseline-фазой (без аномалий) и проверяем,
 /// что burst даёт существенно больше сообщений.
@@ -2412,6 +2413,165 @@ fn test_f17_validate_rejects_bad_burst_multiplier() {
         .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
 }
 
+// ===== F15 (v9.2.0): интеграционные тесты для CEF/LEEF/JSON-lines =====
+
+/// F15: generate_message с format=cef производит валидный CEF.
+#[test]
+fn test_f15_generate_cef_message() {
+    use syslog_generator::{CefConfig, Phase};
+    let mut phase = Phase {
+        name: "cef-test".into(),
+        duration_secs: 1,
+        templates: vec!["login from {{faker.ipv4}}".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    phase.cef = Some(CefConfig {
+        device_vendor: "Acme".into(),
+        device_product: "SyslogGen".into(),
+        device_version: "9.2".into(),
+        signature_id: "100".into(),
+        name: "login".into(),
+        severity: Some(5),
+        extensions: None,
+    });
+    let msg = generate_message(&phase, 1).unwrap();
+    let s = String::from_utf8(msg).unwrap();
+    // CEF-структура: CEF:0|Acme|SyslogGen|9.2|100|login|5|msg=<body>
+    assert!(
+        s.starts_with("CEF:0|Acme|SyslogGen|9.2|100|login|5|msg="),
+        "got: {s}"
+    );
+    assert!(s.contains("login from "), "got: {s}");
+    // Трейлинг newline — нет (CEF не требует, в отличие от LEEF).
+    assert!(!s.ends_with('\n'), "got: {s}");
+}
+
+/// F15: CEF extensions и severity.
+#[test]
+fn test_f15_generate_cef_with_extensions() {
+    use syslog_generator::{CefConfig, Phase};
+    let mut phase = Phase {
+        name: "cef-ext".into(),
+        duration_secs: 1,
+        templates: vec!["action".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    let mut exts = std::collections::BTreeMap::new();
+    exts.insert("src".into(), "10.0.0.1".into());
+    exts.insert("user".into(), "alice".into());
+    phase.cef = Some(CefConfig {
+        device_vendor: "V".into(),
+        device_product: "P".into(),
+        device_version: "1".into(),
+        signature_id: "1".into(),
+        name: "evt".into(),
+        severity: Some(3),
+        extensions: Some(exts),
+    });
+    let msg = generate_message(&phase, 1).unwrap();
+    let s = String::from_utf8(msg).unwrap();
+    // BTreeMap порядок: src, user, потом msg.
+    assert!(
+        s.contains("|3|src=10.0.0.1 user=alice msg=action"),
+        "got: {s}"
+    );
+}
+
+/// F15: generate_message с format=leef производит валидный LEEF v2.0.
+#[test]
+fn test_f15_generate_leef_message() {
+    use syslog_generator::{LeefConfig, Phase};
+    let mut phase = Phase {
+        name: "leef-test".into(),
+        duration_secs: 1,
+        templates: vec!["auth from {{faker.ipv4}}".into()],
+        format: Some("leef".into()),
+        ..Default::default()
+    };
+    phase.leef = Some(LeefConfig {
+        vendor: "Acme".into(),
+        product: "SyslogGen".into(),
+        version: "9.2".into(),
+        event_id: "auth".into(),
+        attributes: None,
+    });
+    let msg = generate_message(&phase, 1).unwrap();
+    let s = String::from_utf8(msg).unwrap();
+    // Структура LEEF v2.0: header|TAB|msg=<body>\n.
+    // Faker.ipv4 не детерминирован без seed (использует энтропию ОС) —
+    // проверяем только структуру, а не точное значение IP.
+    assert!(
+        s.starts_with("LEEF:2.0|Acme|SyslogGen|9.2|auth\tmsg=auth from "),
+        "got: {s}"
+    );
+    assert!(s.ends_with("\n"), "got: {s}");
+    // Проверяем что между префиксом и \n есть IPv4-подобный токен.
+    let body_part = &s["LEEF:2.0|Acme|SyslogGen|9.2|auth\tmsg=auth from ".len()..s.len() - 1];
+    let ipv4_re = regex::Regex::new(r"^\d+\.\d+\.\d+\.\d+$").unwrap();
+    assert!(
+        ipv4_re.is_match(body_part),
+        "expected IPv4 in msg, got: {body_part:?}"
+    );
+}
+
+/// F15: generate_message с format=json_lines производит валидный JSON.
+#[test]
+fn test_f15_generate_json_lines_message() {
+    use serde_json::Value;
+    let mut phase = Phase {
+        name: "jl-test".into(),
+        duration_secs: 1,
+        templates: vec!["event {{sequence}}".into()],
+        format: Some("json_lines".into()),
+        ..Default::default()
+    };
+    let mut extras = std::collections::BTreeMap::new();
+    extras.insert("env".into(), "test".into());
+    phase.json_lines_fields = Some(extras);
+    let bytes = generate_message(&phase, 1).unwrap();
+    let s = std::str::from_utf8(&bytes).unwrap();
+    // Трейлинг newline.
+    assert!(s.ends_with('\n'), "got: {s}");
+    // Без \n — парсится как JSON.
+    let json_part = &s[..s.len() - 1];
+    let parsed: Value = serde_json::from_str(json_part).expect("output должен быть валидным JSON");
+    assert_eq!(parsed["msg"], "event 1");
+    assert_eq!(parsed["level"], "Informational"); // severity=6 default
+    assert_eq!(parsed["env"], "test");
+    assert!(parsed["ts"].as_str().unwrap().starts_with("20")); // ISO 8601
+}
+
+/// F15: профиль с format=cef без cef-конфига — F13 отвергает.
+#[test]
+fn test_f15_validate_cef_without_config_fails() {
+    let phase = Phase {
+        name: "cef-no-config".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::CefConfigMissing { .. })),
+        "got: {errs:?}"
+    );
+}
+
 /// F17: JSON Schema принимает валидные anomalies.
 #[test]
 fn test_f17_schema_check_accepts_anomalies() {
@@ -2528,4 +2688,140 @@ async fn test_f17_burst_and_packet_loss_combined() {
         "packet-loss должно дропнуть ≥1, got: {dropped}"
     );
     let _ = fs::remove_file(file_path);
+}
+
+/// F15: профиль с format=cef без cef-конфига — F13 отвергает.
+#[test]
+fn test_f15_validate_cef_without_config_fails_continue() {
+    let phase = Phase {
+        name: "cef-no-config".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::CefConfigMissing { .. })),
+        "got: {errs:?}"
+    );
+}
+
+/// F15: профиль с format=cef и пустым device_vendor — F13 отвергает.
+#[test]
+fn test_f15_validate_cef_empty_field_fails() {
+    use syslog_generator::CefConfig;
+    let mut phase = Phase {
+        name: "cef-empty".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    phase.cef = Some(CefConfig {
+        device_vendor: "".into(), // ← пустое
+        device_product: "P".into(),
+        device_version: "1".into(),
+        signature_id: "1".into(),
+        name: "evt".into(),
+        severity: None,
+        extensions: None,
+    });
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::CefFieldEmpty { ref field, .. } if field == "device_vendor")),
+        "got: {errs:?}"
+    );
+}
+
+/// F15: профиль с format=cef и severity=15 — F13 отвергает (CEF диапазон 0..=10).
+#[test]
+fn test_f15_validate_cef_severity_out_of_range_fails() {
+    use syslog_generator::CefConfig;
+    let mut phase = Phase {
+        name: "cef-sev".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("cef".into()),
+        ..Default::default()
+    };
+    phase.cef = Some(CefConfig {
+        device_vendor: "V".into(),
+        device_product: "P".into(),
+        device_version: "1".into(),
+        signature_id: "1".into(),
+        name: "evt".into(),
+        severity: Some(15), // ← вне диапазона
+        extensions: None,
+    });
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::InvalidCefSeverity { value: 15, .. })),
+        "got: {errs:?}"
+    );
+}
+
+/// F15: профиль с format=leef без leef-конфига — F13 отвергает.
+#[test]
+fn test_f15_validate_leef_without_config_fails() {
+    let phase = Phase {
+        name: "leef-no-config".into(),
+        duration_secs: 1,
+        templates: vec!["x".into()],
+        format: Some("leef".into()),
+        ..Default::default()
+    };
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "/tmp/x.log".into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![phase],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::LeefConfigMissing { .. })),
+        "got: {errs:?}"
+    );
 }

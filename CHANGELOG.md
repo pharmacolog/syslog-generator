@@ -83,6 +83,91 @@ MITRE ATT&CK-подобных последовательностей. Трети
 Следующие релизы вехи E: v9.5.0 (N4.cipher_policy),
 v9.6.0 (N12: Docker/musl/docker-compose).
 
+## v9.2.0 - 2026-07-13
+
+**F15: ArcSight CEF + IBM QRadar LEEF + JSON-lines форматы.** Расширение
+trait `Format` через `FormatContext` (без breaking changes для существующих
+форматов). Устранение N10-gap в горячем пути продьюсера (F15 step 0).
+
+### Added
+- **`src/format/cef.rs`**: ArcSight Common Event Format v0.
+  `CEF:0|Vendor|Product|Version|SigID|Name|Severity|ext1=val1 ext2=val2 ...`
+  - Экранирование по CEF-спеке: `\` `|` в header, `\` `|` `=` в extension-значениях.
+  - BTreeMap-отсортированные extensions (детерминизм F4).
+  - `msg=<body>` всегда в конце (SmartConnector совместимость).
+- **`src/format/leef.rs`**: IBM QRadar LEEF v2.0.
+  `LEEF:2.0|Vendor|Product|Version|EventID<TAB>key=value<TAB>...<LF>`
+  - Экранирование LEEF 2.0: `\` `|` в header; `\` `=` `\t` `\n` в атрибутах.
+  - BTreeMap-отсортированные атрибуты.
+- **`src/format/json_lines.rs`**: Newline-Delimited JSON для ingestion в
+  Loki/ELK/Vector/Fluent Bit. Использует `serde_json` для корректного
+  JSON-экранирования. Поля: `ts`, `level` (Emergency..Debug по syslog severity),
+  `facility`, `host`, `app`, `procid`/`msgid` (если не NILVALUE), `msg`.
+  - Опциональные доп. поля через `phase.json_lines_fields: BTreeMap<String, String>`.
+  - Детерминированный порядок ключей через BTreeMap.
+- **`FormatContext` (struct)**: расширение trait `Format` для передачи
+  контекста, специфичного для CEF/LEEF/JSON-lines. Существующие форматы
+  используют только `header` (обратная совместимость сохранена).
+- **`FormatKind`**: новые варианты `Cef`, `Leef`, `JsonLines`. `parse()`
+  принимает `"cef"`/`"leef"`/`"json_lines"`. Static dispatch через enum
+  (0 vtable lookups, 0 heap-аллокаций на сообщение).
+- **`Phase`**: новые поля `cef: Option<CefConfig>`, `leef: Option<LeefConfig>`,
+  `json_lines_fields: Option<BTreeMap<String, String>>`. Все `#[serde(default)]`
+  — backward-compat для существующих профилей.
+- **`CefConfig`** (`src/generator/config.rs`): ArcSight CEF-параметры
+  (device_vendor/product/version, signature_id, name, severity 0..=10, extensions).
+- **`LeefConfig`**: IBM QRadar LEEF-параметры (vendor/product/version, event_id, attributes).
+- **`generate_message_with_format(phase, &FormatKind, seq)`** в `src/generator/core.rs`:
+  hot-path версия `generate_message` с предрезолвленным `FormatKind`.
+  Устраняет per-message парсинг `phase.format_type()` (N10-gap fix).
+- **`wrap_syslog` рефакторинг**: диспатч через `FormatKind::render(&ctx, &body)`
+  вместо прямого match на `phase.format_type()`. Единая точка расширения форматов.
+- **3 новых примера**: `examples/cef_format.json`, `examples/leef_format.json`,
+  `examples/json_lines_format.json`.
+
+### Validation (F13)
+- **`VALID_FORMATS`**: расширен `["cef", "leef", "json_lines"]`.
+- **5 новых ошибок** в `ValidationError`:
+  - `CefConfigMissing` — format=cef без phase.cef.
+  - `CefFieldEmpty` — одно из 5 обязательных полей пустое.
+  - `InvalidCefSeverity` — cef.severity вне 0..=10.
+  - `LeefConfigMissing` — format=leef без phase.leef.
+  - `LeefFieldEmpty` — одно из 4 обязательных полей пустое.
+
+### Schema (D3)
+- **`schemas/profile.schema.json`**: 
+  - `format` enum += `["cef", "leef", "json_lines"]`.
+  - Новые `$defs.CefConfig` и `$defs.LeefConfig` с обязательными полями.
+  - Phase: `cef`, `leef`, `json_lines_fields`.
+
+### Tests
+- **22 unit-теста** в новых модулях (`format/cef.rs::tests` × 7,
+  `format/leef.rs::tests` × 6, `format/json_lines.rs::tests` × 9).
+- **4 unit-теста** в `format/mod.rs` обновлены под новую сигнатуру
+  `Format::render(&FormatContext, &[u8])` + новые проверки `name()`/`parse()`
+  для Cef/Leef/JsonLines вариантов.
+- **8 интеграционных тестов** `test_f15_*`:
+  - `test_f15_generate_cef_message` — структура CEF.
+  - `test_f15_generate_cef_with_extensions` — extensions + severity.
+  - `test_f15_generate_leef_message` — структура LEEF v2.0 + TAB-разделитель.
+  - `test_f15_generate_json_lines_message` — валидный JSON + доп. поля.
+  - `test_f15_validate_cef_without_config_fails` — F13.
+  - `test_f15_validate_cef_empty_field_fails` — F13 (пустой device_vendor).
+  - `test_f15_validate_cef_severity_out_of_range_fails` — F13 (severity=15).
+  - `test_f15_validate_leef_without_config_fails` — F13.
+
+### Notes
+- **0 breaking changes** в публичном API (только новые типы, новые поля с `#[serde(default)]`).
+- **228 тестов** (148 unit + 69 integration + 11 n7) — все зелёные.
+- **N10-gap fix**: продьюсер теперь использует `FormatKind`-диспатч
+  с кешированием (один resolve на фазу, 0 string-match в горячем цикле).
+- **Детерминизм F4 сохранён**: BTreeMap для extensions/attributes/JSON-полей
+  гарантирует стабильный порядок при одинаковом seed.
+
+Следующие релизы вехи E: v9.3.0 (F16: Kafka/Redpanda + файловая ротация +
+reconnect-стратегия), v9.5.0 (N4.cipher_policy +
+миграция на rustls), v9.6.0 (N12: Docker/musl/docker-compose).
+
 ## v9.1.0 - 2026-07-13
 
 Первый релиз вехи E (P2 «Зрелость»). N10: полная реализация trait

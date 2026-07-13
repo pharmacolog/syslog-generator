@@ -1776,6 +1776,7 @@ name = "syslog-generator"
 version = "8.6.1"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
  "clap",
  "criterion",

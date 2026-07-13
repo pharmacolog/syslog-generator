@@ -61,6 +61,12 @@
 
 ## 4. Контракт (критерии приёмки) — копия без изменений
 
+> **🚨 КРИТИЧНО: перед выпуском релиза в `main` обязательно дождаться
+> зелёного CI run на ветке release/vX.Y.Z. Локальные проверки
+> (`cargo fmt` / `clippy` / `build` / `test`) НЕ заменяют CI.
+> Добавлено 2026-07-13 после инцидента с v10.2.0/v10.3.0, когда CI упал
+> на `cargo fmt --all -- --check`, но релизы были выпущены.**
+
 1. ✅ Все ранее зелёные тесты остаются зелёными (никаких регрессий)
 2. ✅ Новые тесты добавлены для новой функциональности
 3. ✅ **Backward-compat прогон**: `load_profile_from_path` на все `examples/*.json` + `examples/*.yaml` без изменений (NB: для v10.0.0 backward-compat прогон делается на `--target ADDR:TRANSPORT` legacy-формате; deprecated alias должен работать)
@@ -75,13 +81,42 @@
 12. ✅ Live-проверка бинарника: `./target/release/syslog-generator --version` показывает корректную версию
 13. ✅ Уборка: `target/` удалён, zip удалён
 14. ✅ Gitflow: feature → dev → release → main → tag → push
-15. ✅ CI: все job'ы зелёные на GitHub Actions
+15. ✅ **CI green перед merge в main**: на ветке `release/vX.Y.Z` все job'ы GitHub Actions
+    (`.github/workflows/ci.yml`) должны быть зелёными. Используй `gh run watch <run-id>`
+    или `gh pr checks <pr>` для ожидания. Только после зелёного CI — merge в main.
 16. ✅ Документация: README, CHANGELOG, CLAUDE_HANDOFF, AUDIT обновлены
 17. ✅ PLAN-v10.0.0.md обновлён (отметка ✅ для закрытых задач)
 18. ✅ Schema: `schemas/profile.schema.json` синхронизирован с новыми полями
 19. ✅ Архив в `.archived-releases/` сохранён (НЕ в git)
 20. ✅ feature/release ветки НЕ удаляются (по требованию)
 21. ✅ **Cargo.toml version bumped** в первом коммите feature-ветки
+
+### Release-gate workflow (v10.4.0+)
+
+```
+feature/vX.Y.Z-name
+   ↓ cargo fmt/clippy/test локально
+   ↓ merge feature/vX.Y.Z-name → dev
+release/vX.Y.Z (от dev)
+   ↓ CI: gh pr checks (или push в release/vX.Y.Z + gh run watch)
+   ↓ ждём зелёного CI (все jobs в ci.yml)
+   ↓ только после зелёного CI:
+   ↓ cargo build --release, smoke, zip, .archived-releases/
+main (merge --no-ff + tag)
+```
+
+Команды для проверки CI:
+
+```bash
+# После push в release/vX.Y.Z:
+gh run list --limit 5 --workflow=CI --branch=release/vX.Y.Z
+
+# Дождаться зелёного CI:
+gh run watch <run-id>
+
+# Или через PR (если есть):
+gh pr checks <pr-number> --watch
+```
 
 ---
 
@@ -93,6 +128,7 @@
 | **v10.1.0** ✅ | minor | **Performance (часть 1)**: LTO + codegen-units=1 в Cargo.toml release profile. Bench-regression monitoring в CI (non-blocking, вывод как артефакт). **B5 (CLI `--target split`)**: deprecated alias `ADDR:TRANSPORT` (warning в stderr), новый формат `ADDR` + `--transport TRANSPORT`. **B3+B4 — N/A** (уже структурные с v8.x). | v10.0.0 |
 | **v10.2.0** ✅ | minor | **Performance (часть 2)**: hot-path оптимизация faker-генераторов. Все `format!()` с многоэтапными аллокациями заменены на `String::with_capacity(N)` + `write!()` через `std::fmt::Write`. Затронуты `faker.ipv4`, `faker.ipv6`, `faker.mac`, `faker.hostname`, `faker.url`, `faker.uuid`, `random_string`. Bench: `generate_message_from_template` 6.96µs → **5.17µs** (-26%). Lock-free atomics и BytesMut pre-alloc — N/A (prometheus AtomicU64 + N6 уже оптимизировано). | v10.1.0 |
 | **v10.3.0** ✅ | minor | **Coverage (часть 1)**: `cargo-llvm-cov` baseline **86.40% lines / 88.36% functions / 86.49% regions**. Non-blocking CI coverage job (ubuntu-latest, `taiki-e/install-action@v2`, артефакты `lcov.info` + `coverage-summary.txt`). `docs/COVERAGE.md` с baseline-таблицей и планом v10.4.0 (покрыть непокрытые модули). 317 тестов — все зелёные. | v10.2.0 |
+| **v10.3.1** ✅ | patch | **🚨 CI fix**: `cargo fmt` для `src/payload.rs:97` (`write!(...).expect(...)` в одну строку). CI был сломан после v10.2.0 на `cargo fmt --all -- --check`. v10.3.1 восстанавливает зелёный CI. **Добавлен release-gate workflow**: CI green обязателен перед merge в main (см. §4 п.15 и § Release-gate workflow). Удалены локальные release-ветки `release/v10.{0,1,2,3}.0`. | v10.3.0 |
 | **v10.4.0** | minor | **Coverage (часть 2)**: покрытие ≥ 97% — добавить тесты для непокрытых модулей (по отчёту v10.3.0). **Coverage gate** в CI (blocking: fail если < 97%). **Fuzzing**: `cargo-fuzz` — 5 таргетов (profile_parser, format_rfc5424, format_cef, format_leef, format_json_lines). Fuzz-корпус в `fuzz/corpus/`, инструкция в `docs/FUZZING.md`. | v10.3.0 |
 | **v10.5.0** | minor | **CI расширение**: `cargo-deny` (security + license blocking), `cargo-machete` (unused deps blocking), MSRV-check (best-effort → blocking, requires `rust-toolchain.toml`). Dependabot `.github/dependabot.yml` (еженедельные PR для dependencies + actions). | v10.4.0 |
 | **v10.6.0** | minor | **Usability (часть 1)**: `clap_complete` (bash/zsh/fish/powershell completions через subcommand `completions <shell>`). `clap_mangen` (man page через subcommand `man`). Цветной вывод ошибок (`owo-colors` + auto-detection `NO_COLOR` env). | v10.5.0 |

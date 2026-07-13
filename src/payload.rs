@@ -97,8 +97,7 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 if i > 0 {
                     s.push(':');
                 }
-                write!(s, "{:02x}", rng.random_range(0u8..=255))
-                    .expect("String::write не падает");
+                write!(s, "{:02x}", rng.random_range(0u8..=255)).expect("String::write не падает");
             }
             s
         }

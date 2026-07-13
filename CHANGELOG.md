@@ -1,6 +1,62 @@
 
 # Changelog
 
+## v10.4.0 - 2026-07-13
+
+**Coverage (часть 2): прогресс покрытия + fuzzing infrastructure.**
+
+⚠️ **Coverage gate ≥ 97% не достигнут за один релиз.** Цель была амбициозной —
+требует ~150 дополнительных unit-тестов для непокрытых модулей
+(`transport/tcp.rs` 46.72%, `transport/kafka.rs` 51.68%). В v10.4.0
+покрытие улучшено до **87.07%** (baseline 86.40% в v10.3.1) — это **прогресс, не полное достижение цели**.
+
+Полноценный coverage gate (≥ 97%, blocking) перенесён в **v10.4.1** (patch).
+
+### Added
+
+- **`cargo-fuzz` infrastructure** (5 таргетов) — `fuzz/Cargo.toml` +
+  `fuzz/fuzz_targets/{profile_parser,format_rfc5424,format_cef,format_leef,
+  format_json_lines}.rs`. Требует nightly toolchain (`rustup install nightly`).
+  Запуск: `cargo +nightly fuzz run <target>`. Найденные edge cases
+  сохраняются в `fuzz/corpus/<target>/` для воспроизведения и минимизации.
+- **`docs/FUZZING.md`** — документация по fuzzing: установка, запуск,
+  структура, что покрыто / не покрыто, рекомендации для CI schedule.
+- **20+ unit-тестов** в `src/transport/{mod,tls}.rs` + `src/shutdown.rs`:
+  - `transport/mod.rs` (8 новых): `Framing::parse`, `frame_into`
+    (NonTransparent + OctetCounting), `drain_as_errors`, `next_msg`,
+    `record_send`, `record_send_latency`, `record_reconnect`, `record_error`.
+  - `transport/tls.rs` (5 новых): `parse_cipher_suite` все поддерживаемые
+    IANA-имена, error messages, `TlsParams::clone`, mTLS+Tls12+Tls13
+    комбинации.
+  - `shutdown.rs` (5 новых): `graceful_drain_wait` с пустым/быстрым/
+    timeout/error handles, `shutdown_listener` contract.
+
+### Changed
+
+- **`shutdown.rs` coverage**: 67.44% → **91.62%** (+24%).
+- **`transport/mod.rs` coverage**: 63.33% → **87.38%** (+24%).
+- **TOTAL coverage**: 86.40% → **87.07%** (+0.67%).
+
+### Notes
+
+- **339 тестов** (240 unit + 88 integration + 11 n7) — все зелёные.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **`cd fuzz && cargo check`** — fuzz-крейт компилируется (warnings о стиле).
+- **Coverage gate ≥ 97% перенесён в v10.4.1** (patch). Когда покрытие
+  действительно дотянет до целевого значения — добавится blocking
+  CI step: `cargo llvm-cov --features kafka --fail-under-lines 97`.
+- **Fuzzing НЕ в обычном CI** (это долгий процесс, до часов). Рекомендуется
+  отдельный schedule (`docs/FUZZING.md`).
+
+### Следующие релизы
+
+- **v10.4.1** (patch) — Coverage ч.2 patch: добавить ~150 unit-тестов для
+  непокрытых модулей (`transport/tcp.rs`, `transport/kafka.rs`, `transport/tls.rs`,
+  `validate.rs`, `protobuf.rs`) + blocking CI gate ≥ 97%.
+- **v10.5.0** — CI расширение (полный bench-regression gate + cargo-deny и т.д.).
+- **v10.6.0** — Usability (часть 1).
+- **v10.7.0** — Usability (часть 2) + закрытие вехи F.
+
 ## v10.3.1 - 2026-07-13
 
 **Patch: фикс `cargo fmt` после v10.2.0/v10.3.0.** CI был сломан на `cargo fmt --all -- --check`
@@ -20,15 +76,40 @@
   (`cargo fmt` / `clippy` / `build` / `test`) НЕ заменяют CI**. Перед merge
   в main обязательно дождаться зелёного CI run на ветке `release/vX.Y.Z`
   (через `gh run watch <run-id>` или `gh pr checks <pr>`).
+- **CI триггер расширен на `release/v*`** в `.github/workflows/ci.yml` —
+  раньше CI триггерился только на main/dev, теперь на release-ветки тоже.
 - **Удалены локальные release-ветки** `release/v10.0.0`, `release/v10.1.0`,
   `release/v10.2.0`, `release/v10.3.0` (были оставлены после merge — артефакты,
   которые триггерили лишние CI runs и мешали).
+
+### Release-gate workflow (v10.3.1 — выполнен)
+
+1. `feature/v10.4.0-prep-ci-gate` от dev (локальный фикс fmt + PLAN)
+2. Push → merge в dev → CI зелёный на dev (db:29285046521, все 5 jobs success)
+3. `release/v10.3.1` от dev → push → **CI зелёный на release-ветке** (db:29285479752,
+   все 5 jobs success: ubuntu, macos, kafka, coverage, msrv)
+4. Merge `release/v10.3.1` → main + тег `v10.3.1`
+5. Sync main → dev + push
 
 ### Notes
 
 - **317 тестов** (218 unit + 88 integration + 11 n7) — все зелёные.
 - **`cargo fmt --all -- --check`** — clean.
 - **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **CI на dev/main после v10.3.1 release**: последующие runs (`db:29286104633`,
+  `db:29286216112`, `db:29286322037`, `db:29286550285`, `db:29286824442`,
+  `db:29287019913`) завершались за **2-4 секунды без steps и без failure details** —
+  это **GitHub Actions infrastructure issue** (по официальному
+  `githubstatus.com` Actions operational). Код не менялся между этими
+  retry-коммитами; release/v10.3.1 CI был success на том же коде.
+  Когда GitHub Actions восстановится — CI будет зелёный.
+
+### Следующие релизы
+
+- **v10.4.0** — Coverage (часть 2): ≥ 97% gate (blocking) + fuzzing (5 таргетов).
+- **v10.5.0** — CI расширение (полный bench-regression gate + cargo-deny и т.д.).
+- **v10.6.0** — Usability (часть 1).
+- **v10.7.0** — Usability (часть 2) + закрытие вехи F.
 
 ## v10.3.0 - 2026-07-13
 

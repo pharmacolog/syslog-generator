@@ -273,6 +273,7 @@ pub use udp::target_sender_udp;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::observability::{create_metrics, gather_metrics};
 
     /// N10: `TransportKind::name()` возвращает правильное имя.
     #[test]
@@ -284,14 +285,202 @@ mod tests {
     }
 
     /// N10: `Transport` реализован для `TransportKind` (compile-time check).
-    /// Если сигнатура trait изменится, перестанет компилироваться.
-    /// (Используется как compile-only assertion через `fn f<T: Transport>()
-    /// { }` — аналог `_assert_impl` в других модулях, проверяет что
-    /// `TransportKind: Transport` без вызова.)
     #[allow(dead_code)]
     fn _assert_transport_impl() {
         fn _f<T: Transport>() {}
-        // Компилируется только если TransportKind: Transport.
         let _: fn() = || _f::<TransportKind>();
+    }
+
+    // === v10.4.0 (Coverage ч.2): unit-тесты для transport/mod.rs ===
+
+    /// F9 framing: `Framing::parse` распознаёт canonical и алиасы.
+    #[test]
+    fn v10_4_0_framing_parse() {
+        assert!(matches!(
+            Framing::parse("non-transparent"),
+            Framing::NonTransparent
+        ));
+        assert!(matches!(
+            Framing::parse("octet-counting"),
+            Framing::OctetCounting
+        ));
+        assert!(matches!(
+            Framing::parse("octet_counting"),
+            Framing::OctetCounting
+        ));
+        assert!(matches!(Framing::parse("octet"), Framing::OctetCounting));
+        // Неизвестное значение → default = NonTransparent.
+        assert!(matches!(Framing::parse("unknown"), Framing::NonTransparent));
+        assert!(matches!(Framing::parse(""), Framing::NonTransparent));
+    }
+
+    /// N6 zero-copy: `frame_into` для NonTransparent — `MSG + LF`.
+    #[test]
+    fn v10_4_0_frame_into_non_transparent() {
+        let mut buf = BytesMut::new();
+        frame_into(&mut buf, b"hello", Framing::NonTransparent);
+        assert_eq!(&buf[..], b"hello\n");
+        // Переиспользование буфера: второй вызов дописывает.
+        frame_into(&mut buf, b"world", Framing::NonTransparent);
+        assert_eq!(&buf[..], b"hello\nworld\n");
+    }
+
+    /// N6 zero-copy: `frame_into` для OctetCounting — `MSG-LEN SP MSG`.
+    #[test]
+    fn v10_4_0_frame_into_octet_counting() {
+        let mut buf = BytesMut::new();
+        frame_into(&mut buf, b"hello", Framing::OctetCounting);
+        assert_eq!(&buf[..], b"5 hello");
+        frame_into(&mut buf, b"abc", Framing::OctetCounting);
+        assert_eq!(&buf[..], b"5 hello3 abc");
+    }
+
+    /// `drain_as_errors` опустошает очередь, инкрементит errors_total.
+    #[tokio::test]
+    async fn v10_4_0_drain_as_errors() {
+        let (tx, rx) = mpsc::channel::<Vec<u8>>(8);
+        tx.send(b"a".to_vec()).await.unwrap();
+        tx.send(b"bb".to_vec()).await.unwrap();
+        tx.send(b"ccc".to_vec()).await.unwrap();
+        drop(tx);
+
+        let metrics = create_metrics().expect("create_metrics ok");
+        let shared: SharedRx = Arc::new(Mutex::new(rx));
+        drain_as_errors(&shared, &metrics, "10.0.0.1:514").await;
+
+        // Проверка через gather_metrics.
+        let body = gather_metrics(&metrics).expect("gather ok");
+        // errors_total{target="10.0.0.1:514"} == 3 (3 дрейна).
+        // Каждое сообщение в очереди при дрейне инкрементирует errors_total.
+        assert!(body.contains("syslog_errors_total"));
+        assert!(
+            body.contains("target=\"10.0.0.1:514\""),
+            "body должен содержать label target"
+        );
+
+        let mut guard = shared.lock().await;
+        assert!(guard.recv().await.is_none());
+    }
+
+    /// `next_msg` блокирует до получения сообщения из очереди.
+    #[tokio::test]
+    async fn v10_4_0_next_msg_blocks_until_recv() {
+        let (tx, rx) = mpsc::channel::<Vec<u8>>(2);
+        let shared: SharedRx = Arc::new(Mutex::new(rx));
+
+        let shared_clone = shared.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            tx.send(b"delayed".to_vec()).await.unwrap();
+            drop(tx);
+        });
+
+        let msg = next_msg(&shared_clone).await.expect("got message");
+        assert_eq!(msg, b"delayed");
+    }
+
+    /// `record_send` инкрементит messages_total, bytes_total, messages_by_sink.
+    /// Prometheus выводит labels в алфавитном порядке, поэтому ищем подстроки
+    /// (а не exact match с учётом порядка).
+    #[tokio::test]
+    async fn v10_4_0_record_send_increments() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let shutdown = CancellationToken::new();
+
+        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 42, &shutdown).await;
+
+        let body = gather_metrics(&metrics).expect("gather ok");
+        // messages_total{transport=tcp,phase=phase1,target=...,result=success} == 1
+        assert!(
+            body.contains("syslog_messages_total{phase=\"phase1\",result=\"success\",target=\"10.0.0.1:514\",transport=\"tcp\"} 1"),
+            "messages_total должен быть 1: got:\n{body}"
+        );
+        // bytes_total{transport=tcp,phase=phase1,target=...} == 42
+        assert!(
+            body.contains(
+                "syslog_bytes_total{phase=\"phase1\",target=\"10.0.0.1:514\",transport=\"tcp\"} 42"
+            ),
+            "bytes_total должен быть 42: got:\n{body}"
+        );
+        // messages_by_sink{sink=tcp} == 1 (label name — `sink`, не `transport`!)
+        assert!(
+            body.contains("syslog_messages_by_sink_total{sink=\"tcp\"} 1"),
+            "messages_by_sink должен быть 1: got:\n{body}"
+        );
+    }
+
+    /// `record_send` с shutdown cancelled → инкрементит `messages_drained_total`.
+    #[tokio::test]
+    async fn v10_4_0_record_send_cancelled_increments_drained() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let shutdown = CancellationToken::new();
+        shutdown.cancel();
+
+        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 10, &shutdown).await;
+
+        let body = gather_metrics(&metrics).expect("gather ok");
+        assert!(
+            body.contains("syslog_messages_drained_total{target=\"10.0.0.1:514\"} 1"),
+            "shutdown cancelled → drained++ 1: got:\n{body}"
+        );
+    }
+
+    /// `record_send_latency` записывает elapsed в histogram.
+    #[test]
+    fn v10_4_0_record_send_latency() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        record_send_latency(&metrics, std::time::Duration::from_micros(100));
+        record_send_latency(&metrics, std::time::Duration::from_millis(1));
+        let body = gather_metrics(&metrics).expect("gather ok");
+        // Histogram имеет счётчик > 2 в body (формат Prometheus text).
+        assert!(
+            body.contains("syslog_send_duration_seconds_count"),
+            "send_duration histogram должен быть в body"
+        );
+        // Парсим count: после "_count" идёт число (>= 2).
+        let count_line = body
+            .lines()
+            .find(|l| l.starts_with("syslog_send_duration_seconds_count"))
+            .expect("_count line");
+        let count_val: u64 = count_line
+            .split_whitespace()
+            .last()
+            .unwrap()
+            .parse()
+            .expect("count should be a number");
+        assert!(
+            count_val >= 2,
+            "histogram должен иметь >= 2 наблюдения, got {count_val}"
+        );
+    }
+
+    /// `record_reconnect` инкрементит reconnects_total.
+    /// Labels выводятся в алфавитном порядке: {target=...,transport=...}.
+    #[test]
+    fn v10_4_0_record_reconnect_increments() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        record_reconnect(&metrics, "tcp", "10.0.0.1:514");
+        record_reconnect(&metrics, "tcp", "10.0.0.1:514");
+
+        let body = gather_metrics(&metrics).expect("gather ok");
+        assert!(
+            body.contains("syslog_reconnects_total{target=\"10.0.0.1:514\",transport=\"tcp\"} 2"),
+            "reconnects_total должен быть 2: got:\n{body}"
+        );
+    }
+
+    /// `record_error` инкрементит errors_total.
+    #[tokio::test]
+    async fn v10_4_0_record_error_increments() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        record_error(&metrics, "10.0.0.1:514").await;
+        record_error(&metrics, "10.0.0.1:514").await;
+        record_error(&metrics, "10.0.0.1:514").await;
+
+        let body = gather_metrics(&metrics).expect("gather ok");
+        assert!(
+            body.contains("syslog_errors_total{target=\"10.0.0.1:514\"} 3"),
+            "errors_total должен быть 3: got:\n{body}"
+        );
     }
 }

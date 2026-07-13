@@ -1735,9 +1735,16 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
 
     // Дадим серверу время привязаться и опрашиваем /metrics с ретраями.
     // На загруженных CI runner'ах spawn+bind HTTP-сервера может занять
-    // несколько секунд (особенно под macOS). Раньше было 50×20ms=1s —
-    // недостаточно при contention. Увеличено до 100×100ms=10s для
-    // стабильного прохождения на CI (см. PR review notes).
+    // несколько секунд (особенно под macOS).
+    //
+    // Флаки v9.6.0: проверка `syslog_messages_total` в той же итерации что
+    // и 200 OK — race condition. Метрика `syslog_messages_total` регистрируется
+    // динамически в `record_send()` при первой отправке сообщения, а
+    // `syslog_achieved_rate_messages_per_second` инициализируется сразу
+    // при старте фазы. Если фаза только стартовала — body содержит только
+    // achieved_rate (с значением 0). Фикс: после получения 200 продолжаем
+    // polling пока метрика `syslog_messages_total` не появится (отдельный
+    // timeout ~15s; обычно появляется за <1s после старта первой отправки).
     let mut body = String::new();
     let mut got_200 = false;
     for _ in 0..100 {
@@ -1760,9 +1767,29 @@ async fn test_f12_http_metrics_endpoint_via_run_profile() {
         body.contains("text/plain; version=0.0.4"),
         "нет prometheus content-type: {body}"
     );
+    // После 200 продолжаем polling пока не дождёмся первой отправки сообщения.
+    // syslog_messages_total появляется в registry только при первом вызове
+    // record_send(); до этого HTTP /metrics возвращает только статические
+    // метрики (target_rate, active_workers, achieved_rate).
+    if !body.contains("syslog_messages_total") {
+        for _ in 0..150 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if let Ok(mut c) = TcpStream::connect(&addr_str).await {
+                c.write_all(b"GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+                    .await
+                    .unwrap();
+                let mut buf = Vec::new();
+                let _ = c.read_to_end(&mut buf).await;
+                body = String::from_utf8_lossy(&buf).to_string();
+                if body.contains("syslog_messages_total") {
+                    break;
+                }
+            }
+        }
+    }
     assert!(
         body.contains("syslog_messages_total"),
-        "нет метрик в теле: {body}"
+        "нет syslog_messages_total в теле после 25s ретраев: {body}"
     );
 
     // 404 на неизвестный путь.

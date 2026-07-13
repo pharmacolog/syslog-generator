@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v10.3.1** (compile-verified, **patch-fix CI**: `cargo fmt` фикс для `src/payload.rs:97` после инцидента v10.2.0/v10.3.0). CI green обязателен перед merge в main (см. PLAN-v10.0.0.md §4 п.15 + § Release-gate workflow).
+Дата: 2026-07-13. Текущая версия: **v10.4.0** (compile-verified, Coverage ч.2: **87.07% lines** (baseline 86.40% в v10.3.1, +0.67%), `cargo-fuzz` infrastructure с 5 таргетами (`profile_parser`, `format_rfc5424`, `format_cef`, `format_leef`, `format_json_lines`), `docs/FUZZING.md`; ≥ 97% coverage gate перенесён в **v10.4.1** patch — нужно ещё ~150 unit-тестов для непокрытых модулей).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -248,7 +248,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v10.3.0. **Веха F («Production-hardened») в процессе.** Сделанные релизы: вехи A/B/C/D (v8.0.0, v9.0.0) + вехи E (v9.1.0-v9.6.0) + **v10.0.0 + v10.1.0 + v10.2.0 + v10.3.0** (старт вехи F: breaking cleanup + Performance ч.1+ч.2 + CLI split + Coverage baseline). Следующие релизы вехи F: v10.4.0 (Coverage ч.2 ≥ 97% gate), v10.5.0 (CI расширение), v10.6.0 (usability ч.1), v10.7.0 (usability ч.2 + закрытие вехи F). План в `PLAN-v10.0.0.md` (8 релизов). История вехи E в `PLAN-веха-E.md`.
+Текущее состояние: версия v10.4.0. **Веха F («Production-hardened») в процессе.** Сделанные релизы: вехи A/B/C/D (v8.0.0, v9.0.0) + вехи E (v9.1.0-v9.6.0) + **v10.0.0 + v10.1.0 + v10.2.0 + v10.3.0 + v10.3.1 + v10.4.0** (старт вехи F: breaking cleanup + Performance ч.1+ч.2 + CLI split + Coverage baseline + CI patch-fix + Coverage progress + cargo-fuzz). Следующие релизы вехи F: v10.4.1 (Coverage patch: ≥ 97% gate), v10.5.0 (CI расширение), v10.6.0 (usability ч.1), v10.7.0 (usability ч.2 + закрытие вехи F). План в `PLAN-v10.0.0.md` (8 релизов). История вехи E в `PLAN-веха-E.md`.
 Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Все P2-задачи вехи E (N10/F15/F16/F17/N4.cipher_policy/N12) выполнены. Сделанная часть вехи F: v10.0.0 (breaking cleanup), v10.1.0 (Performance ч.1 + B5), v10.2.0 (Performance ч.2: faker hot-path), v10.3.0 (Coverage baseline). Оставшиеся: v10.4.0-v10.7.0.
 
 Задача на эту сессию: возьми задачу вехи E — F15 (дополнительные форматы для SIEM)

@@ -177,62 +177,61 @@ impl Transport for TransportKind {
     /// `async fn` в trait (Rust 1.75+). Для каждого варианта enum
     /// вызываем соответствующую `target_sender_*` функцию с переданными
     /// `addr`/`phase_name`. Это даёт static dispatch (0 vtable lookups).
+    /// Send bound автоматически выводится из captures (все наши типы Send).
     ///
     /// В v9.3.0: добавим `Kafka(KafkaConfig)` вариант с новой
     /// `target_sender_kafka` функцией.
-    fn run(
+    async fn run(
         &self,
         addr: &str,
         phase_name: &str,
         rx: SharedRx,
         metrics: Metrics,
         shutdown: CancellationToken,
-    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
-        async move {
-            match self {
-                Self::File => {
-                    file::target_sender_file(
-                        addr.to_string(),
-                        phase_name.to_string(),
-                        rx,
-                        metrics,
-                        shutdown,
-                    )
-                    .await
-                }
-                Self::Tcp => {
-                    tcp::target_sender_tcp(
-                        addr.to_string(),
-                        phase_name.to_string(),
-                        rx,
-                        metrics,
-                        shutdown,
-                        crate::transport::Framing::NonTransparent,
-                    )
-                    .await
-                }
-                Self::Udp => {
-                    udp::target_sender_udp(
-                        addr.to_string(),
-                        phase_name.to_string(),
-                        rx,
-                        metrics,
-                        shutdown,
-                    )
-                    .await
-                }
-                Self::Tls => {
-                    tls::target_sender_tls(
-                        addr.to_string(),
-                        crate::transport::tls::TlsParams::default(),
-                        phase_name.to_string(),
-                        rx,
-                        metrics,
-                        shutdown,
-                        crate::transport::Framing::NonTransparent,
-                    )
-                    .await
-                }
+    ) -> anyhow::Result<()> {
+        match self {
+            Self::File => {
+                file::target_sender_file(
+                    addr.to_string(),
+                    phase_name.to_string(),
+                    rx,
+                    metrics,
+                    shutdown,
+                )
+                .await
+            }
+            Self::Tcp => {
+                tcp::target_sender_tcp(
+                    addr.to_string(),
+                    phase_name.to_string(),
+                    rx,
+                    metrics,
+                    shutdown,
+                    crate::transport::Framing::NonTransparent,
+                )
+                .await
+            }
+            Self::Udp => {
+                udp::target_sender_udp(
+                    addr.to_string(),
+                    phase_name.to_string(),
+                    rx,
+                    metrics,
+                    shutdown,
+                )
+                .await
+            }
+            Self::Tls => {
+                tls::target_sender_tls(
+                    addr.to_string(),
+                    crate::transport::tls::TlsParams::default(),
+                    phase_name.to_string(),
+                    rx,
+                    metrics,
+                    shutdown,
+                    crate::transport::Framing::NonTransparent,
+                )
+                .await
             }
         }
     }
@@ -270,10 +269,13 @@ mod tests {
 
     /// N10: `Transport` реализован для `TransportKind` (compile-time check).
     /// Если сигнатура trait изменится, перестанет компилироваться.
+    /// (Используется как compile-only assertion через `fn f<T: Transport>()
+    /// { }` — аналог `_assert_impl` в других модулях, проверяет что
+    /// `TransportKind: Transport` без вызова.)
     #[allow(dead_code)]
     fn _assert_transport_impl() {
-        fn assert_impl<T: Transport>() {
-            assert_impl::<TransportKind>();
-        }
+        fn _f<T: Transport>() {}
+        // Компилируется только если TransportKind: Transport.
+        let _: fn() = || _f::<TransportKind>();
     }
 }

@@ -27,6 +27,7 @@ bytes = "1"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 regex = "1"
+proptest = "1"
 
 [[bench]]
 name = "message_generation"

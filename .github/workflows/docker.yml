@@ -1,0 +1,115 @@
+# N12 (v9.6.0): CI workflow для сборки и публикации Docker-образа.
+#
+# Триггеры:
+#   - push в main → сборка + push в ghcr.io с тегом = версии из Cargo.toml.
+#   - push в dev  → сборка + push с тегом "dev-{short_sha}".
+#   - pull_request → сборка (без push) для smoke-test.
+#   - workflow_dispatch → ручная сборка (для ad-hoc релизов).
+#
+# Multi-arch: linux/amd64 + linux/arm64 (buildx QEMU emulation).
+#
+# Использование secrets:
+#   GITHUB_TOKEN — автоматический, нужен для push в ghcr.io.
+
+name: Docker
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag (default: dev-{short_sha})"
+        required: false
+        default: ""
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}   # pharmacolog/syslog-generator
+
+jobs:
+  docker:
+    name: Build & push (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (для arm64 emulation на amd64 runner)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry (только push, не PR)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from Cargo.toml
+        id: meta
+        run: |
+          # Парсим version = "X.Y.Z" из Cargo.toml (одна строка).
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          # Short SHA для dev-тегов.
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          VERSION="${{ steps.meta.outputs.VERSION }}"
+          SHORT_SHA="${{ steps.meta.outputs.SHORT_SHA }}"
+          TAGS=""
+          # main branch → tag = version (например, "9.6.0")
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:latest"
+          # tag push (v*.*.*) → tag = версия из тега
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+          # dev branch → tag = "dev-{short_sha}"
+          else
+            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}"
+            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev"
+          fi
+          echo "tags<<EOF${TAGS}EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # Кэш GitHub Actions (экономия ~5 минут на повторных сборках).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test (только amd64)
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.VERSION }} --version

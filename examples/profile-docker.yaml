@@ -1,0 +1,60 @@
+# N12 (v9.6.0): пример профиля для docker-compose демо.
+#
+# Генерирует syslog-сообщения в syslog-ng (UDP 514 в compose-сети) и экспортирует
+# метрики в /metrics endpoint на 0.0.0.0:9091 (для Prometheus scrape).
+
+distribution: round-robin
+
+targets:
+  - address: syslog-ng:514        # имя сервиса в compose-сети syslog-net
+    transport: udp                 # стандартный syslog UDP
+    framing: non-transparent       # для UDP framing игнорируется (но поле обязательное)
+    connections: 4                 # пул из 4 воркеров на этот target
+
+  - address: syslog-ng:601        # TCP-fallback с RFC 6587 framing
+    transport: tcp
+    framing: non-transparent       # SYSLOG-MSG + LF (RFC 6587 §3.4.1)
+    connections: 2
+
+shutdown:
+  mode: drain                      # graceful drain в конце фазы
+  drain_timeout_secs: 15
+
+metrics_addr: 0.0.0.0:9091         # Prometheus scrape endpoint
+
+phases:
+  - name: warmup
+    duration_secs: 10
+    messages_per_second: 50         # разогрев — стабильная нагрузка
+    templates:
+      - "warmup from {{faker.ipv4}} to {{faker.hostname}} by {{faker.username}}"
+    format: rfc5424
+    syslog:
+      facility: 1                    # user-level
+      severity: 6                    # informational
+      hostname: "{{faker.hostname}}"
+      app_name: "warmup-svc"
+
+  - name: burst                    # короткие burst'ы для демонстрации spike'ов в Grafana
+    duration_secs: 30
+    messages_per_second: 500        # высокий rate
+    templates:
+      - "burst seq={{sequence}} from {{faker.ipv4}} ua={{faker.user_agent}}"
+    format: rfc5424
+    syslog:
+      facility: 4                    # auth/security
+      severity: 4                    # warning
+      hostname: "{{faker.hostname}}"
+      app_name: "burst-svc"
+
+  - name: steady                   # выход на стационар
+    duration_secs: 20
+    messages_per_second: 100
+    templates:
+      - "GET {{faker.url}} status={{faker.http_status}} by {{faker.username}} from {{faker.ipv4}}"
+    format: rfc5424
+    syslog:
+      facility: 16                   # local0
+      severity: 6                    # informational
+      hostname: "{{faker.hostname}}"
+      app_name: "web-svc"

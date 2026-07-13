@@ -1,0 +1,25 @@
+# N12 (v9.6.0): Prometheus config для docker-compose демо.
+#
+# Scrape:
+#   - syslog-generator /metrics endpoint (на порту 9091 внутри контейнера).
+#   - сам Prometheus (для observability).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: "syslog-generator-demo"
+
+scrape_configs:
+  - job_name: "syslog-generator"
+    metrics_path: /metrics
+    static_configs:
+      # syslog-generator слушает на 0.0.0.0:9091 в compose-сети.
+      - targets: ["syslog-generator:9091"]
+        labels:
+          service: "syslog-generator"
+          version: "9.6.0"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

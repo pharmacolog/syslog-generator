@@ -40,7 +40,8 @@ pub use schema_check::{
     validate_against_embedded_schema, validate_against_schema, SchemaCheckError, PROFILE_SCHEMA,
 };
 pub use sender::{
-    build_tls_connector, record_send, target_sender_file, Framing, SharedRx, TlsParams,
+    build_tls_connector, parse_tls_min_version, record_send, target_sender_file, Framing, SharedRx,
+    TlsParams,
 };
 pub use shutdown::{graceful_drain_wait, shutdown_listener};
 pub use syslog::{build_rfc3164, build_rfc5424, escape_sd_value, prival, Header};

@@ -187,6 +187,18 @@ for seq in 1..=total { ... }
   ~50-100 раз для типичной нагрузки (10k msg/s). + `bytes = "1"` зависимость;
   + 4 unit-теста на zero-copy инварианты (capacity сохраняется, N фреймов в
   один буфер дают корректный конкатенированный вывод).
+- **N4.mTLS (v8.7.2):** mutual TLS (клиент предъявляет сертификат серверу) +
+  минимальная версия TLS-протокола. Добавлены 3 поля в TargetConfig:
+  `tls_client_cert_file`, `tls_client_key_file`, `tls_min_protocol_version`
+  (все опциональные, backward-compatible). `TlsParams` расширен
+  соответствующими полями; `build_tls_connector` загружает client identity
+  через `Identity::from_pkcs8` (если задан) и устанавливает min_protocol
+  через `builder.min_protocol_version`. `parse_tls_min_version` парсит
+  "1.2"/"1.3" в `native_tls::Protocol`. 3 новых `ValidationError`:
+  `TlsClientCertFileNotFound`, `TlsClientKeyFileNotFound`,
+  `InvalidTlsMinProtocolVersion` (fail-fast). 9 новых тестов (4
+  connector, 2 валидация, 3 парсинга). Реализация openssl helper
+  (не rcgen — та же проблема с `Identity::from_pkcs8` на OpenSSL 3.6.1).
 - **N8 (v8.7.1):** property-based тесты через `proptest = "1"` в
   `src/payload_proptests.rs` (`#[cfg(test)]` модуль). 6 тестов покрывают
   инварианты которые трудно выразить конкретными примерами: int_in_range

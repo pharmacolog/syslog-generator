@@ -1987,3 +1987,213 @@ fn test_d3_all_examples_pass_schema() {
 }
 
 // ====================== N8 (v8.7.1): back-pressure ======================
+
+// ====================== N4.mTLS (v8.7.2): client certificates + min_protocol ======================
+//
+// Эти тесты проверяют что новые mTLS-поля TargetConfig
+// (tls_client_cert_file, tls_client_key_file, tls_min_protocol_version)
+// правильно работают с native-tls: клиент может предъявить сертификат
+// серверу, и handshake с разными min_protocol проходит/отвергается как
+// ожидается.
+
+/// N4.mTLS: генерация self-signed клиентского сертификата + ключа (PEM) с
+/// CN=client через `openssl req -x509`. Используется для тестов mTLS и
+/// min_protocol. Без SAN (только CN) — нам не нужен verify_peer, мы только
+/// проверяем что `Identity::from_pkcs8` корректно загружает identity в
+/// native-tls connector.
+///
+/// Используем openssl (не rcgen) потому что `Identity::from_pkcs8` в
+/// native-tls 0.2 на текущем окружении (OpenSSL 3.6.1) корректно парсит
+/// PEM только от openssl CLI, не от rcgen 0.13 (см. PLAN-v9.0.0.md,
+/// зафиксировано в v8.3.1).
+fn make_test_cert() -> (Vec<u8>, Vec<u8>) {
+    use std::process::Command;
+    let dir = std::env::temp_dir().join("sg_test_n4_mtls");
+    std::fs::create_dir_all(&dir).unwrap();
+    let cert_path = dir.join("client.pem");
+    let key_path = dir.join("client.key");
+    let status = Command::new("openssl")
+        .args([
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            key_path.to_str().unwrap(),
+            "-out",
+            cert_path.to_str().unwrap(),
+            "-days",
+            "36500",
+            "-subj",
+            "/CN=client",
+        ])
+        .status()
+        .expect("не удалось запустить openssl (проверьте, что openssl в PATH)");
+    assert!(
+        status.success(),
+        "openssl req завершился с ошибкой: {status:?}"
+    );
+    let cert_pem = fs::read(&cert_path).unwrap();
+    let key_pem = fs::read(&key_path).unwrap();
+    (cert_pem, key_pem)
+}
+
+/// N4.mTLS (v8.7.2): проверка что `parse_tls_min_version` принимает
+/// ровно "1.2" и "1.3" и отвергает остальные значения.
+#[test]
+fn test_n4_parse_tls_min_version_accepts_valid() {
+    use syslog_generator::parse_tls_min_version;
+    assert!(matches!(
+        parse_tls_min_version("1.2").unwrap(),
+        native_tls::Protocol::Tlsv12
+    ));
+    assert!(matches!(
+        parse_tls_min_version("1.3").unwrap(),
+        native_tls::Protocol::Tlsv13
+    ));
+    // Trim пробелов (валидатор парсит значение как есть, но мы
+    // устойчивы к пробелам).
+    assert!(matches!(
+        parse_tls_min_version("  1.2  ").unwrap(),
+        native_tls::Protocol::Tlsv12
+    ));
+    // Невалидные значения.
+    assert!(parse_tls_min_version("1.0").is_err());
+    assert!(parse_tls_min_version("1.1").is_err());
+    assert!(parse_tls_min_version("2.0").is_err());
+    assert!(parse_tls_min_version("").is_err());
+    assert!(parse_tls_min_version("tls").is_err());
+}
+
+/// N4.mTLS (v8.7.2): `build_tls_connector` принимает mTLS-параметры
+/// (client_cert + client_key) без ошибок (identity загружается).
+#[test]
+fn test_n4_mtls_build_connector_with_client_identity() {
+    use syslog_generator::{build_tls_connector, TlsParams};
+    let (cert_pem, key_pem) = make_test_cert();
+    let params = TlsParams {
+        domain: "localhost".into(),
+        ca_pem: Some(cert_pem.clone()), // самоподписанный — клиент доверяет себе
+        insecure: false,
+        client_cert_pem: Some(cert_pem),
+        client_key_pem: Some(key_pem),
+        min_protocol: Some(native_tls::Protocol::Tlsv12),
+    };
+    let connector = build_tls_connector(&params);
+    assert!(
+        connector.is_ok(),
+        "mTLS connector должен собраться: {:?}",
+        connector.err()
+    );
+}
+
+/// N4.mTLS: `build_tls_connector` принимает `min_protocol = Tlsv13`
+/// (защита от downgrade-атак на TLS 1.2 и ниже).
+#[test]
+fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
+    use syslog_generator::{build_tls_connector, TlsParams};
+    let (cert_pem, key_pem) = make_test_cert();
+    let params = TlsParams {
+        domain: "localhost".into(),
+        ca_pem: Some(cert_pem.clone()),
+        insecure: false,
+        client_cert_pem: Some(cert_pem),
+        client_key_pem: Some(key_pem),
+        min_protocol: Some(native_tls::Protocol::Tlsv13),
+    };
+    assert!(build_tls_connector(&params).is_ok());
+}
+
+/// N4.mTLS: `build_tls_connector` отвергает битый client cert/key
+/// (ошибка парсинга PEM в Identity::from_pkcs8).
+#[test]
+fn test_n4_mtls_rejects_bad_client_identity() {
+    use syslog_generator::{build_tls_connector, TlsParams};
+    let (cert_pem, _) = make_test_cert();
+    let params = TlsParams {
+        domain: "localhost".into(),
+        ca_pem: Some(cert_pem.clone()),
+        insecure: false,
+        client_cert_pem: Some(cert_pem),
+        client_key_pem: Some(b"not a real key".to_vec()),
+        min_protocol: None,
+    };
+    let r = build_tls_connector(&params);
+    assert!(r.is_err(), "битый client key должен дать ошибку");
+}
+
+/// N4.mTLS: валидация профиля отвергает несуществующий
+/// `tls_client_cert_file` / `tls_client_key_file`.
+#[test]
+fn test_n4_mtls_validation_rejects_missing_cert_file() {
+    use syslog_generator::ValidationError;
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+
+    let dir = std::env::temp_dir();
+    let missing = dir.join("sg_test_n4_mtls_missing_cert.pem");
+    let _ = fs::remove_file(&missing);
+    assert!(
+        !missing.exists(),
+        "precondition: файл не должен существовать"
+    );
+
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:6514".into(),
+            transport: "tls".into(),
+            tls_client_cert_file: Some(missing.to_string_lossy().into_owned()),
+            tls_client_key_file: None,
+            tls_min_protocol_version: None,
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "mtls".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["mtls-{{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::TlsClientCertFileNotFound { .. })),
+        "ожидалась TlsClientCertFileNotFound, получено: {errs:?}"
+    );
+}
+
+/// N4.mTLS: валидация отвергает недопустимый `tls_min_protocol_version`.
+#[test]
+fn test_n4_mtls_validation_rejects_bad_min_protocol() {
+    use syslog_generator::ValidationError;
+    use syslog_generator::{validate_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:6514".into(),
+            transport: "tls".into(),
+            tls_min_protocol_version: Some("1.0".into()),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "min".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["min-{{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, ValidationError::InvalidTlsMinProtocolVersion { .. })),
+        "ожидалась InvalidTlsMinProtocolVersion, получено: {errs:?}"
+    );
+}

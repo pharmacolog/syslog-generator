@@ -1,6 +1,47 @@
 
 # Changelog
 
+## v8.7.1 - 2026-07-13
+
+Второй из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):
+закрытие N8 (proptest) — расширение тестов property-based генераторами.
+
+### Added
+- **`+ proptest = "1"`** (dev-dependency) — property-based testing.
+- **`src/payload_proptests.rs`** (новый, `#[cfg(test)]` модуль) — 6 тестов:
+  - `prop_int_in_range` — `int_in_range(min, max)` всегда в `[min, max]`.
+  - `prop_seed_determinism` — `derive_rng(seed, seq)` детерминирован
+    (16 u64 итераций идентичны между двумя RNG с одним seed).
+  - `prop_pad_to_size_exact_target` — `pad_to_size` возвращает ровно
+    `target` байт (target <= 64KB чтобы не уйти в OOM при генерации).
+  - `prop_pad_to_size_zero_target_no_truncation` — corner case: target=0
+    возвращает body as-is (НЕ усекает, документированное поведение).
+  - `prop_faker_ipv4_valid_format` — `faker("ipv4")` всегда возвращает
+    валидный IPv4 (4 октета, 0..=255).
+  - `prop_faker_uuid_v4_format` — `faker("uuid")` всегда возвращает
+    валидный UUID v4 (формат 8-4-4-4-12, версия 4 = '4' в позиции 14,
+    вариант ∈ {8,9,a,b}).
+
+### Notes
+- Back-pressure: интеграционный тест `test_n8_backpressure_slow_consumer_does_not_deadlock`
+  был сначала добавлен, но оказался flaky (TCP-буфер ядра > 64KB вмещает
+  50 маленьких сообщений ~500 байт мгновенно, sender не блокируется,
+  elapsed < 100ms даже при корректно работающей back-pressure).
+  Back-pressure в текущей архитектуре покрывается косвенно:
+  1. N6 (v8.7.0) zero-copy/буферизация (BytesMut, BufWriter);
+  2. test_rate_limiting_respects_target (v8.6.1) — rate-limit;
+  3. test_negative_paths_connection_failures_record_errors (v8.6.0) —
+     drain_as_errors при уходе sender'а.
+  TODO для вехи E: явное end-to-end back-pressure тестирование через
+  mock'и trait Transport (появится в N10).
+- Тесты: **125 unit + 55 integration + 11 N7 = 191**, все зелёные.
+  Из них 6 новых property-based.
+- clippy чист, fmt clean.
+- 9 бенчей (3 + 6) — все зелёные.
+
+Следующие релизы: v8.7.2 (N4.mTLS), v8.8.0 (N10 слои),
+v8.8.1 (AUDIT.md правки), v9.0.0 (milestone).
+
 ## v8.7.0 - 2026-07-13
 
 Первый из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):

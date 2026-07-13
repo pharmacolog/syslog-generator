@@ -103,10 +103,13 @@ jobs:
           status=0
           for f in examples/*.json examples/*.yaml examples/*.yml; do
             [ -f "$f" ] || continue
+            # Пропускаем schema-файлы (они НЕ являются валидными Profile —
+            # не предназначены для --validate) и служебные .meta.json.
+            # - schema_*.json: schema_auth, schema_http_access, schema_nginx
+            # - *_schema.json: variable_payload_schema, protobuf_schema
+            # - *.meta.json: UI metadata
             case "$(basename "$f")" in
-              schema_*.json) continue ;;
-              *_schema.json) continue ;;
-              protobuf_schema.json) continue ;;
+              schema_*.json|proto*_schema.json|*_schema.json) continue ;;
               *.meta.json) continue ;;
             esac
             echo "checking $f"

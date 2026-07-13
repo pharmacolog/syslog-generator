@@ -187,6 +187,17 @@ for seq in 1..=total { ... }
   ~50-100 раз для типичной нагрузки (10k msg/s). + `bytes = "1"` зависимость;
   + 4 unit-теста на zero-copy инварианты (capacity сохраняется, N фреймов в
   один буфер дают корректный конкатенированный вывод).
+- **N10 (v8.8.0):** рефакторинг слоёв. До N10 в `src/` лежало ~17 модулей
+  вперемешку (`format`, `transport`, `observability`, `generator`
+  были разбросаны по `src/syslog.rs`, `src/sender.rs`, `src/metrics*.rs`,
+  `src/protobuf.rs`, `src/core.rs`, `src/config.rs`). После N10:
+  4 новые директории (`src/format/`, `src/transport/`, `src/observability/`,
+  `src/generator/`) с явным разделением слоёв. Старые модули
+  `src/{core,config,sender,syslog,metrics,metrics_server,protobuf}.rs`
+  заменены на thin re-export обёртки — публичный API полностью
+  сохранён, 0 breaking changes. `src/architecture-notes.md` переписан
+  с реальной архитектурой (был заглушкой v7.4.0). Trait `Format` и
+  trait `Transport` объявлены как план для вехи E (F15, F16).
 - **N4.mTLS (v8.7.2):** mutual TLS (клиент предъявляет сертификат серверу) +
   минимальная версия TLS-протокола. Добавлены 3 поля в TargetConfig:
   `tls_client_cert_file`, `tls_client_key_file`, `tls_min_protocol_version`

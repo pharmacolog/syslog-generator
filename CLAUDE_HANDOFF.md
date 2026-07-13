@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v10.4.0** (compile-verified, Coverage ч.2: **87.07% lines** (baseline 86.40% в v10.3.1, +0.67%), `cargo-fuzz` infrastructure с 5 таргетами (`profile_parser`, `format_rfc5424`, `format_cef`, `format_leef`, `format_json_lines`), `docs/FUZZING.md`; ≥ 97% coverage gate перенесён в **v10.4.1** patch — нужно ещё ~150 unit-тестов для непокрытых модулей).
+Дата: 2026-07-13. Текущая версия: **v10.4.1** (compile-verified, patch-fix 3 flaky time-sensitive тестов: `linear_ramp_volume` 150..=340 → 130..=380, `burst_injection_increases_volume` >250 → >220, `slow_drip_decreases_volume` >80 → >70. Release-gate возвращён после восстановления CI. v10.4.0 = Coverage 87.07% + cargo-fuzz с 5 таргетами).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

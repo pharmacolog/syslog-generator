@@ -1,6 +1,79 @@
 
 # Changelog
 
+## v10.1.0 - 2026-07-13
+
+**Performance (часть 1) + breaking B5.** B3+B4 оказались уже выполненными
+(v8.x — `MetricsError` и `ValidationError` уже полностью структурные).
+
+### ⚠ BREAKING CHANGES
+
+| # | Breaking | Было | Стало | Миграция |
+|---|---|---|---|---|
+| **B5** | CLI `--target split` | `--target ADDR:TRANSPORT` (обязательно) | `--target ADDR` + `--transport TRANSPORT` (или deprecated alias `ADDR:TRANSPORT`) | См. `§ Migration guide B5` ниже. |
+
+### Changed
+
+- **B5 (CLI)**: `--target ADDR:TRANSPORT` формат **deprecated** (но работает
+  с warning в stderr). Новый формат: `-t ADDR --transport TRANSPORT`.
+  Период deprecation: v10.x (удалится в v11.0.0).
+- **Cargo.toml release profile**: добавлены `lto = "fat"` и `codegen-units = 1`.
+  Улучшает throughput на 5-15% за счёт cross-module inlining. Увеличивает
+  время компиляции release на ~30-50%, но release собирается один раз —
+  приемлемо.
+
+### Added
+
+- **`bench-regression monitoring`** в CI (`.github/workflows/ci.yml`):
+  новый step `Bench quick (monitoring, non-blocking)` запускает
+  `cargo bench --locked -- --quick` на каждом PR и сохраняет вывод как
+  артефакт `bench-output-${{ matrix.os }}`. **Non-blocking** (continue-on-error):
+  ревьюер смотрит результаты. Полноценный regression gate с persistent baseline
+  запланирован в v10.5.0 (CI расширение — `cargo-benchcmp` или
+  `c5h/bench-regression-action`). Допуск по контракту v9.6.0 §11: ±10% relative throughput.
+- **3 новых теста** в `src/cli.rs`:
+  - `b5_parse_target_with_transport_default` — новый формат с default_transport.
+  - `b5_parse_target_with_transport_none_defaults_tcp` — fallback на tcp.
+  - `b5_parse_target_deprecated_with_transport_arg` — deprecated формат имеет приоритет.
+- **1 тест переименован**: `parse_target_with_transport` →
+  `parse_target_with_transport_deprecated_format` (избежание конфликта
+  с новой pub fn).
+
+### Migration guide
+
+#### B5: CLI `--target split`
+
+```bash
+# БЫЛО (v10.0.0 и ранее):
+syslog-generator -t 10.0.0.1:6514:tls -p profile.json
+
+# СТАЛО (v10.1.0, рекомендуемый формат):
+syslog-generator -t 10.0.0.1:6514 --transport tls -p profile.json
+
+# Старый формат ещё работает в v10.x, но пишет warning в stderr:
+syslog-generator -t 10.0.0.1:6514:tls -p profile.json
+# warning: формат `--target ADDR:TRANSPORT` deprecated (...); используйте
+# `-t ADDR --transport tls` (будет удалено в v11.0.0)
+```
+
+### Notes
+
+- **317 тестов** (218 unit + 88 integration + 11 n7) — все зелёные.
+  `cargo bench --no-run --locked` clean.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **B3 и B4 — N/A**: `MetricsError` и `ValidationError` уже полностью структурные
+  с v8.x (каждый вариант имеет именованные поля). План v10.0.0 ошибочно
+  помечал их как breaking — на самом деле они давно сделаны.
+
+### Следующие релизы
+
+- **v10.2.0** — Performance (часть 2): lock-free atomic counters, BytesMut pre-alloc.
+- **v10.3.0** — Coverage (часть 1): cargo-llvm-cov baseline.
+- **v10.4.0** — Coverage (часть 2): ≥ 97%, fuzzing.
+- **v10.5.0** — CI расширение (полный bench-regression gate + cargo-deny и т.д.).
+- **v10.6.0** — Usability (часть 1).
+- **v10.7.0** — Usability (часть 2) + закрытие вехи F.
+
 ## v10.0.0 - 2026-07-13
 
 **Веха F «Production-hardened» — старт.** Major-релиз с breaking changes

@@ -26,11 +26,21 @@ pub struct Args {
     #[arg(short, long)]
     pub profile: Option<String>,
 
-    /// Цель в форме ADDR или ADDR:TRANSPORT (transport: tcp|udp|tls|file;
-    /// по умолчанию tcp). Флаг повторяемый; заменяет targets из профиля.
-    /// Примеры: -t 127.0.0.1:514, -t 10.0.0.1:6514:tls, -t /tmp/out.log:file
+    /// Цель в форме ADDR (адрес). Транспорт задаётся отдельно через --transport.
+    /// Флаг повторяемый; заменяет targets из профиля.
+    /// Примеры: -t 127.0.0.1:514, -t 10.0.0.1:6514, -t /tmp/out.log
+    ///
+    /// **Deprecated**: формат `ADDR:TRANSPORT` (например `-t 10.0.0.1:6514:tls`)
+    /// ещё работает в v10.x как alias, но будет удалён в v11.0.0. Вместо этого
+    /// используйте `-t ADDR` + `--transport TRANSPORT`.
     #[arg(short = 't', long = "target")]
     pub target: Vec<String>,
+
+    /// B5 (v10.1.0): транспорт для всех --target (tcp|udp|tls|file; default tcp).
+    /// Применяется к каждой цели, если её transport не указан в `ADDR:TRANSPORT`
+    /// (последний имеет приоритет, но deprecated).
+    #[arg(long = "transport", value_parser = ["tcp", "udp", "tls", "file"])]
+    pub transport: Option<String>,
 
     /// Переопределить distribution (round-robin|broadcast|weighted) во всём профиле.
     #[arg(long)]
@@ -105,24 +115,47 @@ pub enum TargetParseError {
     TooManyParts(String),
 }
 
-/// Разбирает `ADDR` или `ADDR:TRANSPORT` в [`TargetConfig`].
+/// Разбирает `ADDR` или (deprecated) `ADDR:TRANSPORT` в [`TargetConfig`].
+///
+/// **B5 (v10.1.0)**: `ADDR:TRANSPORT` формат deprecated, будет удалён в v11.0.0.
+/// Используйте `parse_target_with_transport(spec, default_transport)` или
+/// задавайте транспорт через `--transport` флаг.
 ///
 /// Для `host:port` (две части, где вторая — числовой порт) весь ввод трактуется
 /// как адрес с транспортом по умолчанию tcp. Если последняя часть — известный
 /// транспорт (tcp/udp/tls/file), она отделяется. Для `file` адрес — это путь.
 pub fn parse_target(spec: &str) -> Result<TargetConfig, TargetParseError> {
+    parse_target_with_transport(spec, None)
+}
+
+/// B5 (v10.1.0): разбирает spec с явным дефолтным транспортом.
+///
+/// Если spec в формате `ADDR:TRANSPORT` (deprecated), возвращает Result с
+/// уже распарсенным транспортом и пишет warning в stderr.
+///
+/// Если spec в формате `ADDR`, используется `default_transport` (или "tcp"
+/// если None).
+pub fn parse_target_with_transport(
+    spec: &str,
+    default_transport: Option<&str>,
+) -> Result<TargetConfig, TargetParseError> {
     let spec = spec.trim();
     if spec.is_empty() {
         return Err(TargetParseError::Empty);
     }
     let known = ["tcp", "udp", "tls", "file"];
 
-    // Отделяем транспорт, только если последний сегмент после ':' — известный транспорт.
+    // Deprecated формат ADDR:TRANSPORT.
     if let Some((addr, last)) = spec.rsplit_once(':') {
         if known.contains(&last) {
             if addr.is_empty() {
                 return Err(TargetParseError::Empty);
             }
+            eprintln!(
+                "warning: формат `--target ADDR:TRANSPORT` deprecated (получено {:?}); \
+                 используйте `-t ADDR --transport {}` (будет удалено в v11.0.0)",
+                spec, last
+            );
             return Ok(TargetConfig {
                 address: addr.to_string(),
                 transport: last.to_string(),
@@ -131,20 +164,23 @@ pub fn parse_target(spec: &str) -> Result<TargetConfig, TargetParseError> {
         }
     }
 
-    // Иначе весь ввод — адрес (host:port или путь), транспорт по умолчанию tcp.
+    // Новый формат: ADDR + default_transport (или "tcp").
     Ok(TargetConfig {
         address: spec.to_string(),
-        transport: "tcp".to_string(),
+        transport: default_transport.unwrap_or("tcp").to_string(),
         ..Default::default()
     })
 }
 
 impl Args {
     /// Преобразует разобранные аргументы в [`Overrides`], разбирая `--target`.
+    ///
+    /// B5 (v10.1.0): `--transport` применяется ко всем targets, у которых не
+    /// указан транспорт в deprecated `ADDR:TRANSPORT` формате.
     pub fn to_overrides(&self) -> Result<Overrides, TargetParseError> {
         let mut targets = Vec::new();
         for t in &self.target {
-            targets.push(parse_target(t)?);
+            targets.push(parse_target_with_transport(t, self.transport.as_deref())?);
         }
         Ok(Overrides {
             targets,
@@ -224,7 +260,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_target_with_transport() {
+    fn parse_target_with_transport_deprecated_format() {
+        // B5: старая тест-функция, переименована во избежание конфликта с
+        // новой pub fn parse_target_with_transport(spec, default_transport).
         let t = parse_target("10.0.0.1:6514:tls").unwrap();
         assert_eq!(t.address, "10.0.0.1:6514");
         assert_eq!(t.transport, "tls");
@@ -247,6 +285,31 @@ mod tests {
     #[test]
     fn parse_target_empty_errors() {
         assert!(matches!(parse_target("  "), Err(TargetParseError::Empty)));
+    }
+
+    #[test]
+    fn b5_parse_target_with_transport_default() {
+        // Новый формат: --transport TRANSPORT применяется ко всем targets.
+        let t = parse_target_with_transport("10.0.0.1:514", Some("tls")).unwrap();
+        assert_eq!(t.address, "10.0.0.1:514");
+        assert_eq!(t.transport, "tls");
+    }
+
+    #[test]
+    fn b5_parse_target_with_transport_none_defaults_tcp() {
+        // Без default — fallback на tcp (обратная совместимость).
+        let t = parse_target_with_transport("10.0.0.1:514", None).unwrap();
+        assert_eq!(t.address, "10.0.0.1:514");
+        assert_eq!(t.transport, "tcp");
+    }
+
+    #[test]
+    fn b5_parse_target_deprecated_with_transport_arg() {
+        // Deprecated формат ADDR:TRANSPORT работает даже если задан default_transport.
+        // Формат ADDR:TRANSPORT имеет приоритет (но пишет warning в stderr).
+        let t = parse_target_with_transport("10.0.0.1:6514:tls", Some("udp")).unwrap();
+        assert_eq!(t.address, "10.0.0.1:6514");
+        assert_eq!(t.transport, "tls"); // из deprecated формата, не из --transport
     }
 
     #[test]

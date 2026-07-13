@@ -580,4 +580,101 @@ mod tests {
         };
         assert!(build_tls_connector(&p).is_err());
     }
+
+    // === v10.4.0 (Coverage ч.2): больше unit-тестов для error paths ===
+
+    /// `parse_cipher_suite` принимает все поддерживаемые IANA-имена.
+    #[test]
+    fn v10_4_0_parse_cipher_suite_all_known_suites() {
+        use rustls::crypto::ring::cipher_suite::*;
+        // 3 TLS 1.3 suites.
+        assert!(parse_cipher_suite("TLS_AES_256_GCM_SHA384").is_ok());
+        assert!(parse_cipher_suite("TLS_AES_128_GCM_SHA256").is_ok());
+        assert!(parse_cipher_suite("TLS_CHACHA20_POLY1305_SHA256").is_ok());
+        // 5 TLS 1.2 suites (проверяем только принимаются — rustls::SupportedCipherSuite
+        // сравнение через PartialEq нестабильно между версиями, проверка is_ok()
+        // достаточна).
+        assert!(parse_cipher_suite("TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384").is_ok());
+        assert!(parse_cipher_suite("TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256").is_ok());
+        assert!(parse_cipher_suite("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384").is_ok());
+        assert!(parse_cipher_suite("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256").is_ok());
+        assert!(parse_cipher_suite("TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256").is_ok());
+        // Touch variant to silence unused import warning.
+        let _ = TLS13_AES_256_GCM_SHA384;
+    }
+
+    /// `parse_cipher_suite` отклоняет malformed names с человекочитаемым сообщением.
+    #[test]
+    fn v10_4_0_parse_cipher_suite_error_message_lists_supported() {
+        let err = parse_cipher_suite("TLS_FAKE_SUITE").unwrap_err();
+        assert!(
+            err.contains("TLS_FAKE_SUITE"),
+            "err должна содержать введённое имя: {err}"
+        );
+        assert!(
+            err.contains("поддерживаемые:"),
+            "err должна перечислять поддерживаемые: {err}"
+        );
+    }
+
+    /// `build_tls_connector` с min_protocol = Tls12 + insecure = true — оба работают вместе.
+    #[test]
+    fn v10_4_0_build_connector_tls12_insecure_combined() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls12),
+            insecure: true,
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("tls12+insecure");
+    }
+
+    /// `build_tls_connector` с cipher_suites + min_protocol — фильтрует по версии.
+    #[test]
+    fn v10_4_0_build_connector_cipher_suites_with_min_protocol() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls13),
+            // TLS 1.2 suite не должен проходить если min_protocol = Tls13.
+            cipher_suites: Some(vec![
+                rustls::crypto::ring::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+            ]),
+            insecure: true, // insecure — обходит проверку сертификата
+            ..Default::default()
+        };
+        // С TLS 1.2 suite и min=Tls13 rustls отвергает конфигурацию.
+        assert!(build_tls_connector(&p).is_err());
+    }
+
+    /// `build_tls_connector` с TLS 1.3 cipher suite + min=Tls13 — успех.
+    #[test]
+    fn v10_4_0_build_connector_tls13_cipher_suites_with_tls13_min() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls13),
+            cipher_suites: Some(vec![
+                rustls::crypto::ring::cipher_suite::TLS13_AES_256_GCM_SHA384,
+            ]),
+            insecure: true,
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("tls13 suite + tls13 min + insecure");
+    }
+
+    /// `TlsParams` clone — не нарушает invariant (только String/Option).
+    #[test]
+    fn v10_4_0_tls_params_clone_preserves_fields() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            ca_pem: Some(b"CA_PEM".to_vec()),
+            insecure: true,
+            min_protocol: Some(TlsVersion::Tls13),
+            ..Default::default()
+        };
+        let p2 = p.clone();
+        assert_eq!(p2.domain, "example.com");
+        assert_eq!(p2.ca_pem, Some(b"CA_PEM".to_vec()));
+        assert!(p2.insecure);
+        assert_eq!(p2.min_protocol, Some(TlsVersion::Tls13));
+    }
 }

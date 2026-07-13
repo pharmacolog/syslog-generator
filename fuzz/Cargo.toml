@@ -1,0 +1,34 @@
+[package]
+name = "syslog-generator-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "profile_parser"
+path = "fuzz_targets/profile_parser.rs"
+
+[[bin]]
+name = "format_rfc5424"
+path = "fuzz_targets/format_rfc5424.rs"
+
+[[bin]]
+name = "format_cef"
+path = "fuzz_targets/format_cef.rs"
+
+[[bin]]
+name = "format_leef"
+path = "fuzz_targets/format_leef.rs"
+
+[[bin]]
+name = "format_json_lines"
+path = "fuzz_targets/format_json_lines.rs"
+
+[dependencies.syslog-generator]
+path = ".."

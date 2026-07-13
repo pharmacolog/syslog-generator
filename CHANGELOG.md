@@ -1,6 +1,62 @@
 
 # Changelog
 
+## v8.8.0 - 2026-07-13
+
+Minor-релиз с архитектурным рефакторингом (N10). Самое большое
+изменение в плане v9.0.0: вместо плоского списка модулей в `src/`
+явные слои (от внешнего к внутреннему).
+
+### Changed
+- **Новые директории в `src/`** (4 слоя):
+  - `src/format/` — форматы syslog-сообщений (RFC 5424, RFC 3164, raw,
+    protobuf). `mod.rs` содержит общие утилиты (`Header`, `prival`,
+    `escape_sd_value`, `BOM`, `NILVALUE`, `sanitize_header`) и trait
+    `Format` (план для вехи E, см. F15). Подмодули:
+    - `rfc5424.rs` — `build_rfc5424(&Header, &[u8]) -> Vec<u8>`
+    - `rfc3164.rs` — `build_rfc3164(&Header, &[u8]) -> Vec<u8>`
+    - `raw.rs` — passthrough (без обёртки)
+    - `protobuf.rs` — `apply_protobuf_schema`, `serialize_protobuf`,
+      `serialize_protobuf_like` (wire-format varint + length-delimited)
+  - `src/transport/` — транспорты (file, tcp, udp, tls). `mod.rs`
+    содержит общую инфраструктуру (`SharedRx`, `Framing`, `record_send`
+    /`record_send_latency`/`record_reconnect`/`record_error`,
+    `drain_as_errors`, `next_msg`, `frame_into` N6 zero-copy) и trait
+    `Transport` (план для F16). Подмодули:
+    - `file.rs` — `target_sender_file` (BufWriter, N6)
+    - `tcp.rs` — `target_sender_tcp` + `reconnect_tcp` (BytesMut, N6)
+    - `udp.rs` — `target_sender_udp` (zero-copy по дизайну)
+    - `tls.rs` — `target_sender_tls` + `tls_connect` + `TlsParams` +
+      `build_tls_connector` + `parse_tls_min_version` (N4 + N4.mTLS)
+  - `src/observability/` — Prometheus метрики + HTTP /metrics endpoint.
+    `metrics.rs` (`Metrics`, `create_metrics`, `gather_metrics`) +
+    `server.rs` (`parse_request_line`, `route`, `build_http_response`,
+    `serve`, `spawn`).
+  - `src/generator/` — оркестрация профиля. `core.rs` (`run_profile`,
+    `run_phase_multi`, `generate_message`, `create_dispatcher`,
+    `default_values`, `load_schema`, `load_templates`) + `config.rs`
+    (`Profile`, `Phase`, `TargetConfig`, `load_profile_from_path`,
+    `load_profile_from_json_str`, `load_profile_from_yaml_str`).
+- **Backward-compat обёртки** для старых модулей: `src/{core,config,
+  sender,syslog,metrics,metrics_server,protobuf}.rs` теперь содержат
+  `pub use crate::format/transport/observability/generator::*` —
+  публичный API полностью сохранён. `syslog_generator::run_profile`,
+  `syslog_generator::Profile`, `syslog_generator::build_rfc5424` и т.д.
+  продолжают работать без изменений в пользовательском коде.
+- **`src/architecture-notes.md`** переписан с реальной архитектурой
+  (был заглушкой из Initial commit). Включает описание слоёв, trait
+  `Format` (план для F15), trait `Transport` (план для F16).
+
+### Notes
+- **0 breaking changes** — только internal module organization, публичный
+  API не меняется.
+- **Тесты: 200+ (118 unit + 70 integration + 11 N7)**, все зелёные.
+- **Бенчи: 9 (3 + 6)**, все зелёные.
+- clippy чист, fmt clean.
+
+Следующий релиз: v8.8.1 (правки AUDIT.md — поставить ✅ на F7/F8/F9,
+убрать "Отложено" из F13 и N4), потом v9.0.0 (milestone).
+
 ## v8.7.2 - 2026-07-13
 
 Третий из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):

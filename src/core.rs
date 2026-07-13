@@ -3,7 +3,8 @@ use crate::metrics::Metrics;
 use crate::protobuf::serialize_protobuf_like;
 use crate::schema::Schema;
 use crate::sender::{
-    target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing,
+    parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
+    target_sender_udp, Framing,
 };
 use crate::shutdown::{graceful_drain_wait, shutdown_listener};
 use crate::syslog::{build_rfc3164, build_rfc5424, Header};
@@ -311,6 +312,53 @@ pub async fn run_phase_multi(
                         },
                         None => None,
                     };
+                    // N4.mTLS (v8.7.2): читаем клиентский cert+key заранее.
+                    let (client_cert_pem, client_key_pem) =
+                        match (&target.tls_client_cert_file, &target.tls_client_key_file) {
+                            (Some(cert_path), Some(key_path)) => {
+                                match (std::fs::read(cert_path), std::fs::read(key_path)) {
+                                    (Ok(cert), Ok(key)) => {
+                                        if cert.is_empty() || key.is_empty() {
+                                            eprintln!(
+                                        "TLS ({addr}): mTLS клиентский cert или key файл пустой — \
+                                         handshake может не пройти"
+                                    );
+                                        }
+                                        (Some(cert), Some(key))
+                                    }
+                                    _ => (None, None),
+                                }
+                            }
+                            (Some(cert_path), None) => {
+                                eprintln!(
+                                    "TLS ({addr}): задан tls_client_cert_file={cert_path}, \
+                                 но tls_client_key_file не задан — mTLS отключён"
+                                );
+                                (None, None)
+                            }
+                            (None, Some(key_path)) => {
+                                eprintln!(
+                                    "TLS ({addr}): задан tls_client_key_file={key_path}, \
+                                 но tls_client_cert_file не задан — mTLS отключён"
+                                );
+                                (None, None)
+                            }
+                            (None, None) => (None, None),
+                        };
+                    // N4.mTLS: парсим минимальную версию TLS-протокола.
+                    let min_protocol = match &target.tls_min_protocol_version {
+                        Some(s) => match parse_tls_min_version(s) {
+                            Ok(p) => Some(p),
+                            Err(e) => {
+                                eprintln!(
+                                    "TLS ({addr}): не удалось распарсить tls_min_protocol_version={s:?}: {e}; \
+                                     используется системная по умолчанию"
+                                );
+                                None
+                            }
+                        },
+                        None => None,
+                    };
                     if target.tls_insecure {
                         eprintln!("⚠ TLS ({addr}): tls_insecure=true — проверка сертификата ОТКЛЮЧЕНА (небезопасно)");
                     }
@@ -318,6 +366,9 @@ pub async fn run_phase_multi(
                         domain,
                         ca_pem,
                         insecure: target.tls_insecure,
+                        client_cert_pem,
+                        client_key_pem,
+                        min_protocol,
                     };
                     tokio::spawn(target_sender_tls(
                         addr, tls_params, phase_name, rx, m, sd, framing,

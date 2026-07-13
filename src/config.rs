@@ -30,6 +30,21 @@ pub struct TargetConfig {
     /// отключить проверку имени). По умолчанию false — сертификаты проверяются.
     #[serde(default)]
     pub tls_insecure: bool,
+    /// N4.mTLS (v8.7.2): путь к клиентскому PEM-сертификату для mTLS.
+    /// Если задан, TLS-handshake предъявляет этот сертификат серверу.
+    /// Парный файл — `tls_client_key_file`. None → клиент не предъявляет
+    /// сертификат (one-way TLS). Игнорируется для не-TLS.
+    #[serde(default)]
+    pub tls_client_cert_file: Option<String>,
+    /// N4.mTLS: путь к клиентскому PEM-ключу. Должен соответствовать
+    /// сертификату из `tls_client_cert_file`. PEM-формат PKCS#8.
+    #[serde(default)]
+    pub tls_client_key_file: Option<String>,
+    /// N4.mTLS: минимальная допустимая версия TLS-протокола. Принимает
+    /// "1.2" или "1.3" (по умолчанию — системная, обычно 1.0). Защита от
+    /// downgrade-attack на устаревшие версии.
+    #[serde(default)]
+    pub tls_min_protocol_version: Option<String>,
 }
 /// Ручной `Default`, согласованный с serde-дефолтами: connections=1, weight=1,
 /// framing="non-transparent". Это важно, чтобы `TargetConfig::default()` в коде
@@ -45,6 +60,9 @@ impl Default for TargetConfig {
             tls_domain: None,
             tls_ca_file: None,
             tls_insecure: false,
+            tls_client_cert_file: None,
+            tls_client_key_file: None,
+            tls_min_protocol_version: None,
         }
     }
 }

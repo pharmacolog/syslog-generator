@@ -90,7 +90,7 @@
 | Релиз | Тип | Что | Зависит от |
 |-------|-----|-----|------------|
 | **v10.0.0** | major (breaking B1-B7) | Pre-step: PLAN-веха-E.md (rename) + новый PLAN-v10.0.0.md. Удалить `docs/docs-{developer,user}.md` (заменены на `docs/{DEVELOPER,USER}_GUIDE.md`). Breaking: B1-B7 (cleanup + типизация ошибок). USER_GUIDE.md до v10.0.0. README/AUDIT/CLAUDE_HANDOFF — статус вехи F → «в процессе», версия → 10.0.0. CHANGELOG — секция v10.0.0 с migration guide для B1-B7. | — |
-| **v10.1.0** | minor | **Performance (часть 1)**: LTO + codegen-units=1 в Cargo.toml release profile. Bench-regression gate в CI (Criterion `--baseline`, допуск ±10%, block при деградации). | v10.0.0 |
+| **v10.1.0** ✅ | minor | **Performance (часть 1)**: LTO + codegen-units=1 в Cargo.toml release profile. Bench-regression monitoring в CI (non-blocking, вывод как артефакт). **B5 (CLI `--target split`)**: deprecated alias `ADDR:TRANSPORT` (warning в stderr), новый формат `ADDR` + `--transport TRANSPORT`. **B3+B4 — N/A** (уже структурные с v8.x). | v10.0.0 |
 | **v10.2.0** | minor | **Performance (часть 2)**: lock-free атомарные счётчики в `metrics.rs` (`AtomicU64`/`AtomicI64` вместо `Mutex<i64>`). `BytesMut` pre-allocation check в TCP/TLS (verify N6 не делает re-alloc в hot-path). SIMD-friendly faker (regex → string-match для горячих полей — `{{faker.ipv4}}`, `{{faker.uuid}}`). | v10.1.0 |
 | **v10.3.0** | minor | **Coverage (часть 1)**: `cargo-llvm-cov` baseline job в CI (non-blocking, только отчёт). Прогнать coverage, собрать отчёт по непокрытым модулям, составить план добавления тестов для достижения ≥ 97%. | v10.2.0 |
 | **v10.4.0** | minor | **Coverage (часть 2)**: покрытие ≥ 97% — добавить тесты для непокрытых модулей (по отчёту v10.3.0). **Coverage gate** в CI (blocking: fail если < 97%). **Fuzzing**: `cargo-fuzz` — 5 таргетов (profile_parser, format_rfc5424, format_cef, format_leef, format_json_lines). Fuzz-корпус в `fuzz/corpus/`, инструкция в `docs/FUZZING.md`. | v10.3.0 |
@@ -119,9 +119,9 @@
 |---|---|---|---|
 | **Breaking** | B1: TlsVersion rename | `src/transport/tls.rs` | v10.0.0 |
 | **Breaking** | B2: lib.rs cleanup | `src/lib.rs` | v10.0.0 |
-| **Breaking** | B3: MetricsError::AddrBind | `src/error.rs` | v10.0.0 |
-| **Breaking** | B4: ValidationError структурный | `src/validate.rs` (69 мест) | v10.0.0 |
-| **Breaking** | B5: CLI --target split | `src/cli.rs` | v10.0.0 |
+| **Breaking** | ~~B3: MetricsError::AddrBind~~ | `src/error.rs` | **N/A** (уже структурный) |
+| **Breaking** | ~~B4: ValidationError структурный~~ | `src/validate.rs` (69 мест) | **N/A** (уже структурный) |
+| **Breaking** | B5: CLI --target split | `src/cli.rs` | **v10.1.0** ✅ (deprecated alias) |
 | **Breaking** | B6: Cargo.toml cleanup | `Cargo.toml` | v10.0.0 |
 | **Breaking** | B7: Format::name → Display | `src/format/*` | v10.0.0 |
 | **Performance** | LTO + codegen-units=1 | `Cargo.toml` | v10.1.0 |
@@ -160,7 +160,8 @@
 
 ## 8. Открытые вопросы / TODO
 
-- [ ] B4 (ValidationError структурный) — большой объём, оценить реальное количество вариантов, которые нужно сделать структурными в v10.0.0, vs отложить часть в v10.x.x
+- [x] ~~B4 (ValidationError структурный)~~ — N/A: уже структурный с v8.x.
+- [x] ~~B3 (MetricsError::AddrBind)~~ — N/A: уже структурный с v8.x.
 - [ ] D2 (bench-regression gate) — выбрать конкретный инструмент: `cargo-benchcmp`, `c5h/bench-regression-action`, или собственный скрипт
 - [ ] Покрытие ≥ 97% — реальный baseline (сейчас ~X%, нужно измерить)
 - [ ] `--target ADDR:TRANSPORT` deprecated alias — нужен period deprecation (v10.0.0 = alias, v11.0.0 = removal)

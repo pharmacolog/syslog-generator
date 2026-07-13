@@ -94,6 +94,23 @@ jobs:
         # (результаты зависят от железа runner'а и не сравнимы).
         run: cargo bench --no-run --locked
 
+      - name: Bench quick (monitoring, non-blocking)
+        # v10.1.0: запуск benches на каждом PR для мониторинга производительности.
+        # НЕ блокирующий — ревьюер смотрит результаты и принимает решение.
+        # Полноценный bench-regression gate с persistent baseline запланирован
+        # в v10.5.0 (CI расширение — cargo-benchcmp или c5h/bench-regression-action).
+        # Допуск по контракту v9.6.0 §11: ±10% relative throughput.
+        continue-on-error: true
+        run: cargo bench --locked -- --quick 2>&1 | tee bench-output.txt
+
+      - name: Upload bench output (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-output-${{ matrix.os }}
+          path: bench-output.txt
+          if-no-files-found: ignore
+
       - name: Validate examples against JSON Schema (D3, v8.5.0)
         # D3: каждый профиль-пример в examples/ (json/yaml/yml) должен
         # проходить и F13-семантическую валидацию, и формальную JSON Schema

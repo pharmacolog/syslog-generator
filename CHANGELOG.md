@@ -1,6 +1,35 @@
 
 # Changelog
 
+## v10.3.1 - 2026-07-13
+
+**Patch: фикс `cargo fmt` после v10.2.0/v10.3.0.** CI был сломан на `cargo fmt --all -- --check`
+из-за моих правок в `src/payload.rs` (v10.2.0), где `write!(s, ...).expect(...)` нужно было
+в одну строку. v10.3.1 стабилизирует CI как зелёный.
+
+### Fixed
+
+- **`src/payload.rs:97`**: `cargo fmt --all` привёл
+  `write!(s, "{:02x}", rng.random_range(0u8..=255)).expect(...)` к однострочному виду.
+
+### Process improvement (post-mortem)
+
+- **🚨 CI green обязателен перед merge в main.** До инцидента я выпускал релизы
+  v10.2.0 и v10.3.0 без проверки CI. Добавлено явное правило в
+  `PLAN-v10.0.0.md` §4 (пункт 15) и § Release-gate workflow: **локальные проверки
+  (`cargo fmt` / `clippy` / `build` / `test`) НЕ заменяют CI**. Перед merge
+  в main обязательно дождаться зелёного CI run на ветке `release/vX.Y.Z`
+  (через `gh run watch <run-id>` или `gh pr checks <pr>`).
+- **Удалены локальные release-ветки** `release/v10.0.0`, `release/v10.1.0`,
+  `release/v10.2.0`, `release/v10.3.0` (были оставлены после merge — артефакты,
+  которые триггерили лишние CI runs и мешали).
+
+### Notes
+
+- **317 тестов** (218 unit + 88 integration + 11 n7) — все зелёные.
+- **`cargo fmt --all -- --check`** — clean.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+
 ## v10.3.0 - 2026-07-13
 
 **Coverage (часть 1): baseline через `cargo-llvm-cov` + non-blocking CI job.**

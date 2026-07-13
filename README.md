@@ -2,13 +2,13 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v10.0.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v10.1.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
 
 **Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)
 ЗАКРЫТА в v9.6.0 (N12 Docker). v10.0.0 — старт вехи F с breaking cleanup.
 Release-train вехи F (8 релизов, v10.0.0 → v10.7.0):
-v10.0.0 (breaking B1+B2+B6+B7), v10.1.0 (Performance ч.1: LTO, bench-regression gate),
+**v10.0.0** (breaking B1+B2+B6+B7), **v10.1.0** (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias),
 v10.2.0 (Performance ч.2: lock-free atomics, BytesMut pre-alloc),
 v10.3.0 (Coverage ч.1: cargo-llvm-cov baseline),
 v10.4.0 (Coverage ч.2: ≥ 97% gate + fuzzing),

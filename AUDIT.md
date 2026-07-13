@@ -2,20 +2,20 @@
 
 Дата аудита: 2026-07-11. Базис аудита: реальный компилируемый код v7.4.0 (проверен `cargo build/test/bench/clippy`), документация (`README.md`, `docs/`, `examples/`, `REVIEW.md`), Grafana-дашборд.
 
-> **Статус на v10.0.0 (2026-07-13):** вехи A, B, C, D, E закрыты полностью.
+> **Статус на v10.1.0 (2026-07-13):** вехи A, B, C, D, E закрыты полностью.
 > **Веха E (P2 «Зрелость») ЗАКРЫТА — v9.6.0.** Сделанные релизы вехи E:
 > v9.1.0 (N10, trait Format/Transport), v9.2.0 (F15, CEF/LEEF/JSON-lines),
 > **v9.3.0 (F16, Kafka/Redpanda + файловая ротация + exponential backoff reconnect)**,
 > v9.5.0 (N4.cipher_policy + rustls миграция, BREAKING), v9.5.1 (F17, сценарии
 > аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0),
 > **v9.6.0 (N12, Docker/musl/docker-compose — закрытие вехи E)**.
-> **Веха F (P3 «Production-hardened») в процессе — v10.0.0.** Старт с breaking
-> cleanup (B1 `TlsVersion::V1_2 → Tls12`, B2 удалён `pub use self::protobuf`,
-> B6 `rust-version = "1.95"` + удалён `rcgen`, B7 `Format::name → Display`).
-> B3+B4+B5 перенесены в v10.1.0. PLAN split: `PLAN-v10.0.0.md` (веха F, 8 релизов)
-> + `PLAN-веха-E.md` (история вехи E).
-> 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные.
-> Следующие релизы: v10.1.0–v10.7.0 (perf + coverage + CI + usability).
+> **Веха F (P3 «Production-hardened») в процессе — v10.1.0.** Сделано:
+> v10.0.0 (breaking cleanup: B1, B2, B6, B7), v10.1.0 (Performance ч.1: LTO +
+> codegen-units=1, bench-regression monitoring в CI, breaking B5 CLI `--target split`
+> с deprecated alias). B3+B4 — N/A (уже структурные с v8.x).
+> 317 тестов (218 unit + 88 integration + 11 n7) — все зелёные.
+> Следующие релизы: v10.2.0 (perf ч.2), v10.3.0–v10.4.0 (coverage), v10.5.0 (CI),
+> v10.6.0–v10.7.0 (usability + закрытие вехи F).
 > Ранее отложенные опциональные задачи A/B/C (F5 regex, F6 корреляции,
 > F10 честный protobuf, N3 метрики) закрыты в v8.0.0.
 > Разделы 1–2 ниже описывают исходное
@@ -253,7 +253,7 @@ for seq in 1..=total { ... }
 3. **Веха C — «Вариативный пейлоад» (P0 F4–F6, F14): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** ГПСЧ+seed (F4, v7.9.0), богатый faker-набор + типы полей + **regex** (F5), распределения uniform/weighted/zipf + паддинг + **межполевые корреляции** (F6), мультишаблоны с весами (F14). Ранее отложенные `regex` и корреляции реализованы в v8.0.0. Закрывает «глубокую кастомизацию» пейлоада без остаточных задач.
 4. **Веха D — «Продакшн-готовность» (P1): ✅ ЗАКРЫТА (v8.8.0, последний patch — v8.8.1 с правками AUDIT.md).** Все P1-задачи выполнены: CLI (F11), валидация профиля (F13), типизированные ошибки валидации (`ValidationError` через `thiserror`), **HTTP-эндпоинт /metrics (F12)**, **безопасный TLS по умолчанию (N4)**, **типизированные ошибки рантайма (N7)**, починка TLS-тестов (v8.3.1), **CI-пайплайн GitHub Actions (N9)**, починка регрессии бенчмарков (v8.4.1), **JSON Schema + YAML-ввод (D3)**, **синхронизация Grafana-дашборда (N2)**, **CompiledTemplate/N5 (v8.6.1)**, **round-trip RFC 5424/N8 (v8.6.1)**, **документация/N11 (v8.6.1)**, **zero-copy/буферизация (N6, v8.7.0)**, **property-based тесты (N8, v8.7.1)**, **mTLS + min_protocol (N4.mTLS, v8.7.2)**, **рефакторинг слоёв format/transport/observability/generator (N10, v8.8.0)**. v8.8.1 — правки AUDIT.md (поставить ✅ на F7/F8/F9, убрать "Отложено" из F13/N4). v9.0.0 — milestone release без breaking changes (семантический маркер закрытия вехи D). Потом веха E (P2).
 5. **Веха E — «Зрелость» (P2): ✅ ЗАКРЫТА (v9.6.0).** Все P2-задачи выполнены: trait Format + Transport (N10, v9.1.0), CEF/LEEF/JSON-lines (F15, v9.2.0), Kafka/Redpanda transport через `rskafka` opt-in + файловая ротация + exponential backoff reconnect (F16, v9.3.0), сценарии аномалий нагрузки: burst-injection/slow-drip/packet-loss (F17, v9.5.1), **cipher_policy + миграция native-tls → rustls (N4.cipher_policy, v9.5.0, BREAKING)**, **Docker/musl/docker-compose с multi-arch CI build (N12, v9.6.0 — закрытие вехи E)**. 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные.
-6. **Веха F — «Production-hardened» (P3): 🟡 В ПРОЦЕССЕ (v10.0.0).** Цель: оптимизация производительности, расширенный CI, покрытие ≥ 97%, юзабилити-полировка. 8 релизов (v10.0.0 → v10.7.0). v10.0.0 = старт с breaking cleanup (B1+B2+B6+B7; B3+B4+B5 в v10.1.0). Подробный план в `PLAN-v10.0.0.md`.
+6. **Веха F — «Production-hardened» (P3): 🟡 В ПРОЦЕССЕ (v10.1.0).** Цель: оптимизация производительности, расширенный CI, покрытие ≥ 97%, юзабилити-полировка. 8 релизов (v10.0.0 → v10.7.0). Сделано: v10.0.0 (breaking cleanup B1+B2+B6+B7), v10.1.0 (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias). B3+B4 — N/A (уже структурные с v8.x). Подробный план в `PLAN-v10.0.0.md`.
 
 Каждая веха завершается compile-verified релизом с обновлением `CHANGELOG.md` и документации (как в текущем процессе v7.4.0).
 

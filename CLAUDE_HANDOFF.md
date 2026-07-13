@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v10.0.0** (compile-verified, начало вехи F «Production-hardened» с breaking changes B1+B2+B6+B7; B3+B4+B5 перенесены в v10.1.0).
+Дата: 2026-07-13. Текущая версия: **v10.1.0** (compile-verified, Performance ч.1: LTO + codegen-units=1, bench-regression monitoring в CI; breaking B5 CLI `--target split` с deprecated alias. B3+B4 — N/A, уже структурные с v8.x).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -205,7 +205,8 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v9.1.0** — N10 trait Format + TransportKind (dyn-dispatch, async fn в trait). 0 breaking changes. Подготовка к F15 (CEF/LEEF/JSON-lines) и F16 (Kafka/Redpanda).
 - **v9.5.1** — F17 сценарии аномалий: tagged enum `AnomalyKind` (BurstInjection, SlowDrip, PacketLoss), `Phase.anomalies`, `AnomalyPlanner`, метрики `syslog_anomalies_applied_total`/`syslog_anomalies_dropped_total`, валидация F13 (6 новых `ValidationError`), JSON Schema `Anomaly`. 0 breaking changes относительно v9.5.0 (patch поверх N4.cipher_policy + rustls миграции). 21 новый тест.
 - **v9.6.0** — N12 Docker/musl/docker-compose: multi-stage `Dockerfile` (distroless/cc-debian12, ~25 MB), `.dockerignore`, `docker-compose.yml` (syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf`, `docker/prometheus.yml`, `examples/profile-docker.yaml`, `.github/workflows/docker.yml` (multi-arch linux/amd64 + linux/arm64, push в ghcr.io). В составе release-train: N4.cipher_policy + rustls миграция (BREAKING), F17 (anomalies), F16 (Kafka через `rskafka` opt-in feature + файловая ротация + exponential backoff reconnect), hotfix `mtls_cipher_policy.json`, CI-фиксы (flaky tests). 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные. **Веха E «Зрелость» ЗАКРЫТА.**
-- **v10.0.0** — Веха F «Production-hardened» старт: breaking B1 (`TlsVersion::V1_2 → Tls12`), B2 (удалён `pub use self::protobuf::*`), B6 (`rust-version = "1.95"`, удалён `rcgen`), B7 (`Format::name()` → `Display`). B3 (MetricsError структурный), B4 (ValidationError структурный), B5 (CLI `--target split`) перенесены в v10.1.0. PLAN split: `PLAN-v10.0.0.md` (веха F, 8 релизов) + `PLAN-веха-E.md` (история вехи E). Cleanup docs: удалены redirect-stub'ы `docs/docs-{developer,user}.md`. 314 тестов — все зелёные. ← текущая.
+- **v10.0.0** — Веха F «Production-hardened» старт: breaking B1 (`TlsVersion::V1_2 → Tls12`), B2 (удалён `pub use self::protobuf::*`), B6 (`rust-version = "1.95"`, удалён `rcgen`), B7 (`Format::name()` → `Display`). B3 (MetricsError структурный), B4 (ValidationError структурный), B5 (CLI `--target split`) перенесены в v10.1.0. PLAN split: `PLAN-v10.0.0.md` (веха F, 8 релизов) + `PLAN-веха-E.md` (история вехи E). Cleanup docs: удалены redirect-stub'ы `docs/docs-{developer,user}.md`. 314 тестов — все зелёные.
+- **v10.1.0** — Performance ч.1: `lto = "fat"` + `codegen-units = 1` в Cargo.toml release profile (5-15% throughput gain). Bench-regression monitoring в CI (non-blocking, `cargo bench -- --quick` с выводом в артефакт `bench-output-${{ matrix.os }}`). Breaking B5 (CLI `--target split`): deprecated alias `ADDR:TRANSPORT` (warning в stderr), новый формат `-t ADDR --transport TRANSPORT`. Полный deprecation в v11.0.0. **B3+B4 — N/A**: `MetricsError`/`ValidationError` уже структурные с v8.x. 317 тестов (218 unit + 88 integration + 11 n7) — все зелёные. ← текущая.
 
 ---
 
@@ -244,8 +245,8 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v10.0.0. **Веха F («Production-hardened») в процессе.** Сделанные релизы: вехи A/B/C/D (v8.0.0, v9.0.0) + вехи E (v9.1.0-v9.6.0) + **v10.0.0** (старт вехи F с breaking B1+B2+B6+B7). Следующие релизы вехи F: v10.1.0 (perf ч.1), v10.2.0 (perf ч.2), v10.3.0 (cov ч.1), v10.4.0 (cov ч.2), v10.5.0 (CI), v10.6.0 (usability ч.1), v10.7.0 (usability ч.2 + закрытие вехи F). План в `PLAN-v10.0.0.md` (8 релизов с контрактом приёмки из 21 пункта). История вехи E в `PLAN-веха-E.md`.
-Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Все P2-задачи вехи E (N10/F15/F16/F17/N4.cipher_policy/N12) выполнены. Сделанная часть вехи F: v10.0.0 (breaking cleanup, см. CHANGELOG). Оставшиеся: v10.1.0-v10.7.0 (perf + coverage + CI + usability).
+Текущее состояние: версия v10.1.0. **Веха F («Production-hardened») в процессе.** Сделанные релизы: вехи A/B/C/D (v8.0.0, v9.0.0) + вехи E (v9.1.0-v9.6.0) + **v10.0.0 + v10.1.0** (старт вехи F: breaking cleanup + Performance ч.1 + CLI split). Следующие релизы вехи F: v10.2.0 (perf ч.2), v10.3.0 (cov ч.1), v10.4.0 (cov ч.2), v10.5.0 (CI), v10.6.0 (usability ч.1), v10.7.0 (usability ч.2 + закрытие вехи F). План в `PLAN-v10.0.0.md` (8 релизов с контрактом приёмки из 21 пункта). История вехи E в `PLAN-веха-E.md`.
+Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Все P2-задачи вехи E (N10/F15/F16/F17/N4.cipher_policy/N12) выполнены. Сделанная часть вехи F: v10.0.0 (breaking cleanup), v10.1.0 (Performance ч.1 + B5 CLI split). Оставшиеся: v10.2.0-v10.7.0.
 
 Задача на эту сессию: возьми задачу вехи E — F15 (дополнительные форматы для SIEM)
 реализовать форматы CEF (ArcSight Common Event Format), LEEF (IBM QRadar)

@@ -2,27 +2,28 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v9.4.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v9.5.1-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
 **Веха E (P2 «Зрелость») в процессе.** v9.0.0 закрыл веху D. v9.1.0 — N10
-(trait Format + TransportKind + static dispatch), v9.4.0 — F17 (сценарии
-аномалий: burst-injection, slow-drip, packet-loss). Следующие: v9.5.0
-(N4.cipher_policy), v9.6.0 (N12: Docker). Модульная архитектура с реальным multi-target
+(trait Format + TransportKind + static dispatch), v9.2.0 — F15 (CEF/LEEF/JSON-lines),
+v9.5.0 — N4.cipher_policy + rustls миграция (BREAKING), v9.5.1 — F17 (сценарии
+аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0).
+Следующие: v9.6.0 (N12: Docker). Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
-`native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
+`rustls` / `tokio-rustls` (v9.5.0+), mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
 
-**v9.4.0 (F17):** сценарии аномалий нагрузки — `burst-injection` (×M каждые
+**v9.5.1 (F17):** сценарии аномалий нагрузки — `burst-injection` (×M каждые
 `interval_secs` в течение `duration_secs`), `slow-drip` (÷D первые
 `duration_secs`), `packet-loss` (дроп до отправки с вероятностью
 `loss_percent`). `Phase.anomalies: Option<Vec<Anomaly>>` (`#[serde(default)]`).
 Метрики `syslog_anomalies_applied_total{phase,type}` +
 `syslog_anomalies_dropped_total{phase,type}`. Пример:
-`examples/profile-f17-anomalies.yaml`. 0 breaking changes.
+`examples/profile-f17-anomalies.yaml`. 0 breaking changes относительно v9.5.0.
 
 **v9.1.0:** trait `Format` + `enum FormatKind` (dyn-dispatch) и trait
 `Transport` + `enum TransportKind` — инфраструктура для F15/F16

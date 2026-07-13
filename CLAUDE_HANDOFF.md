@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v9.4.0** (compile-verified, F17 сценарии аномалий — третий релиз вехи E «Зрелость»).
+Дата: 2026-07-13. Текущая версия: **v9.5.1** (compile-verified, F17 сценарии аномалий — patch поверх v9.5.0 N4.cipher_policy, веха E «Зрелость»).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -199,7 +199,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v8.8.1** — patch-долг: правки `AUDIT.md` (поставлены ✅ на F7/F8/F9, убраны устаревшие пометки «Отложено» из F13 и N4). Код без изменений. ← текущая.
 - **v9.0.0** — milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА. Major-бамп без breaking changes (0 изменений в API). Публичный API полностью backward-compatible.
 - **v9.1.0** — N10 trait Format + TransportKind (dyn-dispatch, async fn в trait). 0 breaking changes. Подготовка к F15 (CEF/LEEF/JSON-lines) и F16 (Kafka/Redpanda).
-- **v9.4.0** — F17 сценарии аномалий: tagged enum `AnomalyKind` (BurstInjection, SlowDrip, PacketLoss), `Phase.anomalies`, `AnomalyPlanner`, метрики `syslog_anomalies_applied_total`/`syslog_anomalies_dropped_total`, валидация F13 (6 новых `ValidationError`), JSON Schema `Anomaly`. 0 breaking changes. 21 новый тест. ← текущая.
+- **v9.5.1** — F17 сценарии аномалий: tagged enum `AnomalyKind` (BurstInjection, SlowDrip, PacketLoss), `Phase.anomalies`, `AnomalyPlanner`, метрики `syslog_anomalies_applied_total`/`syslog_anomalies_dropped_total`, валидация F13 (6 новых `ValidationError`), JSON Schema `Anomaly`. 0 breaking changes относительно v9.5.0 (patch поверх N4.cipher_policy + rustls миграции). 21 новый тест. ← текущая.
 
 ---
 
@@ -238,11 +238,11 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v9.4.0. **Веха E («Зрелость») в процессе** — N10 (v9.1.0) сделано (trait Format/TransportKind), F17 (v9.4.0) сделано (сценарии аномалий: burst-injection, slow-drip, packet-loss). Следующая v9.5.0 (N4.cipher_policy), v9.6.0 (N12 Docker). План в `PLAN-v10.0.0.md`. CI полностью функционален.
+Текущее состояние: версия v9.5.1. **Веха E («Зрелость») в процессе** — N10 (v9.1.0) сделано (trait Format/TransportKind), F15 (v9.2.0) сделано (CEF/LEEF/JSON-lines), N4.cipher_policy + rustls миграция (v9.5.0, BREAKING), F17 (v9.5.1) сделано (сценарии аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0). Следующая v9.6.0 (N12 Docker). План в `PLAN-v10.0.0.md`. CI полностью функционален.
 Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Сделанные задачи вехи E (P2):
-N10 (v9.1.0), F17 (v9.4.0). Оставшиеся: F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda/
-файловая ротация/reconnect-стратегия), N4.cipher_policy, N12 (Docker/musl/docker-compose).
-Рекомендуется стартовать с F15 (форматы) или F16 (Kafka) — это самое полезное для SIEM-сценариев.
+N10 (v9.1.0), F15 (v9.2.0), N4.cipher_policy (v9.5.0), F17 (v9.5.1). Оставшиеся: F16 (Kafka/Redpanda/
+файловая ротация/reconnect-стратегия), N12 (Docker/musl/docker-compose).
+Рекомендуется стартовать с F16 (Kafka) — это следующий крупный релиз вехи E.
 
 Задача на эту сессию: возьми задачу вехи E — F15 (дополнительные форматы для SIEM)
 реализовать форматы CEF (ArcSight Common Event Format), LEEF (IBM QRadar)

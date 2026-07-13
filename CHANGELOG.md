@@ -72,14 +72,24 @@ MITRE ATT&CK-подобных последовательностей. Patch-ре
   - JSON Schema принимает/отклоняет по anomalies
 
 ### Notes
-- **0 breaking changes**: новый optional-поле `Phase.anomalies` со
-  serde-дефолтом; добавлены новые публичные типы (`Anomaly`,
-  `AnomalyKind`, `AnomalyPlanner`).
-- **180 тестов** (161 unit + 69 integration + 11 N7 = 241; из них
-  13 новых unit + 8 новых integration = 21 новый) — все зелёные.
+- **0 breaking changes** относительно v9.5.0: новый optional-поле
+  `Phase.anomalies` со serde-дефолтом; добавлены новые публичные типы
+  (`Anomaly`, `AnomalyKind`, `AnomalyPlanner`).
+- **288 тестов** (196 unit + 81 integration + 11 N7) — все зелёные.
+  На feature-ветке до merge с v9.5.0 было 241 (161 + 69 + 11), на
+  v9.5.0-ветке было 270 (186 + 73 + 11). После merge origin/dev →
+  feature/v9.4.0-f17 → v9.5.1 получили 288 (196 + 81 + 11).
+  С F17 добавлено 21 новый тест (13 unit anomaly + 2 metrics + 8 validate
+  unit + 8 integration; часть пересекается с F15/N4).
 - **9 бенчей** (3 + 6) — все зелёные (cargo bench --quick).
 - `cargo clippy --all-targets -- -D warnings` — чисто.
 - `cargo fmt --all -- --check` — clean.
+- Gitflow: feature/v9.4.0-f17 → dev через 2 merge-коммита
+  (sync after F15 v9.2.0, sync with v9.5.0 rustls breaking). F17
+  влит в dev как patch (v9.5.1), а не minor (v9.4.0) — потому что
+  release-train v9.5.0 (N4.cipher_policy) уже был на dev к моменту
+  готовности F17. Конфликты при merge (8 файлов при первом sync,
+  6 файлов при втором) разрешены вручную, ~14 конфликт-блоков.
 
 Следующие релизы вехи E: v9.6.0 (N12: Docker/musl/docker-compose).
 

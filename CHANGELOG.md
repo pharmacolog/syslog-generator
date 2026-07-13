@@ -1,6 +1,35 @@
 
 # Changelog
 
+## v10.4.2 - 2026-07-13
+
+**Patch: кэширование тестового сертификата в `make_test_cert` (фикс 2 flaky TLS mTLS тестов).**
+
+CI на main выявил 2 flaky TLS mTLS теста:
+- `test_n4_mtls_build_connector_with_client_identity` — `KeyMismatch`
+- `test_n4_mtls_build_connector_with_min_protocol_tls13` — `build_tls_connector(...).is_ok()` failed
+
+**Root cause:** `make_test_cert()` генерировал новый RSA-ключ через `openssl req`
+при каждом вызове. openssl встраивает timestamp/nonce в ключ, поэтому каждый
+вызов возвращал разные PEM-блобы. На разных CI runner'ах rustls парсил их с
+flaky-результатом (`KeyMismatch`).
+
+**Fix:** кэширование через `OnceLock<(Vec<u8>, Vec<u8>)>` — тот же подход что
+в `openssl_self_signed()`. Тестовый сертификат генерируется один раз и
+переиспользуется во всех 5 `test_n4_mtls_*` тестах.
+
+### Fixed
+
+- **`tests/integration_tests.rs::make_test_cert`**: кэширование через
+  `OnceLock` — flaky-fix для 2 TLS mTLS тестов.
+
+### Notes
+
+- **5 mTLS тестов** (3 прогона подряд): все **passed / 0 failed**.
+- **339 тестов** (240 unit + 88 integration + 11 n7) — все зелёные.
+- **Coverage baseline** на CI: `success` (`cargo-llvm-cov` через
+  `taiki-e/install-action@v2`).
+
 ## v10.4.1 - 2026-07-13
 
 **Patch: расширение допусков для 3 flaky time-sensitive тестов.**

@@ -2059,37 +2059,49 @@ fn test_d3_all_examples_pass_schema() {
 /// native-tls 0.2 на текущем окружении (OpenSSL 3.6.1) корректно парсит
 /// PEM только от openssl CLI, не от rcgen 0.13 (см. PLAN-v9.0.0.md,
 /// зафиксировано в v8.3.1).
+///
+/// v10.4.2: кэширование через `OnceLock` — openssl req генерирует
+/// ключи с timestamp/nonce, поэтому каждый вызов make_test_cert() давал
+/// разные PEM-блобы. На некоторых CI runner'ах rustls парсил их с
+/// `KeyMismatch` (flaky). Кэшируем один раз и переиспользуем во всех
+/// тестах `test_n4_mtls_*` — тот же подход что в `openssl_self_signed`.
 fn make_test_cert() -> (Vec<u8>, Vec<u8>) {
     use std::process::Command;
-    let dir = std::env::temp_dir().join("sg_test_n4_mtls");
-    std::fs::create_dir_all(&dir).unwrap();
-    let cert_path = dir.join("client.pem");
-    let key_path = dir.join("client.key");
-    let status = Command::new("openssl")
-        .args([
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-nodes",
-            "-keyout",
-            key_path.to_str().unwrap(),
-            "-out",
-            cert_path.to_str().unwrap(),
-            "-days",
-            "36500",
-            "-subj",
-            "/CN=client",
-        ])
-        .status()
-        .expect("не удалось запустить openssl (проверьте, что openssl в PATH)");
-    assert!(
-        status.success(),
-        "openssl req завершился с ошибкой: {status:?}"
-    );
-    let cert_pem = fs::read(&cert_path).unwrap();
-    let key_pem = fs::read(&key_path).unwrap();
-    (cert_pem, key_pem)
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<(Vec<u8>, Vec<u8>)> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let dir = std::env::temp_dir().join("sg_test_n4_mtls");
+            std::fs::create_dir_all(&dir).unwrap();
+            let cert_path = dir.join("client.pem");
+            let key_path = dir.join("client.key");
+            let status = Command::new("openssl")
+                .args([
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-nodes",
+                    "-keyout",
+                    key_path.to_str().unwrap(),
+                    "-out",
+                    cert_path.to_str().unwrap(),
+                    "-days",
+                    "36500",
+                    "-subj",
+                    "/CN=client",
+                ])
+                .status()
+                .expect("не удалось запустить openssl (проверьте, что openssl в PATH)");
+            assert!(
+                status.success(),
+                "openssl req завершился с ошибкой: {status:?}"
+            );
+            let cert_pem = fs::read(&cert_path).unwrap();
+            let key_pem = fs::read(&key_path).unwrap();
+            (cert_pem, key_pem)
+        })
+        .clone()
 }
 
 /// N4.mTLS: проверка что `parse_tls_min_version` принимает ровно "1.2"

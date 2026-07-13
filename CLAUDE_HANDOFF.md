@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v10.4.1** (compile-verified, patch-fix 3 flaky time-sensitive тестов: `linear_ramp_volume` 150..=340 → 130..=380, `burst_injection_increases_volume` >250 → >220, `slow_drip_decreases_volume` >80 → >70. Release-gate возвращён после восстановления CI. v10.4.0 = Coverage 87.07% + cargo-fuzz с 5 таргетами).
+Дата: 2026-07-13. Текущая версия: **v10.4.2** (compile-verified, patch-fix 2 flaky TLS mTLS тестов через `OnceLock`-кэширование `make_test_cert`. Release-gate возвращён после восстановления CI: `cargo-llvm-cov` через `taiki-e/install-action@v2` работает. v10.4.1 = flaky-fix time-sensitive тестов. v10.4.0 = Coverage 87.07% + cargo-fuzz).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

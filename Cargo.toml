@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "9.2.0"
+version = "9.5.0"
 edition = "2021"
 
 [dependencies]
@@ -14,8 +14,16 @@ serde_json = "1"
 serde_yaml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "io-util", "fs"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-native-tls = "0.2"
-tokio-native-tls = "0.3"
+# N4.cipher_policy (v9.5.0): миграция native-tls → rustls.
+# Обоснование: native-tls использует SChannel (Windows) / Secure Transport
+# (macOS) / OpenSSL (Linux); set_cipher_list доступен только через OpenSSL
+# (Linux-only). rustls — pure Rust, кросс-платформенный, поддерживает
+# явный выбор cipher_suites через ClientConfig::with_cipher_suites().
+# Это **breaking change** в публичном API транспорта (см. CHANGELOG).
+rustls = { version = "0.23", default-features = false, features = ["std", "logging", "tls12", "ring"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+webpki-roots = "0.26"
 rcgen = "0.13"
 governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

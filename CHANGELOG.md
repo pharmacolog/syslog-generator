@@ -1,6 +1,109 @@
 
 # Changelog
 
+## v9.5.0 - 2026-07-13
+
+**N4.cipher_policy: миграция `native-tls → rustls` + выбор cipher suites.**
+
+### ⚠ BREAKING CHANGES
+
+v9.5.0 вводит **breaking changes** в публичном API транспорта TLS
+(зафиксировано как решение D2 в PLAN §3.5). Это первый breaking release
+с момента v8.0 — все остальные релизы v8.x/v9.0-v9.4 сохраняли
+backward-compat.
+
+| Что | Было (v9.4.0) | Стало (v9.5.0) | Миграция |
+|---|---|---|---|
+| TLS-крейт | `native-tls` + `tokio-native-tls` | `rustls` + `tokio-rustls` + `rustls-pemfile` + `webpki-roots` | Автоматическая — внешний API профиля не изменился |
+| `TlsParams::min_protocol` | `Option<native_tls::Protocol>` | `Option<TlsVersion>` (наш enum) | `native_tls::Protocol::Tlsv12` → `TlsVersion::V1_2` |
+| `parse_tls_min_version` return type | `Result<native_tls::Protocol, String>` | `Result<TlsVersion, String>` | Если вызывали напрямую — замените |
+| `build_tls_connector` return type | `tokio_native_tls::TlsConnector` | `Arc<rustls::ClientConfig>` | Тип возврата другой; внутренние пользователи должны использовать `TlsConnector::from(config)` |
+| `tls_connect` return type | `TlsStream<TcpStream>` (native-tls) | `TlsStream<TcpStream>` (tokio-rustls) | Совместимо по имени, но тип другой |
+| `tls_insecure=true` | native-tls `danger_accept_invalid_*` | rustls `NoCertVerifier` | Семантика сохранена |
+| Поддержка macOS/Windows TLS | SecureTransport / SChannel | rustls (кросс-платформенный) | Поведение unified |
+| `set_cipher_list` | Только Linux (OpenSSL-бэкенд) | Кросс-платформенно через `tls_cipher_suites` | Новое поле в `TargetConfig` |
+
+### Обоснование
+
+`native-tls` использует системный TLS-стек (SChannel/SecureTransport/OpenSSL).
+Прямое управление cipher suites (`set_cipher_list`) доступно только через
+OpenSSL-бэкенд — т.е. только на Linux. На macOS и Windows политика cipher_suites
+была недоступна (поле принималось, но игнорировалось с warning). rustls — pure
+Rust, кросс-платформенный, даёт явный выбор cipher suites через
+`ClientConfig::builder_with_provider()` + кастомный `CryptoProvider`.
+
+### Added
+
+- **`tls_cipher_suites: Option<Vec<String>>`** в `TargetConfig` — список IANA-имён
+  cipher suites, ограничивающий набор в TLS-handshake. Примеры:
+  `["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"]`.
+- **`TlsVersion` enum** (`pub`) — `V1_2 | V1_3`. Заменяет `native_tls::Protocol`.
+- **`parse_cipher_suite(name) -> Result<rustls::SupportedCipherSuite, String>`**
+  — парсинг IANA-имени в rustls-suite. Возвращает человеко-читаемую ошибку
+  со списком всех поддерживаемых имён.
+- **`SUPPORTED_CIPHER_SUITE_NAMES`** — публичная константа со списком имён
+  (используется F13-валидацией для сообщений об ошибке).
+- **3 TLS 1.3 suites**: TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256,
+  TLS_CHACHA20_POLY1305_SHA256.
+- **5 TLS 1.2 suites**: TLS_ECDHE_*_WITH_AES_*_GCM_*, TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305.
+- **F13 валидация**: новая ошибка `InvalidCipherSuite` — отвергает неизвестные
+  IANA-имена с подсказкой (список допустимых).
+- **`ensure_rustls_provider()`** — ленивая установка ring crypto provider'а
+  через `std::sync::Once`. Вызывается автоматически из `build_tls_connector`.
+  Публичный wrapper `ensure_rustls_provider_for_tests()` для интеграционных тестов.
+
+### Changed
+- **Cargo.toml**: `native-tls` + `tokio-native-tls` → `rustls` 0.23 (с feature
+  `tls12`, `ring` crypto provider) + `tokio-rustls` 0.26 + `rustls-pemfile` 2 +
+  `webpki-roots` 0.26.
+- **`build_tls_connector`**: переписан под rustls state machine
+  (`builder_with_provider → with_protocol_versions → dangerous().with_custom_certificate_verifier
+  → with_client_auth_cert / with_no_client_auth`).
+- **TLS-handshake по умолчанию** через Mozilla CA bundle (webpki-roots, ~140 CA).
+  Без явного `tls_ca_file` — клиент доверяет публичным CA. С `tls_ca_file` —
+  добавляет CA к корням.
+- **`tls_insecure=true`**: реализован через `NoCertVerifier` (custom
+  `ServerCertVerifier`-impl, принимает любой сертификат).
+
+### Notes
+- **241 тестов** (158 unit + 72 integration + 11 n7) — все зелёные (было 228 в v9.2.0, +13).
+- **6 новых unit-тестов** в `transport/tls.rs::tests` для cipher parsing и connector build.
+- **3 новых интеграционных теста** в `test_n4_cipher_policy_*`:
+  - `test_n4_cipher_policy_validation_rejects_unknown` — F13 валидация.
+  - `test_n4_cipher_policy_validation_accepts_known` — happy path.
+  - `test_n4_cipher_policy_e2e_tls_handshake` — connector строится без ошибок.
+- **2 новых примера**: `examples/cipher_policy_tls13.json` (TLS 1.3 + 3 suites),
+  `examples/mtls_cipher_policy.json` (mTLS + 2 ECDHE suites).
+- **Default protocol versions**: TLS 1.2 + TLS 1.3 (TLS 1.0/1.1 недоступны
+  из-за feature-флага в rustls).
+
+### Migration guide (v9.4.0 → v9.5.0)
+
+Если ваш код использует только профили (YAML/JSON) — **миграция не требуется**:
+поля `tls_min_protocol_version` и `tls_cipher_suites` имеют `#[serde(default)]`,
+существующие профили работают без изменений.
+
+Если вы напрямую используете Rust API:
+
+```rust
+// БЫЛО (v9.4.0):
+use native_tls::Protocol;
+use syslog_generator::{parse_tls_min_version, build_tls_connector};
+
+let p = parse_tls_min_version("1.3")?;  // → native_tls::Protocol::Tlsv13
+let connector: tokio_native_tls::TlsConnector = build_tls_connector(&params)?;
+
+// СТАЛО (v9.5.0):
+use syslog_generator::{parse_tls_min_version, TlsVersion, build_tls_connector};
+
+let p = parse_tls_min_version("1.3")?;  // → TlsVersion::V1_3
+let config: Arc<rustls::ClientConfig> = build_tls_connector(&params)?;
+let connector = tokio_rustls::TlsConnector::from(config);
+```
+
+Следующие релизы вехи E: **v9.6.0 (N12: Docker/musl/docker-compose)** —
+последний релиз перед v10.0.0.
+
 ## v9.2.0 - 2026-07-13
 
 **F15: ArcSight CEF + IBM QRadar LEEF + JSON-lines форматы.** Расширение

@@ -15,8 +15,16 @@ use thiserror::Error;
 
 /// Допустимые значения `transport` у цели.
 pub const VALID_TRANSPORTS: &[&str] = &["tcp", "udp", "tls", "file"];
-/// Допустимые значения `format` фазы.
-pub const VALID_FORMATS: &[&str] = &["rfc5424", "rfc3164", "raw", "protobuf"];
+/// Допустимые значения `format` фазы (F15: добавлены cef/leef/json_lines).
+pub const VALID_FORMATS: &[&str] = &[
+    "rfc5424",
+    "rfc3164",
+    "raw",
+    "protobuf",
+    "cef",
+    "leef",
+    "json_lines",
+];
 /// Допустимые значения `distribution` профиля.
 pub const VALID_DISTRIBUTIONS: &[&str] = &["round-robin", "broadcast", "weighted"];
 /// Допустимые значения `framing` (нормализуются в sender.rs, здесь — canonical + алиасы).
@@ -188,6 +196,42 @@ pub enum ValidationError {
         name: String,
         field: String,
         value: f64,
+    },
+
+    // ===== F15 (v9.2.0): CEF/LEEF-специфичные ошибки =====
+    /// F15: формат `cef` требует блок `cef: { device_vendor, device_product,
+    /// device_version, signature_id, name }`. Без него нечего экранировать.
+    #[error("phase[{index}] ({name:?}): format=cef требует непустой блок phase.cef с полями device_vendor/device_product/device_version/signature_id/name")]
+    CefConfigMissing { index: usize, name: String },
+
+    /// F15: одно из обязательных полей CEF пустое.
+    #[error("phase[{index}] ({name:?}): format=cef требует непустое cef.{field}")]
+    CefFieldEmpty {
+        index: usize,
+        name: String,
+        field: String,
+    },
+
+    /// F15: CEF severity вне диапазона 0..=10.
+    #[error(
+        "phase[{index}] ({name:?}): cef.severity={value} вне диапазона 0..=10 (CEF-спецификация)"
+    )]
+    InvalidCefSeverity {
+        index: usize,
+        name: String,
+        value: u8,
+    },
+
+    /// F15: формат `leef` требует блок `leef: { vendor, product, version, event_id }`.
+    #[error("phase[{index}] ({name:?}): format=leef требует непустой блок phase.leef с полями vendor/product/version/event_id")]
+    LeefConfigMissing { index: usize, name: String },
+
+    /// F15: одно из обязательных полей LEEF пустое.
+    #[error("phase[{index}] ({name:?}): format=leef требует непустое leef.{field}")]
+    LeefFieldEmpty {
+        index: usize,
+        name: String,
+        field: String,
     },
 }
 
@@ -384,9 +428,95 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
         validate_syslog(index, &name, &p.syslog, errors);
     }
 
+    // F15: CEF/LEEF — обязательные поля конфигурации.
+    match fmt {
+        "cef" => validate_cef(index, &name, p.cef.as_ref(), errors),
+        "leef" => validate_leef(index, &name, p.leef.as_ref(), errors),
+        _ => {}
+    }
+
     // load_shape
     if let Some(ls) = &p.load_shape {
         validate_load_shape(index, &name, ls, errors);
+    }
+}
+
+fn validate_cef(
+    index: usize,
+    name: &str,
+    cef: Option<&crate::config::CefConfig>,
+    errors: &mut Vec<ValidationError>,
+) {
+    let Some(c) = cef else {
+        errors.push(ValidationError::CefConfigMissing {
+            index,
+            name: name.to_string(),
+        });
+        return;
+    };
+    for field in [
+        "device_vendor",
+        "device_product",
+        "device_version",
+        "signature_id",
+        "name",
+    ] {
+        // Через match, чтобы не использовать `reflect`-подобные трюки.
+        let v = match field {
+            "device_vendor" => &c.device_vendor,
+            "device_product" => &c.device_product,
+            "device_version" => &c.device_version,
+            "signature_id" => &c.signature_id,
+            "name" => &c.name,
+            _ => unreachable!(),
+        };
+        if v.trim().is_empty() {
+            errors.push(ValidationError::CefFieldEmpty {
+                index,
+                name: name.to_string(),
+                field: field.to_string(),
+            });
+        }
+    }
+    if let Some(sev) = c.severity {
+        if sev > 10 {
+            errors.push(ValidationError::InvalidCefSeverity {
+                index,
+                name: name.to_string(),
+                value: sev,
+            });
+        }
+    }
+}
+
+fn validate_leef(
+    index: usize,
+    name: &str,
+    leef: Option<&crate::config::LeefConfig>,
+    errors: &mut Vec<ValidationError>,
+) {
+    let Some(l) = leef else {
+        errors.push(ValidationError::LeefConfigMissing {
+            index,
+            name: name.to_string(),
+        });
+        return;
+    };
+    for field in ["vendor", "product", "version", "event_id"] {
+        let v = match field {
+            "vendor" => &l.vendor,
+            "product" => &l.product,
+            "version" => &l.version,
+            "event_id" => &l.event_id,
+            _ => unreachable!(),
+        };
+        if v.trim().is_empty() {
+            errors.push(ValidationError::LeefFieldEmpty {
+                index,
+                name: name.to_string(),
+                field: field.to_string(),
+            });
+        }
     }
 }
 

@@ -208,6 +208,54 @@ pub struct Phase {
     /// F6: паддинг тела сообщения до указанного размера в байтах (0/None = выкл).
     #[serde(default)]
     pub pad_to_bytes: Option<usize>,
+    /// F15: конфигурация ArcSight CEF-формата (используется при `format: "cef"`).
+    /// `None` — формат cef неприменим (валидатор F13 отвергнет такую фазу).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cef: Option<CefConfig>,
+    /// F15: конфигурация IBM QRadar LEEF-формата (используется при `format: "leef"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leef: Option<LeefConfig>,
+    /// F15: дополнительные поля верхнего уровня для JSON-lines формата
+    /// (`{"ts":"...","level":"...","msg":"...","extra_field":"...",...}`).
+    /// `None` — без доп. полей (только timestamp/level/msg).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_lines_fields: Option<std::collections::BTreeMap<String, String>>,
+}
+
+/// F15: конфигурация ArcSight Common Event Format (CEF).
+///
+/// CEF: `CEF:Version|Device Vendor|Device Product|Device Version|Signature ID|Name|Severity|Extension`
+/// Severity 0..=10 (CEF-спецификация, не путать с syslog-severity 0..=7).
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct CefConfig {
+    pub device_vendor: String,
+    pub device_product: String,
+    pub device_version: String,
+    pub signature_id: String,
+    pub name: String,
+    /// CEF severity 0..=10. None = 0 (Unknown).
+    #[serde(default)]
+    pub severity: Option<u8>,
+    /// Extension key=value pairs (CEF extension block). None = пустой extension.
+    /// Значения подставляются через `render_template` (поддержка `{{faker.*}}`).
+    #[serde(default)]
+    pub extensions: Option<std::collections::BTreeMap<String, String>>,
+}
+
+/// F15: конфигурация IBM QRadar Log Event Extended Format (LEEF).
+///
+/// LEEF: `LEEF:Version|Vendor|Product|Version|EventID|...|key=value\n`
+/// Attributes — key=value пары после разделителя (обычно TAB).
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct LeefConfig {
+    pub vendor: String,
+    pub product: String,
+    pub version: String,
+    pub event_id: String,
+    /// LEEF attributes key=value pairs. None = без атрибутов (пустой хвост).
+    /// Значения подставляются через `render_template`.
+    #[serde(default)]
+    pub attributes: Option<std::collections::BTreeMap<String, String>>,
 }
 impl Phase {
     pub fn format_type(&self) -> &str {

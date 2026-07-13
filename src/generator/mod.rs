@@ -17,10 +17,10 @@ pub mod core;
 
 // Re-exports для API, экспортируемого из `pub use` в `lib.rs`.
 pub use config::{
-    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, Phase, Profile,
-    ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, CefConfig,
+    LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use core::{
-    create_dispatcher, default_values, generate_message, load_schema, load_templates,
-    run_phase_multi, run_profile,
+    create_dispatcher, default_values, generate_message, generate_message_with_format, load_schema,
+    load_templates, run_phase_multi, run_profile,
 };

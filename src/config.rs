@@ -6,6 +6,6 @@
 //! работать.
 
 pub use crate::generator::{
-    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, Phase, Profile,
-    ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, CefConfig,
+    LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };

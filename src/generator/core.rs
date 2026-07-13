@@ -5,6 +5,12 @@ use crate::observability::metrics::Metrics;
 use crate::schema::Schema;
 use crate::shutdown::{graceful_drain_wait, shutdown_listener};
 use crate::template::render_template;
+use crate::transport::file::{target_sender_file_with_rotation, RotationConfig};
+#[cfg(feature = "kafka")]
+use crate::transport::kafka::{
+    parse_kafka_acks, parse_kafka_compression, target_sender_kafka, KafkaConfig,
+};
+use crate::transport::reconnect::ReconnectConfig;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
     target_sender_udp, Framing,
@@ -377,6 +383,18 @@ pub async fn run_phase_multi(
         let pool_size = target.connections.max(1);
         total_workers += pool_size as u64;
         let framing = Framing::parse(&target.framing);
+        // F16: собираем RotationConfig и ReconnectConfig из TargetConfig.
+        let rotation = RotationConfig {
+            size_mb: target.file_rotation_size_mb,
+            interval_secs: target.file_rotation_interval_secs,
+            max_files: target.file_rotation_max_files,
+        };
+        let rcfg = ReconnectConfig::resolve(
+            target.reconnect_max_attempts,
+            target.reconnect_initial_backoff_ms,
+            target.reconnect_max_backoff_ms,
+            target.reconnect_multiplier,
+        );
         for _ in 0..pool_size {
             let rx = shared_rx.clone();
             let addr = target.address.clone();
@@ -384,8 +402,22 @@ pub async fn run_phase_multi(
             let m = metrics.clone();
             let sd = shutdown.clone();
             let h = match target.transport.as_str() {
-                "tcp" => tokio::spawn(target_sender_tcp(addr, phase_name, rx, m, sd, framing)),
-                "udp" => tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd)),
+                "tcp" => {
+                    // F16: передаём reconnect_config в TCP sender.
+                    tokio::spawn(target_sender_tcp(
+                        addr,
+                        phase_name,
+                        rx,
+                        m,
+                        sd,
+                        framing,
+                        Some(rcfg.clone()),
+                    ))
+                }
+                "udp" => {
+                    // UDP без reconnect (connectionless).
+                    tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd))
+                }
                 "tls" => {
                     // N4: SNI/проверка имени — из tls_domain или хост-части address.
                     let domain = target.tls_domain.clone().unwrap_or_else(|| {
@@ -424,14 +456,14 @@ pub async fn run_phase_multi(
                             (Some(cert_path), None) => {
                                 eprintln!(
                                     "TLS ({addr}): задан tls_client_cert_file={cert_path}, \
-                                 но tls_client_key_file не задан — mTLS отключён"
+                                     но tls_client_key_file не задан — mTLS отключён"
                                 );
                                 (None, None)
                             }
                             (None, Some(key_path)) => {
                                 eprintln!(
                                     "TLS ({addr}): задан tls_client_key_file={key_path}, \
-                                 но tls_client_cert_file не задан — mTLS отключён"
+                                     но tls_client_cert_file не задан — mTLS отключён"
                                 );
                                 (None, None)
                             }
@@ -490,11 +522,82 @@ pub async fn run_phase_multi(
                             None => None,
                         },
                     };
+                    // F16: reconnect config для TLS.
                     tokio::spawn(target_sender_tls(
-                        addr, tls_params, phase_name, rx, m, sd, framing,
+                        addr,
+                        tls_params,
+                        phase_name,
+                        rx,
+                        m,
+                        sd,
+                        framing,
+                        Some(rcfg.clone()),
                     ))
                 }
-                _ => tokio::spawn(target_sender_file(addr, phase_name, rx, m, sd)),
+                #[cfg(feature = "kafka")]
+                "kafka" => {
+                    // F16: Kafka target. Собираем KafkaConfig из полей target'а.
+                    let bootstrap = crate::transport::kafka::parse_bootstrap_servers(&addr);
+                    let topic = target.kafka_topic.clone().unwrap_or_default();
+                    let client_id = target
+                        .kafka_client_id
+                        .clone()
+                        .unwrap_or_else(|| "syslog-generator".to_string());
+                    let compression = match target.kafka_compression.as_deref() {
+                        Some(s) => match parse_kafka_compression(s) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                eprintln!(
+                                    "Kafka ({addr}): не удалось распарсить kafka_compression={s:?}: {e}; \
+                                     используется NoCompression"
+                                );
+                                rskafka::client::partition::Compression::NoCompression
+                            }
+                        },
+                        None => rskafka::client::partition::Compression::NoCompression,
+                    };
+                    let acks = match target.kafka_acks.as_deref() {
+                        Some(s) => match parse_kafka_acks(s) {
+                            Ok(v) => Some(v),
+                            Err(e) => {
+                                eprintln!(
+                                    "Kafka ({addr}): не удалось распарсить kafka_acks={s:?}: {e}; \
+                                     поле игнорируется"
+                                );
+                                None
+                            }
+                        },
+                        None => None,
+                    };
+                    let linger =
+                        std::time::Duration::from_millis(target.kafka_linger_ms.unwrap_or(5));
+                    let max_batch_size = target.kafka_max_batch_size.unwrap_or(1024);
+                    let kafka_cfg = KafkaConfig {
+                        bootstrap_servers: bootstrap,
+                        topic,
+                        client_id,
+                        compression,
+                        acks,
+                        linger,
+                        max_batch_size,
+                    };
+                    tokio::spawn(target_sender_kafka(kafka_cfg, addr, phase_name, rx, m, sd))
+                }
+                _ => {
+                    // F16: file с ротацией (если задана) или без (default).
+                    if rotation.is_enabled() {
+                        tokio::spawn(target_sender_file_with_rotation(
+                            std::path::PathBuf::from(addr),
+                            phase_name,
+                            rotation.clone(),
+                            rx,
+                            m,
+                            sd,
+                        ))
+                    } else {
+                        tokio::spawn(target_sender_file(addr, phase_name, rx, m, sd))
+                    }
+                }
             };
             handles.push(h);
         }

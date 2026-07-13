@@ -102,6 +102,15 @@ pub use transport::{
     target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing, SharedRx,
     TlsParams, TlsVersion,
 };
+// F16 (v9.3.0): новые типы transport-слоя — file rotation, reconnect config.
+pub use transport::file::{target_sender_file_with_rotation, RotationConfig};
+pub use transport::reconnect::{reconnect_with_backoff, ReconnectConfig};
+// F16: Kafka transport (доступен только при feature `kafka`).
+#[cfg(feature = "kafka")]
+pub use transport::kafka::{
+    parse_bootstrap_servers, parse_kafka_acks, parse_kafka_compression, target_sender_kafka,
+    KafkaConfig,
+};
 pub use validate::{format_errors, validate_profile, ValidationError};
 
 // Re-exports из backward-compat обёрток для имён, которых НЕТ в основных

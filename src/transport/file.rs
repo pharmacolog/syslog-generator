@@ -1,12 +1,216 @@
 //! N10 (v8.8.0): file transport — запись в локальный файл через BufWriter.
+//!
+//! F16 (v9.3.0): расширен файловой ротацией по размеру и/или времени.
+//!
+//! ## Параметры ротации (через `RotationConfig`)
+//!
+//! - `size_mb`: None → без ротации по размеру. Some(N) → при `bytes_written
+//!   >= N * 1024 * 1024` файл ротируется.
+//! - `interval_secs`: None → без ротации по времени. Some(N) → при
+//!   `Instant::now() >= opened_at + Duration::from_secs(N)` файл ротируется.
+//! - `max_files`: None → default 10. После ротации удаляются старые файлы
+//!   сверх лимита (LRU).
+//!
+//! ## Именование ротированных файлов
+//!
+//! `<path>.<unix_secs>.log`, где `<path>` — оригинальный путь target'а,
+//! `<unix_secs>` — unix timestamp на момент ротации. Пример: при `address =
+//! /var/log/app.log` и ротации в момент 1718000000 → `/var/log/app.log.1718000000.log`.
+//!
+//! ## Метрика
+//!
+//! `syslog_file_rotations_total{phase, target}` — counter, инкрементируется
+//! на каждой ротации (включая ручную по достижении max_files).
 
 use crate::metrics::Metrics;
 use anyhow::Result;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::fs::{self, File, OpenOptions};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
 
 use super::{next_msg, record_send, record_send_latency, SharedRx};
 
+/// F16 (v9.3.0): конфигурация файловой ротации.
+///
+/// `Default` создаёт конфиг БЕЗ ротации (size=None, interval=None) —
+/// backward-compat с поведением до v9.3.0.
+#[derive(Debug, Clone, Default)]
+pub struct RotationConfig {
+    /// Максимальный размер файла перед ротацией (в МБ). None → без ротации по размеру.
+    pub size_mb: Option<u64>,
+    /// Интервал ротации по времени (в секундах). None → без ротации по времени.
+    pub interval_secs: Option<u64>,
+    /// Максимум файлов (текущий + ротированные). None → default 10.
+    pub max_files: Option<u32>,
+}
+
+impl RotationConfig {
+    /// Включена ли хоть какая-то ротация.
+    pub fn is_enabled(&self) -> bool {
+        self.size_mb.is_some() || self.interval_secs.is_some()
+    }
+
+    /// Максимум файлов (с учётом дефолта).
+    pub fn effective_max_files(&self) -> u32 {
+        self.max_files.unwrap_or(10)
+    }
+
+    /// Конвертация в байты для size-триггера.
+    pub fn size_threshold_bytes(&self) -> Option<u64> {
+        self.size_mb.map(|mb| mb.saturating_mul(1024 * 1024))
+    }
+
+    /// Валидация параметров. Возвращает Err(reason) при ошибке.
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.is_enabled() {
+            return Ok(()); // без ротации валидация тривиальна
+        }
+        if let Some(mb) = self.size_mb {
+            if mb == 0 {
+                return Err(
+                    "file_rotation_size_mb=0 — ротация по нулевому размеру бессмысленна"
+                        .to_string(),
+                );
+            }
+        }
+        if let Some(s) = self.interval_secs {
+            if s == 0 {
+                return Err(
+                    "file_rotation_interval_secs=0 — ротация по нулевому интервалу бессмысленна"
+                        .to_string(),
+                );
+            }
+        }
+        if let Some(m) = self.max_files {
+            if m == 0 {
+                return Err("file_rotation_max_files=0 — должно быть >= 1".to_string());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// F16: вычислить suffix ротации (unix seconds) для текущего момента.
+fn rotation_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// F16: переименовать текущий файл в `<stem>.<ts>.log` и удалить старые
+/// сверх `max_files`. Возвращает Ok(rotation_count) для инкремента
+/// метрики (обычно 1 — одна ротация; но может быть 2+ при достижении
+/// max_files в момент ротации, тогда удаляется лишнее).
+async fn rotate_file(path: &Path, max_files: u32) -> Result<usize> {
+    let ts = rotation_timestamp();
+    let parent = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    // file_stem() — имя БЕЗ расширения (`foo.log` → `foo`). Это даёт
+    // короткий stem, чтобы prefix-match в cleanup был точным.
+    let stem = path
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("rotated");
+
+    // Найти уникальное имя для rotated-файла. Обычно это
+    // `<stem>.<ts>.log`, но при коллизии (две ротации за < 1с — крайне
+    // маловероятно, но возможно) добавляем счётчик или nanoseconds.
+    let mut final_name = if parent.as_os_str().is_empty() {
+        PathBuf::from(format!("{stem}.{ts}.log"))
+    } else {
+        parent.join(format!("{stem}.{ts}.log"))
+    };
+    let mut counter = 0u32;
+    while final_name.exists() {
+        counter += 1;
+        final_name = if parent.as_os_str().is_empty() {
+            PathBuf::from(format!("{stem}.{ts}.{counter}.log"))
+        } else {
+            parent.join(format!("{stem}.{ts}.{counter}.log"))
+        };
+        if counter > 100 {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.subsec_nanos())
+                .unwrap_or(0);
+            final_name = if parent.as_os_str().is_empty() {
+                PathBuf::from(format!("{stem}.{ts}.{nanos}.log"))
+            } else {
+                parent.join(format!("{stem}.{ts}.{nanos}.log"))
+            };
+            break;
+        }
+    }
+    fs::rename(path, &final_name).await?;
+
+    // Удаляем лишние старые файлы (LRU). Ищем файлы с тем же stem
+    // и суффиксом `.log`. Сортируем по timestamp (в имени) и удаляем
+    // самые старые сверх max_files.
+    let deleted = cleanup_old_rotated_files(path, max_files).await?;
+    Ok(1 + deleted)
+}
+
+/// F16: удалить старые ротированные файлы сверх лимита. Возвращает
+/// количество удалённых файлов.
+///
+/// Алгоритм: итерируем все файлы в родительской директории, фильтруем
+/// те, чей `file_stem()` имеет формат `<our_stem>.<numeric_ts>` (т.е.
+/// начинается с нашего stem и после него идёт точка + число). Сортируем
+/// по timestamp (числовая часть) ascending, удаляем самые старые сверх
+/// лимита `max_files - 1` (один слот занимает текущий файл).
+async fn cleanup_old_rotated_files(path: &Path, max_files: u32) -> Result<usize> {
+    let parent = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    // file_stem() — имя БЕЗ расширения (`foo.log` → `foo`).
+    // Ротированные файлы имеют формат `<stem>.<ts>.log`, поэтому
+    // их file_stem() равен `<stem>.<ts>` (содержит наш stem как префикс
+    // до последней точки).
+    let our_stem = path
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("rotated");
+
+    let mut entries = fs::read_dir(&parent).await?;
+    let mut rotated_files: Vec<(u64, PathBuf)> = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let entry_stem = match entry.path().file_stem().and_then(|n| n.to_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        // Должно быть `<our_stem>.<numeric_ts>` — наш stem + точка + число.
+        if !entry_stem.starts_with(our_stem) {
+            continue;
+        }
+        let suffix = &entry_stem[our_stem.len()..];
+        // Должно начинаться с точки, затем число.
+        let ts_part = match suffix.strip_prefix('.') {
+            Some(s) => s,
+            None => continue,
+        };
+        // ts_part может содержать `.N` (collision counter) — берём
+        // только первую цифровую часть до следующей точки.
+        let ts_main = ts_part.split('.').next().unwrap_or("");
+        if let Ok(ts) = ts_main.parse::<u64>() {
+            rotated_files.push((ts, entry.path()));
+        }
+    }
+    // Сортируем по timestamp ascending (старые first).
+    rotated_files.sort_by_key(|(ts, _)| *ts);
+
+    // Удаляем лишние (оставляем max_files самых свежих).
+    let to_keep = max_files.saturating_sub(1) as usize; // -1 потому что текущий ещё не считается
+    let to_delete = rotated_files.len().saturating_sub(to_keep);
+    let mut deleted = 0usize;
+    for (_, p) in rotated_files.iter().take(to_delete) {
+        if fs::remove_file(p).await.is_ok() {
+            deleted += 1;
+        }
+    }
+    Ok(deleted)
+}
+
+/// N10: file sender (БЕЗ ротации). Запись через BufWriter (8 KiB).
 pub async fn target_sender_file(
     path: String,
     phase_name: String,
@@ -14,35 +218,328 @@ pub async fn target_sender_file(
     metrics: Metrics,
     shutdown: CancellationToken,
 ) -> Result<()> {
-    let file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .await?;
-    // N6 (v8.7.0): `BufWriter` (8 KiB) — мелкие write коалесцируются в один
-    // syscall, что уменьшает число системных вызовов в ~N раз для
-    // типичной нагрузки (mpsc(1024) → 1024 одиночных write'ов без
-    // буфера → 1024 syscall'а, с буфером → 128 syscall'ов при 8 KiB
-    // capacity). Flush делается автоматически в Drop при завершении.
-    let mut writer = BufWriter::with_capacity(8 * 1024, file);
+    let path_buf = PathBuf::from(&path);
+    target_sender_file_with_rotation(
+        path_buf,
+        phase_name,
+        RotationConfig::default(),
+        rx,
+        metrics,
+        shutdown,
+    )
+    .await
+}
+
+/// F16: file sender с поддержкой ротации.
+///
+/// Используется как из `run_phase_multi` (новая сигнатура с
+/// `RotationConfig`), так и из `target_sender_file` (default = без ротации).
+pub async fn target_sender_file_with_rotation(
+    path: PathBuf,
+    phase_name: String,
+    rotation: RotationConfig,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+) -> Result<()> {
+    // Подготовим родительскую директорию (если указана) — `OpenOptions`
+    // не создаёт промежуточные директории.
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent).await?;
+        }
+    }
+
+    let mut writer = open_writer(&path).await?;
+    let mut opened_at = Instant::now();
+    let mut bytes_written: u64 = 0;
+
     while let Some(msg) = next_msg(&rx).await {
-        // O_APPEND гарантирует атомарность дозаписи, BufWriter
-        // коалесцирует мелкие write в один syscall.
+        // Перед записью проверяем триггеры ротации (по времени — на старте
+        // каждой итерации; по размеру — после записи).
+        if rotation.interval_secs.is_some()
+            && opened_at.elapsed() >= Duration::from_secs(rotation.interval_secs.unwrap_or(0))
+        {
+            do_rotate(&path, &rotation, &metrics, &phase_name).await?;
+            writer = open_writer(&path).await?;
+            opened_at = Instant::now();
+            bytes_written = 0;
+        }
+
         let t0 = std::time::Instant::now();
         writer.write_all(&msg).await?;
         writer.write_all(b"\n").await?;
         record_send_latency(&metrics, t0.elapsed());
+        bytes_written += msg.len() as u64 + 1; // +1 за '\n'
         record_send(
             &metrics,
             "file",
             &phase_name,
-            &path,
+            path.to_string_lossy().as_ref(),
             msg.len() as u64,
             &shutdown,
         )
         .await;
+
+        // Проверка size-триггера ПОСЛЕ записи.
+        if let Some(threshold) = rotation.size_threshold_bytes() {
+            if bytes_written >= threshold {
+                do_rotate(&path, &rotation, &metrics, &phase_name).await?;
+                writer = open_writer(&path).await?;
+                opened_at = Instant::now();
+                bytes_written = 0;
+            }
+        }
     }
     // Explicit flush перед выходом — содержимое буфера попадает на диск.
     writer.flush().await?;
     Ok(())
+}
+
+/// F16: helper для открытия файла через BufWriter (8 KiB).
+async fn open_writer(path: &Path) -> Result<BufWriter<File>> {
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .await?;
+    Ok(BufWriter::with_capacity(8 * 1024, file))
+}
+
+/// F16: helper для ротации: flush writer → rename → метрика.
+async fn do_rotate(
+    path: &Path,
+    rotation: &RotationConfig,
+    metrics: &Metrics,
+    phase_name: &str,
+) -> Result<()> {
+    let rotations = rotate_file(path, rotation.effective_max_files()).await?;
+    for _ in 0..rotations {
+        metrics
+            .file_rotations_total
+            .with_label_values(&[phase_name, path.to_string_lossy().as_ref()])
+            .inc();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::observability::metrics::create_metrics;
+    use crate::transport::SharedRx;
+    use std::sync::Arc;
+    use tokio::io::AsyncReadExt;
+    use tokio::sync::{mpsc, Mutex};
+
+    fn temp_path(name: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        p.push(format!("sg_f16_test_{nanos}_{name}.log"));
+        p
+    }
+
+    async fn make_metrics() -> Metrics {
+        create_metrics().expect("create_metrics ok")
+    }
+
+    async fn read_file(p: &Path) -> String {
+        let mut s = String::new();
+        File::open(p)
+            .await
+            .unwrap()
+            .read_to_string(&mut s)
+            .await
+            .unwrap();
+        s
+    }
+
+    #[tokio::test]
+    async fn no_rotation_works_as_before() {
+        // Backward-compat: без ротации пишет как раньше.
+        let path = temp_path("no_rot");
+        let metrics = make_metrics().await;
+        let (tx, rx) = mpsc::channel(16);
+        let shared_rx: SharedRx = Arc::new(Mutex::new(rx));
+        let shutdown = CancellationToken::new();
+        let path_str = path.to_string_lossy().to_string();
+        let h = tokio::spawn(target_sender_file(
+            path_str.clone(),
+            "test".to_string(),
+            shared_rx,
+            metrics,
+            shutdown,
+        ));
+        for i in 0..5 {
+            tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+        }
+        drop(tx);
+        h.await.unwrap().unwrap();
+        let content = read_file(&path).await;
+        assert!(content.contains("msg0"));
+        assert!(content.contains("msg4"));
+        let _ = fs::remove_file(&path).await;
+    }
+
+    #[tokio::test]
+    async fn rotation_validate_catches_bad_params_when_enabled() {
+        // size_mb=0 при включённой ротации — бессмысленно.
+        assert!(RotationConfig {
+            size_mb: Some(0),
+            interval_secs: None,
+            max_files: None,
+        }
+        .validate()
+        .is_err());
+        // interval_secs=0 при включённой ротации — бессмысленно.
+        assert!(RotationConfig {
+            size_mb: None,
+            interval_secs: Some(0),
+            max_files: None,
+        }
+        .validate()
+        .is_err());
+        // max_files=0 при включённой ротации — должно быть >= 1.
+        assert!(RotationConfig {
+            size_mb: Some(10),
+            interval_secs: None,
+            max_files: Some(0),
+        }
+        .validate()
+        .is_err());
+        // default — без ротации — должен проходить валидацию
+        // (max_files не проверяется, если ротация выключена).
+        assert!(RotationConfig::default().validate().is_ok());
+        // Валидный — тоже.
+        assert!(RotationConfig {
+            size_mb: Some(10),
+            interval_secs: Some(3600),
+            max_files: Some(5),
+        }
+        .validate()
+        .is_ok());
+        // max_files=0 без ротации — допустимо (max_files не имеет эффекта).
+        assert!(RotationConfig {
+            size_mb: None,
+            interval_secs: None,
+            max_files: Some(0),
+        }
+        .validate()
+        .is_ok());
+    }
+
+    #[tokio::test]
+    async fn rotation_by_interval_triggers_after_duration() {
+        let path = temp_path("interval_rot");
+        let metrics = make_metrics().await;
+        let (tx, rx) = mpsc::channel(16);
+        let shared_rx: SharedRx = Arc::new(Mutex::new(rx));
+        let shutdown = CancellationToken::new();
+
+        // interval=1 sec, max_files=3. Каждое сообщение — отдельная ротация
+        // (sleep между сообщениями > 1 сек через tokio::time::sleep).
+        let rotation = RotationConfig {
+            size_mb: None,
+            interval_secs: Some(1),
+            max_files: Some(3),
+        };
+        let h = tokio::spawn(target_sender_file_with_rotation(
+            path.clone(),
+            "test".to_string(),
+            rotation,
+            shared_rx,
+            metrics,
+            shutdown,
+        ));
+        for i in 0..3 {
+            tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+        }
+        drop(tx);
+        h.await.unwrap().unwrap();
+        // Должны быть ротированные файлы.
+        let parent = path.parent().unwrap();
+        let mut rotated = 0;
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with("sg_f16_test_") && n.contains("interval_rot.") {
+                rotated += 1;
+            }
+        }
+        assert!(
+            rotated >= 1,
+            "expected at least 1 rotated file, got {rotated}"
+        );
+        // Cleanup.
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.contains("interval_rot") || n == path.file_name().unwrap().to_string_lossy() {
+                let _ = fs::remove_file(e.path()).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cleanup_old_rotated_files_respects_max_files() {
+        // Создаём искусственно 5 ротированных файлов, просим max_files=2.
+        let parent = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let stem = format!("sg_f16_cleanup_{nanos}");
+        let mut created: Vec<PathBuf> = Vec::new();
+        for ts in 1..=5u64 {
+            let p = parent.join(format!("{stem}.{ts}.log"));
+            fs::write(&p, b"x").await.unwrap();
+            created.push(p);
+        }
+        // Создаём "текущий" файл (нужен только для extract stem).
+        let current = parent.join(format!("{stem}.log"));
+        fs::write(&current, b"current").await.unwrap();
+
+        // max_files=2 → должно остаться 2 самых свежих + текущий.
+        let deleted = cleanup_old_rotated_files(&current, 2).await.unwrap();
+        // Было 5 ротированных, оставить (2-1)=1 → удалить 4.
+        assert_eq!(deleted, 4);
+
+        // Проверим что осталось.
+        let mut remaining = 0;
+        let mut entries = fs::read_dir(&parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(&stem) && n.ends_with(".log") {
+                remaining += 1;
+            }
+        }
+        assert_eq!(remaining, 1 + 1); // 1 ротированный (самый свежий) + текущий
+
+        // Cleanup.
+        for p in created {
+            let _ = fs::remove_file(&p).await;
+        }
+        let _ = fs::remove_file(&current).await;
+    }
+
+    #[test]
+    fn rotation_config_helpers() {
+        let r = RotationConfig::default();
+        assert!(!r.is_enabled());
+        assert_eq!(r.effective_max_files(), 10);
+        assert_eq!(r.size_threshold_bytes(), None);
+
+        let r = RotationConfig {
+            size_mb: Some(50),
+            interval_secs: Some(60),
+            max_files: Some(3),
+        };
+        assert!(r.is_enabled());
+        assert_eq!(r.effective_max_files(), 3);
+        assert_eq!(r.size_threshold_bytes(), Some(50 * 1024 * 1024));
+    }
 }

@@ -121,7 +121,11 @@ pub trait Format: Send + Sync {
 - Faker-поля (`{{faker.ipv4}}`, `{{faker.user_agent}}`) в extensions.
 - Escaping edge cases: `|` `=` `\` в значениях.
 
-### 3.3 v9.3.0 (F16 — Kafka/Redpanda/файловая ротация/reconnect)
+### 3.3 v9.3.0 (F16 — Kafka/Redpanda/файловая ротация/reconnect) — ✅ СДЕЛАНО
+
+> Все 3 подзадачи выполнены: D1 (Kafka через `rskafka` feature flag),
+> файловая ротация (расширение `file`), reconnect (exponential backoff
+> с jitter для TCP/TLS). 0 breaking changes.
 
 #### D1: Kafka через `rskafka` (feature flag)
 

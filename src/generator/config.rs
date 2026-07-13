@@ -52,6 +52,65 @@ pub struct TargetConfig {
     /// проверяет, что каждое имя известно rustls (иначе профиль отвергается).
     #[serde(default)]
     pub tls_cipher_suites: Option<Vec<String>>,
+    // === F16 (v9.3.0): Kafka-конфигурация (feature flag `kafka`) ===
+    /// F16: Kafka topic (обязательно если `transport: "kafka"`). None →
+    /// target считается не-Kafka (валидатор reject'ит `kafka` без topic).
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_topic: Option<String>,
+    /// F16: Kafka client_id для идентификации в логах брокера.
+    /// None → default "syslog-generator".
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_client_id: Option<String>,
+    /// F16: Kafka compression: "none" / "gzip" / "snappy" / "lz4" / "zstd".
+    /// None → "none" (без сжатия).
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_compression: Option<String>,
+    /// F16: Kafka acks (forward-compat): "0" / "1" / "all". В rskafka 0.5
+    /// этот параметр контролируется на стороне брокера; сохраняем в
+    /// логах для документирования intent'а пользователя.
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_acks: Option<String>,
+    /// F16: linger для BatchProducer — задержка перед flush'ом батча
+    /// (миллисекунды). None → default 5 ms.
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_linger_ms: Option<u64>,
+    /// F16: max_batch_size для RecordAggregator. None → default 1024.
+    #[serde(default)]
+    #[cfg(feature = "kafka")]
+    pub kafka_max_batch_size: Option<usize>,
+    // === F16: файловая ротация (для transport: "file") ===
+    /// F16: ротация файла по размеру (в МБ). None → без ротации по размеру.
+    /// Применяется только если `transport: "file"`.
+    #[serde(default)]
+    pub file_rotation_size_mb: Option<u64>,
+    /// F16: ротация файла по интервалу (в секундах). None → без ротации
+    /// по времени.
+    #[serde(default)]
+    pub file_rotation_interval_secs: Option<u64>,
+    /// F16: максимум файлов (текущий + ротированные). None → default 10.
+    /// Старые сверх лимита удаляются (LRU).
+    #[serde(default)]
+    pub file_rotation_max_files: Option<u32>,
+    // === F16: reconnect-стратегия (для tcp/tls) ===
+    /// F16: максимум попыток переподключения. None → бесконечно (до shutdown).
+    /// `Some(0)` → отключить auto-reconnect (одна попытка, потом ошибка).
+    #[serde(default)]
+    pub reconnect_max_attempts: Option<u32>,
+    /// F16: начальная задержка между попытками (мс). None → default 100.
+    #[serde(default)]
+    pub reconnect_initial_backoff_ms: Option<u64>,
+    /// F16: максимальная задержка между попытками (мс). None → default 30 000.
+    #[serde(default)]
+    pub reconnect_max_backoff_ms: Option<u64>,
+    /// F16: множитель задержки (`backoff = backoff * multiplier`).
+    /// None → default 2.0.
+    #[serde(default)]
+    pub reconnect_multiplier: Option<f64>,
 }
 /// Ручной `Default`, согласованный с serde-дефолтами: connections=1, weight=1,
 /// framing="non-transparent". Это важно, чтобы `TargetConfig::default()` в коде
@@ -71,6 +130,25 @@ impl Default for TargetConfig {
             tls_client_key_file: None,
             tls_min_protocol_version: None,
             tls_cipher_suites: None,
+            #[cfg(feature = "kafka")]
+            kafka_topic: None,
+            #[cfg(feature = "kafka")]
+            kafka_client_id: None,
+            #[cfg(feature = "kafka")]
+            kafka_compression: None,
+            #[cfg(feature = "kafka")]
+            kafka_acks: None,
+            #[cfg(feature = "kafka")]
+            kafka_linger_ms: None,
+            #[cfg(feature = "kafka")]
+            kafka_max_batch_size: None,
+            file_rotation_size_mb: None,
+            file_rotation_interval_secs: None,
+            file_rotation_max_files: None,
+            reconnect_max_attempts: None,
+            reconnect_initial_backoff_ms: None,
+            reconnect_max_backoff_ms: None,
+            reconnect_multiplier: None,
         }
     }
 }

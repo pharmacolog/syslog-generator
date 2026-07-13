@@ -15,7 +15,7 @@ use crate::load_shape::LoadShape;
 use thiserror::Error;
 
 /// Допустимые значения `transport` у цели.
-pub const VALID_TRANSPORTS: &[&str] = &["tcp", "udp", "tls", "file"];
+pub const VALID_TRANSPORTS: &[&str] = &["tcp", "udp", "tls", "file", "kafka"];
 /// Допустимые значения `format` фазы (F15: добавлены cef/leef/json_lines).
 pub const VALID_FORMATS: &[&str] = &[
     "rfc5424",
@@ -297,6 +297,85 @@ pub enum ValidationError {
         a_index: usize,
         value: f64,
     },
+
+    // === F16 (v9.3.0): Kafka/ротация/reconnect ===
+    /// F16: `transport: "kafka"` указан, но `kafka_topic` не задан.
+    /// Для Kafka-target'а topic обязателен (нет дефолта — broker не
+    /// принимает "куда попало").
+    #[error(
+        "target[{index}] (address={address:?}): transport=\"kafka\" требует kafka_topic (поле обязательно)"
+    )]
+    KafkaTopicRequired { index: usize, address: String },
+
+    /// F16: `transport: "kafka"` указан, но feature flag `kafka` не включён
+    /// при компиляции. Нужно пересобрать с `--features kafka`.
+    #[error(
+        "target[{index}] (address={address:?}): transport=\"kafka\" требует cargo build --features kafka"
+    )]
+    KafkaFeatureDisabled { index: usize, address: String },
+
+    /// F16: параметр ротации файла вырожденный (size/interval=0 при
+    /// включённой ротации).
+    #[error(
+        "target[{index}] (address={address:?}): {field}={value} — должно быть > 0 при включённой ротации"
+    )]
+    InvalidFileRotation {
+        index: usize,
+        address: String,
+        field: String,
+        value: u64,
+    },
+
+    /// F16: file_rotation_max_files=0 (минимум 1).
+    #[error("target[{index}] (address={address:?}): file_rotation_max_files=0 — должно быть >= 1")]
+    ZeroFileRotationMaxFiles { index: usize, address: String },
+
+    /// F16: reconnect_max_backoff_ms < reconnect_initial_backoff_ms.
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_max_backoff_ms ({max}) должно быть >= reconnect_initial_backoff_ms ({initial})"
+    )]
+    InvalidReconnectBackoffRange {
+        index: usize,
+        address: String,
+        initial: u64,
+        max: u64,
+    },
+
+    /// F16: reconnect_multiplier < 1.0 или NaN.
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_multiplier={value} — должно быть >= 1.0 и конечным"
+    )]
+    InvalidReconnectMultiplier {
+        index: usize,
+        address: String,
+        value: f64,
+    },
+
+    /// F16: reconnect_initial_backoff_ms=0 (минимум 1).
+    #[error(
+        "target[{index}] (address={address:?}): reconnect_initial_backoff_ms=0 — должно быть > 0"
+    )]
+    ZeroReconnectInitialBackoff { index: usize, address: String },
+
+    /// F16: `kafka_compression` имеет недопустимое значение.
+    #[error(
+        "target[{index}] (address={address:?}): kafka_compression={value:?} — ожидается одно из: none, gzip, snappy, lz4, zstd"
+    )]
+    InvalidKafkaCompression {
+        index: usize,
+        address: String,
+        value: String,
+    },
+
+    /// F16: `kafka_acks` имеет недопустимое значение.
+    #[error(
+        "target[{index}] (address={address:?}): kafka_acks={value:?} — ожидается одно из: \"0\", \"1\", \"all\""
+    )]
+    InvalidKafkaAcks {
+        index: usize,
+        address: String,
+        value: String,
+    },
 }
 
 /// Проверяет профиль и возвращает список **всех** обнаруженных ошибок.
@@ -429,6 +508,44 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
                     address: t.address.clone(),
                     name: name.clone(),
                     allowed: crate::transport::tls::SUPPORTED_CIPHER_SUITE_NAMES.join(", "),
+                });
+            }
+        }
+    }
+
+    // === F16 (v9.3.0): Kafka/ротация/reconnect ===
+
+    // F16: Kafka-специфичная валидация (только при feature flag).
+    #[cfg(feature = "kafka")]
+    if t.transport == "kafka" {
+        // topic обязателен.
+        if t.kafka_topic.as_deref().unwrap_or("").is_empty() {
+            errors.push(ValidationError::KafkaTopicRequired {
+                index,
+                address: t.address.clone(),
+            });
+        }
+        // compression — допустимые значения.
+        if let Some(s) = &t.kafka_compression {
+            let s_lower = s.trim().to_ascii_lowercase();
+            if !matches!(
+                s_lower.as_str(),
+                "none" | "no" | "" | "gzip" | "snappy" | "lz4" | "zstd"
+            ) {
+                errors.push(ValidationError::InvalidKafkaCompression {
+                    index,
+                    address: t.address.clone(),
+                    value: s.clone(),
+                });
+            }
+        }
+        // acks — допустимые значения.
+        if let Some(s) = &t.kafka_acks {
+            if !matches!(s.trim(), "0" | "1" | "all") {
+                errors.push(ValidationError::InvalidKafkaAcks {
+                    index,
+                    address: t.address.clone(),
+                    value: s.clone(),
                 });
             }
         }

@@ -10,17 +10,73 @@
       "additionalProperties": false,
       "required": ["address", "transport"],
       "properties": {
-        "address": { "type": "string", "minLength": 1 },
-        "transport": { "type": "string", "enum": ["tcp", "udp", "tls", "file"] },
-        "connections": { "type": "integer", "minimum": 1, "default": 1 },
-        "weight": { "type": "integer", "minimum": 0, "default": 1 },
-        "framing": { "type": "string", "enum": ["non-transparent", "octet-counting", "octet_counting", "octet"], "default": "non-transparent" },
-        "tls_domain": { "type": ["string", "null"], "minLength": 1 },
-        "tls_ca_file": { "type": ["string", "null"], "minLength": 1 },
-        "tls_insecure": { "type": "boolean", "default": false },
-        "tls_client_cert_file": { "type": ["string", "null"], "minLength": 1 },
-        "tls_client_key_file": { "type": ["string", "null"], "minLength": 1 },
-        "tls_min_protocol_version": { "type": ["string", "null"], "enum": ["1.2", "1.3", null] }
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Адрес target'а: для file — путь к файлу; для tcp/udp/tls — host:port. tls_domain по умолчанию берёт host-часть."
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["tcp", "udp", "tls", "file"],
+          "description": "Транспорт доставки. Семантическая валидация (диапазоны и т.п.) — в validate.rs."
+        },
+        "connections": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Число воркеров в пуле на target. Семантика >=1 проверяется в F13."
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1,
+          "description": "Вес для distribution=weighted (F2)."
+        },
+        "framing": {
+          "type": "string",
+          "enum": ["non-transparent", "octet-counting", "octet_counting", "octet"],
+          "default": "non-transparent",
+          "description": "Фрейминг для потоковых транспортов по RFC 6587. Для udp/file игнорируется."
+        },
+        "tls_domain": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4: имя хоста для SNI и проверки имени в сертификате. None → хост из address."
+        },
+        "tls_ca_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4: путь к PEM-файлу доверенного CA."
+        },
+        "tls_insecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "N4: opt-in в небезопасный режим (отключить проверку)."
+        },
+        "tls_client_cert_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4.mTLS (v8.7.2): путь к клиентскому PEM-сертификату для mTLS. Если задан, TLS-handshake предъявляет этот сертификат серверу. Парный файл — tls_client_key_file."
+        },
+        "tls_client_key_file": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "N4.mTLS: путь к клиентскому PEM-ключу (PKCS#8). Должен соответствовать сертификату из tls_client_cert_file."
+        },
+        "tls_min_protocol_version": {
+          "type": ["string", "null"],
+          "enum": ["1.2", "1.3", null],
+          "description": "N4.mTLS: минимально допустимая версия TLS-протокола. Защита от downgrade-атак (None = системная, обычно 1.0)."
+        },
+        "tls_cipher_suites": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "N4.cipher_policy (v9.5.0): IANA-имена cipher suites (напр. [\"TLS_AES_256_GCM_SHA384\", \"TLS_CHACHA20_POLY1305_SHA256\"]). None → дефолтный набор rustls. Семантика (известность rustls) проверяется в validate.rs.",
+          "examples": [
+            ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"],
+            ["TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"]
+          ]
+        }
       }
     },
     "SyslogConfig": {

@@ -1,0 +1,33 @@
+{
+  "distribution": "round-robin",
+  "targets": [
+    {
+      "address": "127.0.0.1:6514",
+      "transport": "tls",
+      "tls_ca_file": "/path/to/ca.pem",
+      "tls_insecure": false,
+      "tls_client_cert_file": "/path/to/client.pem",
+      "tls_client_key_file": "/path/to/client.key",
+      "tls_min_protocol_version": "1.3",
+      "tls_cipher_suites": [
+        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+      ]
+    }
+  ],
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "mtls-with-cipher-policy",
+      "duration_secs": 30,
+      "messages_per_second": 100,
+      "templates": [
+        "audit event from {{faker.username}}@{{faker.hostname}}"
+      ],
+      "format": "rfc5424"
+    }
+  ]
+}

@@ -250,7 +250,10 @@ pub mod udp;
 // Обёртки для backward-compat: `syslog_generator::target_sender_file` и т.д.
 pub use file::target_sender_file;
 pub use tcp::target_sender_tcp;
-pub use tls::{build_tls_connector, parse_tls_min_version, target_sender_tls, TlsParams};
+pub use tls::{
+    build_tls_connector, parse_cipher_suite, parse_tls_min_version, target_sender_tls, TlsParams,
+    TlsVersion,
+};
 pub use udp::target_sender_udp;
 
 // ===== N10 (v9.1.0): тесты trait Transport =====

@@ -461,6 +461,34 @@ pub async fn run_phase_multi(
                         client_cert_pem,
                         client_key_pem,
                         min_protocol,
+                        // N4.cipher_policy (v9.5.0): парсинг IANA-имён →
+                        // rustls::SupportedCipherSuite. Парсинг идёт здесь
+                        // (а не в build_tls_connector) чтобы при ошибке имя
+                        // файла/фазы было в логе. None → дефолтные suites.
+                        cipher_suites: match &target.tls_cipher_suites {
+                            Some(names) => {
+                                let mut out = Vec::with_capacity(names.len());
+                                for name in names {
+                                    match crate::transport::tls::parse_cipher_suite(name) {
+                                        Ok(s) => out.push(s),
+                                        Err(e) => {
+                                            eprintln!(
+                                                "TLS ({addr}): не удалось распарсить cipher_suites={name:?}: {e}; \
+                                                 используется дефолтный набор"
+                                            );
+                                            out.clear();
+                                            break;
+                                        }
+                                    }
+                                }
+                                if out.is_empty() {
+                                    None
+                                } else {
+                                    Some(out)
+                                }
+                            }
+                            None => None,
+                        },
                     };
                     tokio::spawn(target_sender_tls(
                         addr, tls_params, phase_name, rx, m, sd, framing,

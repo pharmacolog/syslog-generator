@@ -45,6 +45,13 @@ pub struct TargetConfig {
     /// downgrade-attack на устаревшие версии.
     #[serde(default)]
     pub tls_min_protocol_version: Option<String>,
+    /// N4.cipher_policy (v9.5.0): список IANA-имён cipher suites, ограничивающий
+    /// набор согласуемых в TLS-handshake. None → дефолтный набор rustls
+    /// (AES_128/256_GCM, CHACHA20_POLY1305 — все TLS 1.3 + основные TLS 1.2).
+    /// Парсинг — в `transport/tls.rs::parse_cipher_suite`. F13 валидация
+    /// проверяет, что каждое имя известно rustls (иначе профиль отвергается).
+    #[serde(default)]
+    pub tls_cipher_suites: Option<Vec<String>>,
 }
 /// Ручной `Default`, согласованный с serde-дефолтами: connections=1, weight=1,
 /// framing="non-transparent". Это важно, чтобы `TargetConfig::default()` в коде
@@ -63,6 +70,7 @@ impl Default for TargetConfig {
             tls_client_cert_file: None,
             tls_client_key_file: None,
             tls_min_protocol_version: None,
+            tls_cipher_suites: None,
         }
     }
 }

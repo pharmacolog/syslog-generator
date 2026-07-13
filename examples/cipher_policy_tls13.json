@@ -1,0 +1,32 @@
+{
+  "distribution": "round-robin",
+  "targets": [
+    {
+      "address": "127.0.0.1:6514",
+      "transport": "tls",
+      "tls_ca_file": null,
+      "tls_insecure": true,
+      "tls_min_protocol_version": "1.3",
+      "tls_cipher_suites": [
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "TLS_AES_128_GCM_SHA256"
+      ]
+    }
+  ],
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "cipher-policy-demo",
+      "duration_secs": 10,
+      "messages_per_second": 20,
+      "templates": [
+        "TLS 1.3 only, custom cipher suites, from {{faker.ipv4}}"
+      ],
+      "format": "rfc5424"
+    }
+  ]
+}

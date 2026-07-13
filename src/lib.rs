@@ -4,7 +4,7 @@
 //! - `cli` — парсинг аргументов командной строки (clap).
 //! - `validate` — F13 семантическая валидация профиля.
 //! - `schema_check` — D3 структурная JSON Schema валидация.
-//! - `format` — форматы (RFC 5424, RFC 3164, raw, protobuf).
+//! - `format` — форматы (RFC 5424, RFC 3164, raw, protobuf, cef, leef, json_lines).
 //! - `transport` — транспорты (file, tcp, udp, tls).
 //! - `generator` — оркестрация (run_profile, run_phase_multi, generate_message,
 //!   конфиг Profile/Phase/TargetConfig, загрузка профиля).
@@ -22,6 +22,26 @@
 //! (thin re-export из новых слоёв). Сигнатура публичного API не меняется.
 
 pub mod anomaly;
+
+// N4.cipher_policy (v9.5.0): rustls 0.23 требует явной установки
+// crypto provider'а (мы используем ring). Делаем лениво через Once —
+// вызывается при первом обращении к TLS API. Если пользователь вызывает
+// только non-TLS функции — provider не нужен.
+static RUSTLS_PROVIDER_INIT: std::sync::Once = std::sync::Once::new();
+
+pub(crate) fn ensure_rustls_provider() {
+    RUSTLS_PROVIDER_INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+/// Публичный wrapper для интеграционных тестов, которые строят TLS-сервер
+/// напрямую через rustls (минуя наш `build_tls_connector`). Безопасный к
+/// множественным вызовам.
+pub fn ensure_rustls_provider_for_tests() {
+    ensure_rustls_provider();
+}
+
 pub mod cli;
 pub mod error;
 pub mod format;
@@ -78,8 +98,9 @@ pub use schema_check::{
 pub use shutdown::{graceful_drain_wait, shutdown_listener};
 pub use template::render_template;
 pub use transport::{
-    build_tls_connector, parse_tls_min_version, record_send, target_sender_file, target_sender_tcp,
-    target_sender_tls, target_sender_udp, Framing, SharedRx, TlsParams,
+    build_tls_connector, parse_cipher_suite, parse_tls_min_version, record_send,
+    target_sender_file, target_sender_tcp, target_sender_tls, target_sender_udp, Framing, SharedRx,
+    TlsParams, TlsVersion,
 };
 pub use validate::{format_errors, validate_profile, ValidationError};
 

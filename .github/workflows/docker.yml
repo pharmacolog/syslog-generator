@@ -95,7 +95,14 @@ jobs:
             TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}"
             TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev"
           fi
-          echo "tags<<EOF${TAGS}EOF" >> "$GITHUB_OUTPUT"
+          # GHA output через heredoc — ОБЯЗАТЕЛЬНО многострочный вариант.
+          # Однострочный `echo "tags<<EOF${TAGS}EOF"` подставляет ${TAGS} в echo,
+          # а не в heredoc, и парсер GHA не находит маркер EOF.
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build & push
         uses: docker/build-push-action@v6

@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-13. Текущая версия: **v8.7.0** (compile-verified, N6 zero-copy — патч-релиз по плану v9.0.0).
+Дата: 2026-07-13. Текущая версия: **v8.7.1** (compile-verified, N8 proptest — патч-релиз по плану v9.0.0).
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -70,7 +70,7 @@ for b in $(ls -t target/debug/deps/syslog_generator-* | grep -v '\.d$'); do
   test -x "$b" && timeout 90 "$b" --test-threads=1
 done
 ```
-Текущее зелёное состояние: **66 интеграционных + 119 юнит-тестов + 9 бенчей (3 + 6)**, `cargo clippy --all-targets` чист.
+Текущее зелёное состояние: **66 интеграционных + 125 юнит-тестов + 9 бенчей (3 + 6)**, `cargo clippy --all-targets` чист.
 В v8.3.1 починены 3 TLS-target теста (mixed_*_end_to_end), которые до этого
 падали из-за несовместимости rcgen 0.13 + OpenSSL. Теперь все тесты зелёные.
 Сертификаты для TLS-тестов генерируются через `openssl req -config openssl-server.cnf`
@@ -192,7 +192,8 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v8.5.0** — веха D: D3 (формальная JSON Schema + YAML-ввод профиля).
 - **v8.6.0** — веха D закрыта: N2 (синхронизация Grafana-дашборда).
 - **v8.6.1** — закрытие P1-пробелов: N5 (CompiledTemplate, ~100x шаблонов), N8 (round-trip RFC 5424), N11 (docs/.meta.json).
-- **v8.7.0** — N6 zero-copy/буферизация (BytesMut, BufWriter, уменьшение syscall'ов в ~50-100 раз). ← текущая.
+- **v8.7.0** — N6 zero-copy/буферизация (BytesMut, BufWriter, уменьшение syscall'ов в ~50-100 раз).
+- **v8.7.1** — N8 proptest: 6 property-based тестов для payload (int/seed/pad/faker IPv4/faker UUID). ← текущая.
 - **v9.0.0 (отложено)** — milestone release: веха D «Продакшн-готовность» ЗАКРЫТА. (Ждёт v8.7.1/v8.7.2/v8.8.0/v8.8.1.)
 
 ---
@@ -210,7 +211,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 ## 9. Пример стартового промпта для Claude
 
 Скопируй текст ниже в первое сообщение новой сессии Claude, приложив архив
-`syslog-generator-v8.7.0-verified.zip` (или распакованный проект). При работе в Claude Code
+`syslog-generator-v8.7.1-verified.zip` (или распакованный проект). При работе в Claude Code
 достаточно открыть каталог проекта — файл `CLAUDE_HANDOFF.md` уже лежит в корне.
 
 ```text
@@ -232,7 +233,7 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
    и статус вехи), CLAUDE_HANDOFF.md, examples/. Следуй чек-листу релиза из раздела 6.
 5. Compile-verified релиз: код собирается, clippy чист, все тесты зелёные.
 
-Текущее состояние: версия v8.7.0. **Веха D («Продакшн-готовность») в процессе закрытия** — N6 zero-copy сделано в v8.7.0, осталось N8 proptest, N4.mTLS, N10 рефакторинг слоёв. План в `PLAN-v9.0.0.md`.
+Текущее состояние: версия v8.7.1. **Веха D («Продакшн-готовность») в процессе закрытия** — N6 zero-copy (v8.7.0) + N8 proptest (v8.7.1) сделано, осталось N4.mTLS + N10 рефакторинг слоёв. План в `PLAN-v9.0.0.md`.
 Все P1-задачи (F11/F12/F13/N4/N7/N9/D3/N2/N5/N8/N11) выполнены. Следующая — веха E (P2):
 F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda/файловая ротация/reconnect-стратегия),
 F17 (сценарии аномалий/атак), N12 (Docker/musl/docker-compose), N10 (рефакторинг слоёв).

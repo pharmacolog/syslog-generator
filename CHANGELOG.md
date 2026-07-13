@@ -1,6 +1,51 @@
 
 # Changelog
 
+## v9.0.0 - 2026-07-13
+
+**Milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА.** Major-бамп
+(8.8.1 → 9.0.0) как семантический маркер перехода к вехе E (P2 «Зрелость»).
+Публичный API полностью backward-compatible с v8.x (только добавлены
+новые типы и модули; ничего не удалено и не сломано).
+
+### Why a major bump?
+
+v8.x → v9.0 — это **не breaking change** для пользователей. Публичный
+API полностью backward-compatible. Major bump сделан как milestone
+release:
+1. **Семантический маркер** — переход от этапа разработки (v0-v8.x) к
+   зрелому этапу (v9.0+) с фиксированным набором P1-возможностей.
+2. **Release-train** — следующая веха E (F15, F16, F17, N10, N12) будет
+   наращивать функциональность поверх стабильного ядра v9.
+3. **Соответствие semver-recommended** для milestone releases
+   (см. semver.org/#how-should-i-handle-deprecating-functionality).
+
+### Закрытые задачи (полная веха D)
+
+**P0 (F1-F10):** rate-limiting (F1), connections (F2), load_shape (F3),
+RNG с seed (F4), faker/regex/distributions (F5/F6), RFC 5424 (F7),
+RFC 3164 (F8), framing (F9), protobuf wire-format (F10), live metrics (N3).
+
+**P1 (F11-F14, N4, N7, N9):** CLI (F11), HTTP /metrics (F12), validation (F13),
+multi-template (F14), безопасный TLS (N4), типизированные ошибки (N7),
+CI-пайплайн (N9), CompiledTemplate (N5), round-trip RFC 5424 (N8),
+property-based тесты (N8), mTLS + min_protocol (N4.mTLS), zero-copy/
+буферизация (N6), рефакторинг слоёв (N10), формальная JSON Schema +
+YAML-ввод (D3), синхронизация Grafana-дашборда (N2), документация (N11).
+
+**Осталось в веху E (P2):** cipher_policy (N4), CEF/LEEF/JSON-lines (F15),
+Kafka/Redpanda (F16), сценарии аномалий (F17), Docker/musl (N12),
+траспортная архитектура — следующий release-train v9.x.
+
+### Notes
+- **0 breaking changes** в публичном API.
+- **199 тестов** (118 unit + 70 integration + 11 N7) — все зелёные.
+- **9 бенчей** (3 + 6) — все зелёные.
+- `cargo clippy --all-targets -- -D warnings` — чисто.
+- `cargo fmt --all -- --check` — clean.
+- CI: GitHub Actions — все 3 job'а зелёные (Test macos-latest,
+  Test ubuntu-latest, MSRV check).
+
 ## v8.8.1 - 2026-07-13
 
 Patch-долг перед major release v9.0.0: исправления документации (AUDIT.md)

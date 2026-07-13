@@ -1,6 +1,51 @@
 
 # Changelog
 
+## v8.7.2 - 2026-07-13
+
+Третий из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):
+закрытие N4.mTLS (mutual TLS + min_protocol version) — отложенная
+часть N4 (N4 сама сделана в v8.2.0).
+
+### Added
+- **`TargetConfig::tls_client_cert_file`** (`Option<String>`) — путь к
+  клиентскому PEM-сертификату для mTLS. Если задан, TLS-handshake
+  предъявляет этот сертификат серверу.
+- **`TargetConfig::tls_client_key_file`** (`Option<String>`) — путь к
+  клиентскому PEM-ключу (PKCS#8, парный к tls_client_cert_file).
+- **`TargetConfig::tls_min_protocol_version`** (`Option<String>`) — "1.2"
+  или "1.3" (None = системная, обычно 1.0). Защита от downgrade-атак.
+- **`TlsParams`**: расширен полями `client_cert_pem`, `client_key_pem`,
+  `min_protocol` (заполняются в `run_phase_multi` из TargetConfig).
+- **`build_tls_connector`**: если client_cert_pem+key заданы →
+  `builder.identity(Identity::from_pkcs8(...))`. Если min_protocol задан →
+  `builder.min_protocol_version(Some(proto))`.
+- **`parse_tls_min_version`** (новый public API) — парсит "1.2"/"1.3"
+  в `native_tls::Protocol::Tlsv12`/`Tlsv13`. Принимает только эти
+  два значения (1.0/1.1 deprecated NIST SP 800-52).
+- **JSON Schema**: `TargetConfig` дополнен тремя mTLS-полями
+  с описанием.
+- **3 новых `ValidationError`**: `TlsClientCertFileNotFound`,
+  `TlsClientKeyFileNotFound`, `InvalidTlsMinProtocolVersion`. Fail-fast
+  проверки: файл клиентского сертификата существует, парный ключ задан,
+  min_protocol либо не задан либо равен "1.2"/"1.3".
+
+### Notes
+- Тесты: **125 unit + 64 integration + 11 N7 = 200**, все зелёные.
+  Из них 9 новых: 4 mTLS-connector (parse_tls_min_version, identity,
+  min_protocol=Tlsv13, bad_identity), 2 валидации (missing cert file,
+  bad min_protocol), +3 существующих N4-* для ca_file/insecure.
+- clippy чист, fmt clean.
+- 9 бенчей (3 + 6) — все зелёные.
+- Реализация openssl helper: `tests/integration_tests.rs::make_test_cert`
+  использует `openssl req -x509 -newkey rsa:2048` (не rcgen — та же
+  проблема с `Identity::from_pkcs8` на OpenSSL 3.6.1, что была в v8.3.1).
+- Backward compatible: новые поля опциональные. Профили без них
+  работают как раньше (one-way TLS).
+
+Следующие релизы: v8.8.0 (N10 слои), v8.8.1 (AUDIT.md правки),
+v9.0.0 (milestone).
+
 ## v8.7.1 - 2026-07-13
 
 Второй из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):

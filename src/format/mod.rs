@@ -89,15 +89,79 @@ pub mod raw;
 pub mod rfc3164;
 pub mod rfc5424;
 
-/// Trait `Format` — будущая абстракция для динамического выбора формата
-/// (планируется в вехе E, см. F15). На текущем этапе — статические функции
-/// `build_*` экспортируются напрямую.
+/// Trait `Format` (N10, v9.1.0) — абстракция для динамического выбора
+/// формата. Реализуется в [`FormatKind`] для dyn-dispatch через enum
+/// (вместо `Box<dyn Format>` — экономия heap-аллокаций на горячем пути).
+/// Используется в `run_phase_multi` через `FormatKind::from(phase)`.
 pub trait Format {
     /// Собрать полное сообщение в данном формате.
     fn render(&self, h: &Header, msg: &[u8]) -> Vec<u8>;
-    /// Имя формата (rfc5424, rfc3164, raw, protobuf) — для логирования
+    /// Имя формата (rfc5424, rfc3164, raw, protobuf, ...) — для логирования
     /// и метрик (`syslog_messages_by_format_total`).
     fn name(&self) -> &'static str;
+}
+
+/// Конкретный выбор формата для фазы (N10, v9.1.0).
+///
+/// Используется в `run_phase_multi` для dyn-dispatch — `match self { ... }`
+/// в `render` компилируется в branchless jumps. Стоимость: 0 heap-аллокаций
+/// на сообщение, 0 vtable lookups (в отличие от `Box<dyn Format>`).
+///
+/// v9.2.0+: добавим `Cef`, `Leef`, `JsonLines` варианты (F15).
+pub enum FormatKind {
+    Rfc5424,
+    Rfc3164,
+    Raw,
+    /// Protobuf с опциональной схемой. `None` — пустое сообщение
+    /// (валидный пустой protobuf-блоб).
+    Protobuf(Option<crate::generator::config::ProtobufSchemaFieldMap>),
+}
+
+impl Format for FormatKind {
+    fn render(&self, h: &Header, msg: &[u8]) -> Vec<u8> {
+        match self {
+            Self::Rfc5424 => rfc5424::build(h, msg),
+            Self::Rfc3164 => rfc3164::build(h, msg),
+            Self::Raw => msg.to_vec(),
+            Self::Protobuf(map) => {
+                // Преобразуем текущий `Header` в `HashMap<String, String>` для
+                // совместимости с существующим API `serialize_protobuf`.
+                // TODO v9.5.0: явное поле protobuf_schema в Header.
+                let values: std::collections::HashMap<String, String> = [
+                    ("hostname", h.hostname.clone()),
+                    ("app_name", h.app_name.clone()),
+                    ("procid", h.procid.clone()),
+                    ("msgid", h.msgid.clone()),
+                ]
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect();
+                protobuf::serialize_protobuf(map.as_ref(), &values)
+            }
+        }
+    }
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Rfc5424 => "rfc5424",
+            Self::Rfc3164 => "rfc3164",
+            Self::Raw => "raw",
+            Self::Protobuf(_) => "protobuf",
+        }
+    }
+}
+
+impl FormatKind {
+    /// Конвертация из строки имени формата (phase.format) в [`FormatKind`].
+    /// Возвращает `None` для неизвестных имён (F13 валидация должна была их отклонить).
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "rfc5424" => Some(Self::Rfc5424),
+            "rfc3164" => Some(Self::Rfc3164),
+            "raw" => Some(Self::Raw),
+            "protobuf" => Some(Self::Protobuf(None)),
+            _ => None,
+        }
+    }
 }
 
 pub mod local_time {
@@ -136,5 +200,56 @@ mod tests {
         // Clamping при out-of-range значениях (F13 валидация не пропустит
         // эти значения в проде, но защита в prival остаётся).
         assert_eq!(prival(100, 100), (23u16 * 8) + 7);
+    }
+
+    // ===== N10 (v9.1.0): тесты trait Format =====
+
+    /// N10: `FormatKind::Rfc5424` рендерит валидный RFC 5424.
+    #[test]
+    fn n10_formatkind_rfc5424_renders_valid() {
+        let h = Header {
+            facility: 1,
+            severity: 4,
+            hostname: "host".into(),
+            app_name: "app".into(),
+            procid: "1".into(),
+            msgid: "X".into(),
+            structured_data: "-".into(),
+            bom: false,
+        };
+        let out = FormatKind::Rfc5424.render(&h, b"hello");
+        assert!(out.starts_with(b"<12>1 "));
+        assert!(out.ends_with(b" hello"));
+        assert_eq!(out[out.len() - 1], b'o');
+    }
+
+    /// N10: `FormatKind::Raw` = passthrough (копия msg).
+    #[test]
+    fn n10_formatkind_raw_is_passthrough() {
+        let h = Header {
+            facility: 0, severity: 0, hostname: "h".into(), app_name: "a".into(),
+            procid: "".into(), msgid: "".into(), structured_data: "-".into(), bom: false,
+        };
+        let out = FormatKind::Raw.render(&h, b"hello world");
+        assert_eq!(out, b"hello world");
+    }
+
+    /// N10: имя формата через `name()`.
+    #[test]
+    fn n10_formatkind_name() {
+        assert_eq!(FormatKind::Rfc5424.name(), "rfc5424");
+        assert_eq!(FormatKind::Rfc3164.name(), "rfc3164");
+        assert_eq!(FormatKind::Raw.name(), "raw");
+        assert_eq!(FormatKind::Protobuf(None).name(), "protobuf");
+    }
+
+    /// N10: `parse("rfc5424")` → `Some(Rfc5424)`, `parse("unknown")` → `None`.
+    #[test]
+    fn n10_formatkind_parse() {
+        assert!(matches!(FormatKind::parse("rfc5424"), Some(FormatKind::Rfc5424)));
+        assert!(matches!(FormatKind::parse("rfc3164"), Some(FormatKind::Rfc3164)));
+        assert!(matches!(FormatKind::parse("raw"), Some(FormatKind::Raw)));
+        assert!(matches!(FormatKind::parse("protobuf"), Some(FormatKind::Protobuf(_))));
+        assert!(FormatKind::parse("unknown").is_none());
     }
 }

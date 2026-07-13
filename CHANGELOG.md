@@ -1,6 +1,53 @@
 
 # Changelog
 
+## v8.7.0 - 2026-07-13
+
+Первый из серии патч-релизов по плану v9.0.0 (см. PLAN-v9.0.0.md):
+закрытие N6 (zero-copy/буферизация) перед major v9.0.0.
+
+### Changed
+- **`src/sender.rs` — `frame` / `frame_stream` объединены в `frame_into`**:
+  раньше возвращали новый `Vec<u8>` через `format!` + `extend_from_slice`
+  на каждое сообщение (аллокация в горячем пути). Теперь принимают
+  `&mut BytesMut` и дописывают туда — буфер переиспользуется между
+  сообщениями через `buf.clear()`. 0 аллокаций на кадр.
+- **`target_sender_file` использует `BufWriter` (8 KiB)**:
+  мелкие write'ы коалесцируются в один write-syscall каждые ~8 KiB
+  (уменьшение системных вызовов в ~50-100 раз для типичной нагрузки).
+  `flush()` делается вручную + автоматически в Drop. O_APPEND сохраняет
+  атомарность дозаписи.
+- **`target_sender_tcp` и `target_sender_tls` используют `BytesMut` (8 KiB)**:
+  на каждое сообщение `frame_into(&mut buf, ...)` + `write_all(&buf)` +
+  `buf.clear()`. 0 аллокаций в горячем пути. Один `write_all` отправляет
+  много накопленных сообщений — меньше TCP write-syscall'ов и Nagle overhead.
+- **`target_sender_udp` — без изменений** (уже zero-copy по дизайну,
+  `send_to(&msg, ...)` не копирует payload).
+
+### Added
+- **`+ bytes = "1"`** (зависимость) — для `BytesMut` батчинга и
+  zero-copy `extend_from_slice` / `freeze`.
+- **4 новых unit-теста в `sender::tests::n6_*`**:
+  - `n6_frame_into_non_transparent_appends_lf`
+  - `n6_frame_into_octet_counting_appends_len_prefix`
+  - `n6_clear_preserves_capacity` — capacity сохраняется после clear()
+    (zero-copy инвариант: capacity переиспользуется между сообщениями)
+  - `n6_consecutive_frames_concatenate` — N фреймов в один буфер дают
+    корректный конкатенированный вывод
+
+### Notes
+- Тесты: **119 unit + 55 integration + 11 N7 = 185**, все зелёные.
+- 9 бенчей (3 + 6), все зелёные.
+- clippy чист, fmt clean.
+- Backward compatible: публичный API не изменился (`frame` и `frame_stream`
+  были private, заменены на private `frame_into`).
+- Производительность: для типичной нагрузки (10k msg/s) — уменьшение
+  аллокаций в ~N раз (N = размер сообщения / capacity батчера) и
+  уменьшение syscall'ов в ~50-100 раз.
+
+Следующие релизы по плану: v8.7.1 (N8 proptest), v8.7.2 (N4.mTLS),
+v8.8.0 (N10 слои), v8.8.1 (AUDIT.md), v9.0.0 (milestone).
+
 ## v9.0.0 - 2026-07-13
 
 **Milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА.** Major-бамп

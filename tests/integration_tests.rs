@@ -2958,7 +2958,10 @@ phases:
     let profile = load_profile_from_yaml_str(yaml).expect("yaml should parse");
     assert_eq!(profile.targets.len(), 1);
     assert_eq!(profile.targets[0].transport, "kafka");
-    assert_eq!(profile.targets[0].kafka_topic.as_deref(), Some("syslog-test"));
+    assert_eq!(
+        profile.targets[0].kafka_topic.as_deref(),
+        Some("syslog-test")
+    );
     assert_eq!(profile.targets[0].kafka_compression.as_deref(), Some("lz4"));
     assert_eq!(profile.targets[0].kafka_linger_ms, Some(10));
 }
@@ -2987,8 +2990,13 @@ fn test_f16_validate_kafka_requires_topic() {
         metrics_addr: None,
     };
     let errs = validate_profile(&profile);
-    assert!(errs.iter().any(|e| matches!(e, syslog_generator::ValidationError::KafkaTopicRequired { .. })),
-        "ожидалась KafkaTopicRequired, got: {errs:?}");
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::KafkaTopicRequired { .. }
+        )),
+        "ожидалась KafkaTopicRequired, got: {errs:?}"
+    );
 }
 
 /// F16: валидация reject'ит невалидные параметры файловой ротации.
@@ -3014,13 +3022,23 @@ fn test_f16_validate_rejects_bad_rotation_params() {
         metrics_addr: None,
     };
     let errs = validate_profile(&profile);
-    assert!(errs.iter().any(|e| matches!(e, syslog_generator::ValidationError::InvalidFileRotation { .. })),
-        "ожидалась InvalidFileRotation, got: {errs:?}");
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::InvalidFileRotation { .. }
+        )),
+        "ожидалась InvalidFileRotation, got: {errs:?}"
+    );
     profile.targets[0].file_rotation_size_mb = Some(10);
     profile.targets[0].file_rotation_max_files = Some(0);
     let errs = validate_profile(&profile);
-    assert!(errs.iter().any(|e| matches!(e, syslog_generator::ValidationError::ZeroFileRotationMaxFiles { .. })),
-        "ожидалась ZeroFileRotationMaxFiles, got: {errs:?}");
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::ZeroFileRotationMaxFiles { .. }
+        )),
+        "ожидалась ZeroFileRotationMaxFiles, got: {errs:?}"
+    );
 }
 
 /// F16: валидация reject'ит невалидные параметры reconnect.
@@ -3046,35 +3064,55 @@ fn test_f16_validate_rejects_bad_reconnect_params() {
         metrics_addr: None,
     };
     let errs = validate_profile(&profile);
-    assert!(errs.iter().any(|e| matches!(e, syslog_generator::ValidationError::ZeroReconnectInitialBackoff { .. })),
-        "ожидалась ZeroReconnectInitialBackoff, got: {errs:?}");
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::ZeroReconnectInitialBackoff { .. }
+        )),
+        "ожидалась ZeroReconnectInitialBackoff, got: {errs:?}"
+    );
     profile.targets[0].reconnect_initial_backoff_ms = Some(100);
     profile.targets[0].reconnect_multiplier = Some(0.5);
     let errs = validate_profile(&profile);
-    assert!(errs.iter().any(|e| matches!(e, syslog_generator::ValidationError::InvalidReconnectMultiplier { .. })),
-        "ожидалась InvalidReconnectMultiplier, got: {errs:?}");
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            syslog_generator::ValidationError::InvalidReconnectMultiplier { .. }
+        )),
+        "ожидалась InvalidReconnectMultiplier, got: {errs:?}"
+    );
 }
 
 /// F16: пример file_rotation.yaml парсится и валиден.
 #[test]
 fn test_f16_example_file_rotation_parses() {
     use syslog_generator::{load_profile_from_path, validate_profile};
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples").join("file_rotation.yaml");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join("file_rotation.yaml");
     let profile = load_profile_from_path(&path).expect("example must parse");
     assert_eq!(profile.targets[0].transport, "file");
     assert!(profile.targets[0].file_rotation_size_mb.is_some());
-    assert!(validate_profile(&profile).is_empty(), "file_rotation.yaml должен быть валиден");
+    assert!(
+        validate_profile(&profile).is_empty(),
+        "file_rotation.yaml должен быть валиден"
+    );
 }
 
 /// F16: пример reconnect_tcp.yaml парсится и валиден.
 #[test]
 fn test_f16_example_reconnect_tcp_parses() {
     use syslog_generator::{load_profile_from_path, validate_profile};
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples").join("reconnect_tcp.yaml");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join("reconnect_tcp.yaml");
     let profile = load_profile_from_path(&path).expect("example must parse");
     assert_eq!(profile.targets[0].transport, "tcp");
     assert!(profile.targets[0].reconnect_max_attempts.is_some());
-    assert!(validate_profile(&profile).is_empty(), "reconnect_tcp.yaml должен быть валиден");
+    assert!(
+        validate_profile(&profile).is_empty(),
+        "reconnect_tcp.yaml должен быть валиден"
+    );
 }
 
 /// F16: реальная файловая ротация — sender создаёт rotated-файлы через 1 сек.
@@ -3086,7 +3124,10 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
     use tokio::sync::{mpsc, Mutex};
     use tokio_util::sync::CancellationToken;
 
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     let path = std::env::temp_dir().join(format!("sg_f16_e2e_{nanos}.log"));
     let metrics = create_metrics().expect("metrics");
     let (tx, rx) = mpsc::channel(16);
@@ -3099,7 +3140,12 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
     };
     let path_for_sender = path.clone();
     let h = tokio::spawn(target_sender_file_with_rotation(
-        path_for_sender, "f16-test".into(), rotation, shared_rx, metrics.clone(), shutdown.clone(),
+        path_for_sender,
+        "f16-test".into(),
+        rotation,
+        shared_rx,
+        metrics.clone(),
+        shutdown.clone(),
     ));
     for i in 0..3 {
         tx.send(format!("msg{i}").into_bytes()).await.unwrap();
@@ -3113,13 +3159,19 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
     let mut entries = tokio::fs::read_dir(parent).await.unwrap();
     while let Some(e) = entries.next_entry().await.unwrap() {
         let n = e.file_name().to_string_lossy().to_string();
-        if n.starts_with(&format!("{stem}.")) && n.ends_with(".log") && n != path.file_name().unwrap().to_string_lossy() {
+        if n.starts_with(&format!("{stem}."))
+            && n.ends_with(".log")
+            && n != path.file_name().unwrap().to_string_lossy()
+        {
             rotated_count += 1;
             let _ = tokio::fs::remove_file(e.path()).await;
         }
     }
     let _ = tokio::fs::remove_file(&path).await;
-    assert!(rotated_count >= 2, "ожидалось >= 2 ротированных файлов, got {rotated_count}");
+    assert!(
+        rotated_count >= 2,
+        "ожидалось >= 2 ротированных файлов, got {rotated_count}"
+    );
 }
 
 /// F16: TCP sender использует exponential backoff reconnect после успешного connect'а.
@@ -3161,8 +3213,13 @@ async fn test_f16_tcp_sender_uses_reconnect_backoff() {
         }
     });
     let h = tokio::spawn(target_sender_tcp(
-        addr_str.clone(), "f16-reconnect".into(), shared_rx, metrics.clone(), shutdown.clone(),
-        Framing::NonTransparent, Some(rcfg),
+        addr_str.clone(),
+        "f16-reconnect".into(),
+        shared_rx,
+        metrics.clone(),
+        shutdown.clone(),
+        Framing::NonTransparent,
+        Some(rcfg),
     ));
     tx.send(b"first\n".to_vec()).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -3170,15 +3227,29 @@ async fn test_f16_tcp_sender_uses_reconnect_backoff() {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     shutdown.cancel();
     drop(tx);
-    let res = tokio::time::timeout(std::time::Duration::from_secs(5), h).await
-        .expect("sender должен завершиться").expect("join ok");
+    let res = tokio::time::timeout(std::time::Duration::from_secs(5), h)
+        .await
+        .expect("sender должен завершиться")
+        .expect("join ok");
     res.expect("sender ok");
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_handle).await;
     let text = syslog_generator::gather_metrics(&metrics).expect("gather ok");
-    let reconnects_line = text.lines().find(|l| {
-        l.starts_with("syslog_reconnects_total{") && l.contains("transport=\"tcp\"")
-            && !l.contains("transport=\"tls\"") && !l.contains("transport=\"kafka\"")
-    }).unwrap_or_else(|| panic!("reconnects_total{{transport=tcp}} отсутствует, got:\n{text}"));
-    let count: f64 = reconnects_line.split_whitespace().last().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    assert!(count >= 1.0, "syslog_reconnects_total{{transport=tcp...}} должен быть >= 1, got {count}");
+    let reconnects_line = text
+        .lines()
+        .find(|l| {
+            l.starts_with("syslog_reconnects_total{")
+                && l.contains("transport=\"tcp\"")
+                && !l.contains("transport=\"tls\"")
+                && !l.contains("transport=\"kafka\"")
+        })
+        .unwrap_or_else(|| panic!("reconnects_total{{transport=tcp}} отсутствует, got:\n{text}"));
+    let count: f64 = reconnects_line
+        .split_whitespace()
+        .last()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    assert!(
+        count >= 1.0,
+        "syslog_reconnects_total{{transport=tcp...}} должен быть >= 1, got {count}"
+    );
 }

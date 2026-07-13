@@ -513,6 +513,70 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
         }
     }
 
+    // F16: файловая ротация — параметры должны быть валидны.
+    let rotation_enabled =
+        t.file_rotation_size_mb.is_some() || t.file_rotation_interval_secs.is_some();
+    if rotation_enabled {
+        if let Some(mb) = t.file_rotation_size_mb {
+            if mb == 0 {
+                errors.push(ValidationError::InvalidFileRotation {
+                    index,
+                    address: t.address.clone(),
+                    field: "file_rotation_size_mb".to_string(),
+                    value: 0,
+                });
+            }
+        }
+        if let Some(s) = t.file_rotation_interval_secs {
+            if s == 0 {
+                errors.push(ValidationError::InvalidFileRotation {
+                    index,
+                    address: t.address.clone(),
+                    field: "file_rotation_interval_secs".to_string(),
+                    value: 0,
+                });
+            }
+        }
+        if let Some(m) = t.file_rotation_max_files {
+            if m == 0 {
+                errors.push(ValidationError::ZeroFileRotationMaxFiles {
+                    index,
+                    address: t.address.clone(),
+                });
+            }
+        }
+    }
+
+    // F16: reconnect-стратегия — параметры должны быть валидны.
+    if let Some(initial) = t.reconnect_initial_backoff_ms {
+        if initial == 0 {
+            errors.push(ValidationError::ZeroReconnectInitialBackoff {
+                index,
+                address: t.address.clone(),
+            });
+        }
+    }
+    if let Some(m) = t.reconnect_multiplier {
+        if !m.is_finite() || m < 1.0 {
+            errors.push(ValidationError::InvalidReconnectMultiplier {
+                index,
+                address: t.address.clone(),
+                value: m,
+            });
+        }
+    }
+    if let (Some(initial), Some(max)) = (t.reconnect_initial_backoff_ms, t.reconnect_max_backoff_ms)
+    {
+        if max < initial {
+            errors.push(ValidationError::InvalidReconnectBackoffRange {
+                index,
+                address: t.address.clone(),
+                initial,
+                max,
+            });
+        }
+    }
+
     // === F16 (v9.3.0): Kafka/ротация/reconnect ===
 
     // F16: Kafka-специфичная валидация (только при feature flag).

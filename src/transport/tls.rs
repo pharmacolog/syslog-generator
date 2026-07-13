@@ -391,15 +391,8 @@ async fn run_send_loop(
             record_error(&metrics, &addr).await;
             buf.clear();
             // F16: reconnect через exponential backoff (rustls API).
-            let outcome = try_tls_connect(
-                &addr,
-                &connector,
-                &server_name,
-                &rcfg,
-                &shutdown,
-                &metrics,
-            )
-            .await;
+            let outcome =
+                try_tls_connect(&addr, &connector, &server_name, &rcfg, &shutdown, &metrics).await;
             match outcome {
                 Some(Ok(new_tls)) => {
                     tls = new_tls;

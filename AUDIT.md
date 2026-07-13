@@ -187,6 +187,17 @@ for seq in 1..=total { ... }
   ~50-100 раз для типичной нагрузки (10k msg/s). + `bytes = "1"` зависимость;
   + 4 unit-теста на zero-copy инварианты (capacity сохраняется, N фреймов в
   один буфер дают корректный конкатенированный вывод).
+- **N8 (v8.7.1):** property-based тесты через `proptest = "1"` в
+  `src/payload_proptests.rs` (`#[cfg(test)]` модуль). 6 тестов покрывают
+  инварианты которые трудно выразить конкретными примерами: int_in_range
+  в диапазоне, seed-детерминизм (16 итераций u64), pad_to_size ровно target
+  (с лимитом 64KB чтобы не уйти в OOM), faker IPv4 валидный формат, faker
+  UUID v4 валидный формат. Каждый тест прогоняет 256+ случайных комбинаций.
+  Явное end-to-end back-pressure integration тестирование (TCP receiver
+  с задержкой → проверка mpsc overflow) отложено — TCP-буфер ядра > 64KB
+  вмещает маленькие сообщения мгновенно, sender не блокируется, тест
+  flaky. Back-pressure покрывается косвенно: N6 (батчинг), rate-limit,
+  drain_as_errors. TODO для вехи E через mock'и trait Transport.
 - **N5 + N8 + N11 (v8.6.1):** финальные P1-пробелы перед major v9.0. Закрыты:
   - **N5** `src/template.rs` — `CompiledTemplate` с one-pass парсингом
     `{{placeholder}}` (вместо O(N×M) `String::replace`-цикла). Для типичного

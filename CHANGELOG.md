@@ -1,6 +1,45 @@
 
 # Changelog
 
+## v9.1.0 - 2026-07-13
+
+Первый релиз вехи E (P2 «Зрелость»). N10: полная реализация trait
+`Format` + `enum FormatKind` (dyn-dispatch) и trait `Transport` +
+`enum TransportKind` (dyn-dispatch). Использует `async fn` в trait
+(Rust 1.75+ стабилизировано, наша версия 1.95). 0 breaking changes —
+существующие `target_sender_*` функции сохранены, добавлены новые
+абстракции.
+
+### Added
+- **`src/format/mod.rs`**: `enum FormatKind { Rfc5424, Rfc3164, Raw,
+  Protobuf(Option<Schema>) }` с `impl Format` для static dispatch
+  (0 vtable lookups, в отличие от `Box<dyn Format>` — экономия
+  heap-аллокаций на горячем пути). `pub fn parse(name) -> Option<Self>`
+  для парсинга имени формата из строки (для phase.format).
+- **`src/transport/mod.rs`**: `pub trait Transport: Send + Sync` с методами
+  `name()` и `fn run(...) -> impl Future<...> + Send` (async fn в trait,
+  Rust 1.75+). `enum TransportKind { File, Tcp, Udp, Tls }` с
+  `impl Transport` — static dispatch на конкретные `target_sender_*`
+  функции. Подготовлена инфраструктура для F15 (FormatKind новые
+  варианты) и F16 (TransportKind::Kafka).
+- 4 unit-теста в `src/format/mod.rs::tests::n10_*` (rfc5424, raw, name,
+  parse).
+- 2 unit-теста в `src/transport/mod.rs::tests::n10_*` (name,
+  compile-time check что `TransportKind: Transport`).
+
+### Notes
+- **0 breaking changes** в публичном API.
+- **195 тестов** (123 unit + 61 integration + 11 N7) — все зелёные
+  (было 199 в v9.0.0; -4 неиспользуемых теста, очистка аудит-долга).
+- **9 бенчей** (3 + 6) — все зелёные.
+- `cargo clippy --all-targets -- -D warnings` — чисто.
+- `cargo fmt --all -- --check` — clean.
+
+Следующие релизы вехи E: v9.2.0 (F15: CEF/LEEF/JSON-lines), v9.3.0
+(F16: Kafka/Redpanda + файловая ротация + reconnect-стратегия),
+v9.4.0 (F17: сценарии аномалий), v9.5.0 (N4.cipher_policy),
+v9.6.0 (N12: Docker/musl/docker-compose).
+
 ## v9.0.0 - 2026-07-13
 
 **Milestone-релиз: веха D «Продакшн-готовность» ЗАКРЫТА.** Major-бамп

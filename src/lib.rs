@@ -113,9 +113,10 @@ pub use transport::kafka::{
 };
 pub use validate::{format_errors, validate_profile, ValidationError};
 
-// Re-exports из backward-compat обёрток для имён, которых НЕТ в основных
-// re-exports. Например, `format::prival` уже в `pub use format::...` выше.
-// protobuf re-exports нужен: `pub use generator::...` не покрывает.
-pub use self::protobuf::{
-    apply_protobuf_schema, serialize_protobuf, serialize_protobuf_like, PbType,
-};
+// B2 (v10.0.0): удалён `pub use self::protobuf::{apply_protobuf_schema,
+// serialize_protobuf, serialize_protobuf_like, PbType}`. Это были re-exports
+// из backward-compat модуля `src/protobuf.rs`. Используйте прямой путь:
+//   `syslog_generator::protobuf::apply_protobuf_schema`
+//   `syslog_generator::protobuf::serialize_protobuf`
+//   `syslog_generator::protobuf::serialize_protobuf_like`
+//   `syslog_generator::protobuf::PbType`

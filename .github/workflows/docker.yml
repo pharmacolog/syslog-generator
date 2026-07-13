@@ -81,19 +81,20 @@ jobs:
         run: |
           VERSION="${{ steps.meta.outputs.VERSION }}"
           SHORT_SHA="${{ steps.meta.outputs.SHORT_SHA }}"
+          # docker/build-push-action принимает `tags:` как multiline список,
+          # каждый тег — отдельная строка. НЕ префиксуем через `--tag` —
+          # action сам парсит и разделяет по whitespace.
           TAGS=""
           # main branch → tag = version (например, "9.6.0")
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:${VERSION}"
-            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:latest"
+            TAGS="${REGISTRY}/${IMAGE_NAME}:${VERSION}\n${REGISTRY}/${IMAGE_NAME}:latest"
           # tag push (v*.*.*) → tag = версия из тега
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
-            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
-          # dev branch → tag = "dev-{short_sha}"
+            TAGS="${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+          # dev branch → tag = "dev-{short_sha}" + "dev"
           else
-            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}"
-            TAGS="${TAGS} --tag ${REGISTRY}/${IMAGE_NAME}:dev"
+            TAGS="${REGISTRY}/${IMAGE_NAME}:dev-${SHORT_SHA}\n${REGISTRY}/${IMAGE_NAME}:dev"
           fi
           # GHA output через heredoc — ОБЯЗАТЕЛЬНО многострочный вариант.
           # Однострочный `echo "tags<<EOF${TAGS}EOF"` подставляет ${TAGS} в echo,

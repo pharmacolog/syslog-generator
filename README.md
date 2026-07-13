@@ -2,16 +2,34 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v8.7.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v8.8.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)]()
 
-Версия `v8.7.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
+Версия `v8.8.0` — compile-verified релиз. Модульная архитектура с реальным multi-target
 runtime (`file`, `tcp`, `udp`, `tls`), настоящим TLS client handshake через
 `native-tls` / `tokio-native-tls`, mixed end-to-end тестами для `file + tcp + udp + tls`
 по всем режимам диспетчеризации (`broadcast`, `round-robin`, `weighted`), negative-path
 тестами и бенчмарками на Criterion. Вся сборка и тесты проверены реальной компиляцией
 (`cargo build`, `cargo test`, `cargo bench`, `cargo clippy`) и автоматизированы через
 GitHub Actions на ubuntu-latest + macos-latest.
+
+**v8.8.0 (N10):** рефакторинг слоёв — `src/format/` (RFC 5424/3164/raw/protobuf),
+`src/transport/` (file/tcp/udp/tls), `src/observability/` (Prometheus + HTTP /metrics),
+`src/generator/` (orchestration). 0 breaking changes (старые модули сохранены
+как thin re-export обёртки из новых слоёв). `src/architecture-notes.md`
+переписан с реальной архитектурой.
+
+**v8.7.2 (N4.mTLS):** mutual TLS + минимальная версия TLS-протокола.
+3 новых `TargetConfig`-поля (`tls_client_cert_file`, `tls_client_key_file`,
+`tls_min_protocol_version`) + `parse_tls_min_version()` + 3 новых
+`ValidationError` (`TlsClientCertFileNotFound`, `TlsClientKeyFileNotFound`,
+`InvalidTlsMinProtocolVersion`). 9 новых integration-тестов.
+
+**v8.7.1 (N8):** property-based тесты через `proptest = "1"` — 6 тестов в
+`src/payload_proptests.rs` покрывают инварианты генераторов payload
+(seed-детерминизм, int-диапазон, faker IPv4/UUID формат, pad_to_size).
+Back-pressure integration тест отозван как flaky (TCP-буфер ядра большой);
+покрыто косвенно через N6 + rate-limit + drain_as_errors.
 
 **v8.7.0 (N6):** zero-copy/буферизация — `BytesMut` для TCP/TLS батчинга,
 `BufWriter` (8 KiB) для файла. Уменьшение syscall'ов в ~50-100 раз для

@@ -4,10 +4,10 @@
     {
       "address": "127.0.0.1:6514",
       "transport": "tls",
-      "tls_ca_file": "/path/to/ca.pem",
+      "tls_ca_file": null,
       "tls_insecure": false,
-      "tls_client_cert_file": "/path/to/client.pem",
-      "tls_client_key_file": "/path/to/client.key",
+      "tls_client_cert_file": null,
+      "tls_client_key_file": null,
       "tls_min_protocol_version": "1.3",
       "tls_cipher_suites": [
         "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",

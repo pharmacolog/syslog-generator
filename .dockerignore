@@ -1,0 +1,56 @@
+# N12 (v9.6.0): .dockerignore — что НЕ копировать в Docker-контекст.
+#
+# Уменьшает размер build-контекста (target/ ≈ 2 GB после cargo build),
+# ускоряет docker build, исключает чувствительные файлы.
+
+# === Rust / Cargo build artifacts ===
+target/
+**/target/
+
+# Backup-файлы rustfmt
+**/*.rs.bk
+
+# MSVC PDB
+*.pdb
+
+# cargo mutants
+**/mutants.out*/
+
+# === Тестовые артефакты ===
+*.log
+*.tmp
+# Self-signed TLS-сертификаты (генерируются тестами)
+**/*.pem.tmp
+
+# === Git / IDE / OS ===
+.git/
+.gitignore
+.gitattributes
+.github/
+.archived-releases/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# === Документация (опционально — нужны только examples для runtime) ===
+# README.md нужен в image (информативно для `docker inspect`),
+# но большие .md-файлы можно исключить если мешают.
+# README.md
+# CHANGELOG.md
+# PLAN-v10.0.0.md
+# CLAUDE_HANDOFF.md
+# AUDIT.md
+
+# === Архивы ===
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# === Docker (self-reference — не копировать в контекст этого Dockerfile) ===
+Dockerfile
+.dockerignore
+docker-compose.yml
+.docker/

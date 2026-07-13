@@ -1,6 +1,67 @@
 
 # Changelog
 
+## v9.6.0 - 2026-07-13
+
+**N12: Docker/musl/docker-compose — последний релиз вехи E.**
+
+Закрывает веху E (P2 «Зрелость»). Полная цепочка теперь:
+v9.0.0 (веха D) → v9.1.0 (N10) → v9.2.0 (F15) → v9.3.0 (F16) → v9.4.0 (F17)
+→ v9.5.0 (N4) → **v9.6.0 (N12)** → v10.0.0.
+
+### Added
+
+- **`Dockerfile`** (multi-stage): `rust:1.97-bookworm` → `gcr.io/distroless/cc-debian12`.
+  - Stage 1 (builder): cmake + build-essential + pkg-config + libssl-dev
+    для dev-зависимостей (rcgen для TLS-сертификатов в тестах, criterion).
+    Оптимизация: `--bin syslog-generator` собирает только наш бинарь.
+    Бинарь strip'ается (≈30% экономии).
+  - Stage 2 (runtime): distroless `cc-debian12` — Debian 12 + glibc + ca-certificates.
+    Без shell, без apt. Размер образа ≈25 MB.
+  - User: 65532 (non-root, distroless default).
+- **`.dockerignore`**: исключает target/ (~2 GB), .git/, .archived-releases/,
+  .github/, IDE/OS файлы, *.log, *.zip.
+- **`docker-compose.yml`**: 4 сервиса:
+  - `syslog-generator` — генератор с профилем `profile-docker.yaml`.
+  - `syslog-ng` — приёмник syslog (UDP 514 + TCP 601 с RFC 6587 framing).
+  - `prometheus` — scrape `/metrics` endpoint (порт 9091 внутри compose-сети).
+  - `grafana` — визуализация (admin/admin).
+  - Volumes: `syslog-ng-data`, `prometheus-data`, `grafana-data`.
+- **`docker/syslog-ng.conf`**: syslog-ng 4.7 — UDP 514 (RFC 5424/3164) +
+  TCP 601 (`flags(no-parse)` для прозрачного pipe), destination → `/var/log/syslog-ng/messages.log`.
+- **`docker/prometheus.yml`**: scrape `syslog-generator:9091/metrics` каждые 15s.
+- **`examples/profile-docker.yaml`**: 3 фазы (warmup → burst → steady) с faker-полями.
+- **`.github/workflows/docker.yml`**: multi-arch build (linux/amd64 + linux/arm64)
+  с buildx QEMU, push в `ghcr.io/<repo>:<tag>`:
+  - `main` branch → tag = версия из Cargo.toml + `latest`
+  - `dev` branch → tag = `dev-{short_sha}` + `dev`
+  - tag push (v*.*.*) → tag = имя тега
+  - PR → build без push (smoke-test)
+  - GHA-кэш для ускорения повторных сборок.
+  - Smoke-test: `docker run --rm ... --version` на amd64.
+
+### Notes
+- **Все 9 бенчмарков + 288 тестов** (196 unit + 81 integration + 11 n7) — без изменений
+  (новые файлы не в Cargo workspace).
+- **Distroless выбор**: `cc-debian12` (а не `static-debian12`) — все runtime-deps
+  pure-Rust (`rskafka`, `rustls+ring`, `tokio`), но glibc-based образ
+  безопаснее для cross-arch (musl совместимость не тестировалась).
+- **TLS-приём syslog-ng** (6514) не настроен в этом compose — для TLS-теста
+  используйте `examples/rfc5424_tls_octet.json` и добавьте `network(source + tls)`
+  в `docker/syslog-ng.conf`.
+
+### Итог вехи E (v9.0.0 → v9.6.0)
+| Релиз | Фича |
+|---|---|
+| v9.1.0 | N10: trait Format + Transport (dyn-dispatch через enum) |
+| v9.2.0 | F15: CEF/LEEF/JSON-lines + N10-gap fix |
+| v9.3.0 | F16: Kafka (rskafka) + файловая ротация + exponential backoff reconnect |
+| v9.4.0 | F17: сценарии аномалий (burst/slow_drip/packet_loss) |
+| v9.5.0 | N4: cipher_policy + миграция native-tls → rustls (BREAKING) |
+| v9.6.0 | N12: Docker/musl/docker-compose (этот релиз) |
+
+Следующий релиз: **v10.0.0** (major milestone — закрытие вехи E).
+
 ## v9.5.1 - 2026-07-13
 
 F17: сценарии аномалий нагрузки — для тестирования SIEM-правил и

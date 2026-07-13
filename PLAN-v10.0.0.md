@@ -1,10 +1,10 @@
 # PLAN: v9.x — Веха E «Зрелость» (P2)
 
-> Статус: **поздняя стадия вехи E**. v9.5.0 (N4.cipher_policy + rustls) **выпущен** ✅.
-> v9.2.0 (F15) и более ранние — выпущены. Реализуем P2: N12 (Docker) — последний
-> релиз перед v10.0.0.
+> Статус: **конец вехи E**. v9.6.0 (N12 Docker) **выпущен** ✅.
+> Веха E полностью закрыта: N10, F15, F16, F17, N4, N12.
+> Следующий — **v10.0.0** (major milestone release).
 
-Дата: 2026-07-13. Цель: v9.6.0 (N12) → v10.0.0.
+Дата: 2026-07-13. Цель: v10.0.0.
 
 ## Зафиксированные стратегические решения
 
@@ -26,7 +26,7 @@
 | **F16** | `src/transport/{file,tcp,udp,tls}.rs` — sender'ы. Нет Kafka. | pending | `src/transport/kafka.rs` через `rskafka` (feature flag). Расширение `file` rotation. Reconnect: exponential backoff + jitter (см. §3.3). |
 | **F17** ✅ | `src/anomaly.rs` (новый модуль) | **DONE (v9.5.1, patch поверх v9.5.0)** | Tagged enum `AnomalyKind` (BurstInjection/SlowDrip/PacketLoss), `Phase.anomalies: Option<Vec<Anomaly>>`, `AnomalyPlanner` (compositional), 6 новых `ValidationError`, 2 Prometheus-метрики, JSON Schema `Anomaly`. 0 breaking changes относительно v9.5.0. 21 новый тест. Реализован как patch v9.5.1, не v9.4.0, потому что release-train v9.5.0 (N4.cipher_policy) уже был выпущен к моменту готовности F17. |
 | **N4.cipher_policy** ✅ | `src/transport/tls.rs` — `build_tls_connector` + `TlsParams` + `parse_cipher_suite` | **DONE (v9.5.0, BREAKING)** | Миграция `native-tls → rustls` 0.23 (c `ring` crypto provider, `webpki-roots`). Новое поле `tls_cipher_suites: Option<Vec<String>>` в `TargetConfig`. `parse_cipher_suite` парсит IANA-имена в `rustls::SupportedCipherSuite`. F13 валидация: `InvalidCipherSuite`. `TlsVersion` enum заменил `native_tls::Protocol`. |
-| **N12** | Не реализован. | pending | `Dockerfile` (multi-stage, distroless/cc-debian12) + `.dockerignore` + `docker-compose.yml` (см. §3.6). |
+| **N12** ✅ | `Dockerfile` (multi-stage) + `.dockerignore` + `docker-compose.yml` + `docker/syslog-ng.conf` + `examples/profile-docker.yaml` + `.github/workflows/docker.yml` | **DONE (v9.6.0)** | Distroless/cc-debian12 runtime (~25 MB), syslog-ng вместо rsyslog (лучше для контейнеров), multi-arch build (linux/amd64 + linux/arm64), push в ghcr.io. |
 
 ---
 
@@ -40,7 +40,7 @@
 | **v9.4.0** | — | **Отменён**: v9.5.0 (N4.cipher_policy) был выпущен раньше готовности F17. | — |
 | **v9.5.0** ✅ | minor | **N4.cipher_policy** + **миграция `native-tls → rustls`** (BREAKING CHANGE): добавление `tls_cipher_suites: Option<Vec<String>>` через `rustls::ClientConfig`. | — |
 | **v9.5.1** ✅ | patch | **F17**: сценарии аномалий (`phases.anomalies: BurstInjection/SlowDrip/PacketLoss`). Patch-релиз, 0 breaking changes относительно v9.5.0. Реализован в `feature/v9.4.0-f17`, merged в dev через 2 sync-коммита (после F15 v9.2.0 и после v9.5.0). | — |
-| **v9.6.0** | minor | **N12 (Docker)**: `Dockerfile` (multi-stage, distroless/cc-debian12) + `.dockerignore` + multi-arch buildx + `docker-compose.yml` | — |
+| **v9.6.0** ✅ | minor | **N12 (Docker)**: `Dockerfile` (multi-stage) + `.dockerignore` + multi-arch buildx + `docker-compose.yml` (generator + syslog-ng + prometheus + grafana). | — |
 
 ---
 

@@ -1,0 +1,126 @@
+# N12 (v9.6.0): docker-compose для end-to-end демо syslog-generator.
+#
+# Сервисы:
+#   syslog-generator — генератор нагрузки с профилем profile-docker.yaml.
+#   syslog-ng        — приёмник syslog (UDP 514 + TCP 601).
+#   prometheus       — scrape /metrics endpoint генератора.
+#   grafana          — визуализация метрик.
+#
+# Использование:
+#   docker compose up                  # foreground (Ctrl+C для остановки)
+#   docker compose up -d               # background
+#   docker compose logs syslog-generator
+#   docker compose down -v             # остановить и удалить volumes
+#
+# Доступ:
+#   Grafana:     http://localhost:3000  (admin/admin)
+#   Prometheus:  http://localhost:9090
+#   Metrics:     http://localhost:9091/metrics
+#
+# Примечания:
+# - syslog-generator указывает target=syslog-ng:514 (UDP). syslog-ng слушает
+#   на 514 UDP — стандартный syslog-порт.
+# - TLS-приём syslog-ng (6514) не настроен в этом compose — для TLS-теста
+#   см. examples/rfc5424_tls_octet.json и добавьте network(source + tls) в
+#   docker/syslog-ng.conf.
+# - prometheus scrape'ит syslog-generator напрямую через metrics_addr.
+
+services:
+  # ============ Генератор syslog-нагрузки ============
+  syslog-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: syslog-generator:9.6.0
+    container_name: syslog-generator
+    restart: "no"  # burst-генератор: запустился → отработал → вышел
+    command:
+      - --profile
+      - /examples/profile-docker.yaml
+      - --metrics-addr
+      - 0.0.0.0:9091
+    volumes:
+      - ./examples:/examples:ro
+    ports:
+      - "9091:9091"  # Prometheus metrics endpoint
+    depends_on:
+      syslog-ng:
+        condition: service_started
+    networks:
+      - syslog-net
+    healthcheck:
+      # Генератор — CLI без long-running daemon. Этот healthcheck
+      # нужен для `docker compose ps` чтобы показать "running".
+      # Используем test: --version (всегда успешно, если бинарь жив).
+      test: ["CMD", "/usr/local/bin/syslog-generator", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ============ Приёмник syslog (syslog-ng) ============
+  syslog-ng:
+    image: syslog-ng/syslog-ng:latest
+    container_name: syslog-syslog-ng
+    # SYSLOG: стандартные порты 514/UDP + 601/TCP (RFC 6587).
+    # Docker host-port → container-port mapping:
+    #   514:514/udp  — RFC 5424/3164 syslog (UDP)
+    #   601:601/tcp  — RFC 6587 framing (TCP)
+    ports:
+      - "514:514/udp"
+      - "601:601/tcp"
+    volumes:
+      # syslog-ng по умолчанию читает /etc/syslog-ng/syslog-ng.conf.
+      # Монтируем наш конфиг туда.
+      - ./docker/syslog-ng.conf:/etc/syslog-ng/syslog-ng.conf:ro
+      - syslog-ng-data:/var/log/syslog-ng
+    networks:
+      - syslog-net
+
+  # ============ Prometheus (scrape /metrics) ============
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: syslog-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - syslog-net
+    depends_on:
+      - syslog-generator
+
+  # ============ Grafana (визуализация) ============
+  grafana:
+    image: grafana/grafana:latest
+    container_name: syslog-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - syslog-net
+    depends_on:
+      - prometheus
+
+# ============ Volumes ============
+volumes:
+  syslog-ng-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ============ Networks ============
+networks:
+  syslog-net:
+    driver: bridge
+    name: syslog-net

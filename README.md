@@ -2,7 +2,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v10.2.0-blue)]()
+[![Version](https://img.shields.io/badge/version-v10.3.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
 
 **Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)
@@ -10,7 +10,8 @@
 Release-train вехи F (8 релизов, v10.0.0 → v10.7.0):
 **v10.0.0** (breaking B1+B2+B6+B7), **v10.1.0** (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias),
 **v10.2.0** (Performance ч.2: faker hot-path оптимизация, -26% на `generate_message_from_template` bench),
-v10.3.0 (Coverage ч.1),
+**v10.3.0** (Coverage ч.1: `cargo-llvm-cov` baseline 86.40% lines + non-blocking CI job),
+v10.4.0 (Coverage ч.2: ≥ 97% gate + fuzzing),
 v10.3.0 (Coverage ч.1: cargo-llvm-cov baseline),
 v10.4.0 (Coverage ч.2: ≥ 97% gate + fuzzing),
 v10.5.0 (CI: cargo-deny, cargo-machete, MSRV-blocking, Dependabot),

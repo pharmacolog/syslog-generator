@@ -233,3 +233,48 @@ jobs:
         run: |
           cargo run --quiet --bin syslog-generator --features kafka -- \
             --validate --schema-strict --profile examples/kafka_redpanda.yaml
+
+  # v10.3.0 (Coverage ч.1): baseline coverage через cargo-llvm-cov.
+  # **Non-blocking** — только отчёт и артефакт lcov.info. Blocking gate
+  # (≥ 97% lines) запланирован в v10.4.0. Документация: docs/COVERAGE.md.
+  coverage:
+    name: Coverage baseline (cargo-llvm-cov, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-cov
+
+      - name: Run coverage
+        # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97%.
+        # LCOV-формат для возможной интеграции с codecov.io в будущем.
+        run: |
+          cargo llvm-cov \
+            --features kafka \
+            --workspace \
+            --lcov --output-path lcov.info \
+            --summary-only 2>&1 | tee coverage-summary.txt
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-baseline
+          path: |
+            lcov.info
+            coverage-summary.txt
+          if-no-files-found: warn

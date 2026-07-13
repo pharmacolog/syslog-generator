@@ -1,6 +1,62 @@
 
 # Changelog
 
+## v10.3.0 - 2026-07-13
+
+**Coverage (часть 1): baseline через `cargo-llvm-cov` + non-blocking CI job.**
+
+### Added
+
+- **CI coverage baseline job** в `.github/workflows/ci.yml`:
+  новый job `coverage` (ubuntu-latest) устанавливает `cargo-llvm-cov` через
+  `taiki-e/install-action@v2`, запускает `cargo llvm-cov --features kafka --workspace --lcov`
+  и загружает артефакты `lcov.info` + `coverage-summary.txt`. **Non-blocking**
+  (`continue-on-error: true`) — это baseline, не gate. Blocking gate
+  (≥ 97% lines) запланирован в v10.4.0.
+- **`docs/COVERAGE.md`** — документация по coverage: как запустить локально,
+  baseline по модулям (86.40% lines / 88.36% functions / 86.49% regions),
+  план v10.4.0 (какие модули нужно покрыть и как).
+- **`cargo-llvm-cov` v0.8.7** установлен локально для разработчиков
+  (`cargo install cargo-llvm-cov --locked`).
+
+### Baseline (v10.3.0)
+
+```
+TOTAL: 86.40% lines / 88.36% functions / 86.49% regions
+```
+
+Топ непокрытых модулей (план v10.4.0):
+
+| Модуль | Lines | Приоритет |
+|---|---|---|
+| `transport/tcp.rs` | 46.72% | 🔴 нужен +50% |
+| `transport/kafka.rs` | 51.68% | 🔴 нужен +45% |
+| `transport/mod.rs` | 63.33% | 🟡 нужен +34% |
+| `shutdown.rs` | 67.44% | 🟡 нужен +30% |
+| `transport/tls.rs` | 68.44% | 🟡 нужен +29% |
+| `protobuf.rs` | 81.62% | 🔵 нужен +15% |
+| `validate.rs` | 84.08% | 🔵 нужен +13% |
+
+Подробная таблица и план — `docs/COVERAGE.md`.
+
+### Notes
+
+- **317 тестов** (218 unit + 88 integration + 11 n7) — все зелёные.
+  `cargo bench --no-run --locked` clean.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **`cargo-llvm-cov` локально** занимает 40 сек на установку (один раз),
+  затем ~30 сек на coverage прогон (зависит от количества тестов).
+- **Coverage артефакты** в CI: `lcov.info` (для codecov.io) + `coverage-summary.txt`
+  (для чтения в выводе job). Полная интеграция с codecov.io — отдельная задача
+  (не входит в v10.3.0, см. открытые вопросы в `docs/COVERAGE.md`).
+
+### Следующие релизы
+
+- **v10.4.0** — Coverage (часть 2): ≥ 97% gate (blocking) + fuzzing (5 таргетов).
+- **v10.5.0** — CI расширение (полный bench-regression gate + cargo-deny и т.д.).
+- **v10.6.0** — Usability (часть 1).
+- **v10.7.0** — Usability (часть 2) + закрытие вехи F.
+
 ## v10.2.0 - 2026-07-13
 
 **Performance (часть 2): hot-path оптимизация faker-генераторов.**

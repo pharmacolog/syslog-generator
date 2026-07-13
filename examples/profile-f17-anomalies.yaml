@@ -1,0 +1,61 @@
+# F17 (v9.4.0): сценарии аномалий нагрузки
+#
+# Демонстрирует три типа аномалий:
+#  - burst-injection: каждые 30с на 2с интенсивность ×10 (DDoS-like spike)
+#  - slow-drip:       первые 60с интенсивность ÷5 (low-and-slow фон)
+#  - packet-loss:     20% сообщений дропаются до отправки (эмуляция потерь)
+#
+# Use case: тестирование SIEM-правил, которые должны детектировать
+# нетипичные паттерны нагрузки (всплески ошибок, редкие события,
+# MITRE ATT&CK-подобные последовательности).
+#
+# Запуск:
+#   cargo run --release --bin syslog-generator \
+#     -- --profile examples/profile-f17-anomalies.yaml --target 127.0.0.1:514
+
+targets:
+  - address: 127.0.0.1:514
+    transport: tcp
+    framing: octet-counting
+  - address: /tmp/f17-anomalies.log
+    transport: file
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 10
+
+phases:
+  - name: f17-anomalies-demo
+    duration_secs: 90
+    messages_per_second: 50
+    format: rfc5424
+    seed: 42
+    templates:
+      - "{{timestamp}} {{hostname}} {{app_name}}[{{pid}}]: seq={{sequence}}"
+      - "{{timestamp}} {{app_name}} user={{faker.username}} ip={{faker.ipv4}} action=login"
+      - "{{timestamp}} {{app_name}} event=auth_failed user={{faker.username}} from={{faker.ipv4}}"
+
+    # F17: все три типа аномалий в одной фазе.
+    anomalies:
+      # BurstInjection: каждые 30 секунд — окно 2с с rate ×10.
+      # Используется для эмуляции DDoS / spike-нагрузки.
+      - type: burst-injection
+        rate_multiplier: 10.0
+        interval_secs: 30.0
+        duration_secs: 2.0
+
+      # SlowDrip: первые 60 секунд — rate ÷5 (низкая фоновая активность).
+      # Используется для эмуляции low-and-slow атак / редких событий.
+      - type: slow-drip
+        rate_divisor: 5.0
+        duration_secs: 60.0
+
+      # PacketLoss: 20% сообщений дропаются до отправки в транспорт.
+      # Детерминировано по seed + sequence → воспроизводимо при перезапуске.
+      # Используется для эмуляции потерь UDP / нестабильного канала.
+      - type: packet-loss
+        loss_percent: 20.0
+
+metrics_addr: 127.0.0.1:9090

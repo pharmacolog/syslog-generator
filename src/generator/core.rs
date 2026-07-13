@@ -1,3 +1,4 @@
+use crate::anomaly::AnomalyPlanner;
 use crate::format::{build_rfc3164, build_rfc5424, protobuf::serialize_protobuf_like, Header};
 use crate::generator::config::{Phase, Profile, TargetConfig};
 use crate::observability::metrics::Metrics;
@@ -381,12 +382,26 @@ pub async fn run_phase_multi(
     metrics.active_workers.set(total_workers as f64);
 
     // Целевая интенсивность.
-    // Два режима:
-    //  1) Постоянный rate (load_shape не задан) — токен-бакет `governor`,
-    //     messages_per_second == 0 => “без ограничения скорости”.
-    //  2) Кривая нагрузки (load_shape задан, F3) — sleep-планировщик по
-    //     мгновенному rate_at(t); говернор не используется.
-    let limiter = if phase.load_shape.is_none() {
+    // Режимы (выбираются в порядке приоритета):
+    //  1) Кривая нагрузки (load_shape задан, F3) — sleep-планировщик по
+    //     мгновенному rate_at(t). F17: дополнительно умножается на
+    //     anomaly_multiplier(t).
+    //  2) Постоянный rate с аномалиями (F17) — sleep-планировщик по
+    //     base_rate * anomaly_multiplier(t).
+    //  3) Постоянный rate без аномалий — токен-бакет `governor`,
+    //     messages_per_second == 0 => "без ограничения скорости".
+    //
+    // Governor несовместим с динамическим rate (он burst-friendly и
+    // рассчитан на постоянный bucket-size), поэтому при наличии аномалий
+    // мы переключаемся на честный sleep-планировщик (как в load_shape).
+    let has_anomalies = phase
+        .anomalies
+        .as_ref()
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
+    let planner = AnomalyPlanner::new(phase.anomalies.as_deref().unwrap_or(&[]));
+    let use_governor = phase.load_shape.is_none() && !has_anomalies;
+    let limiter = if use_governor {
         NonZeroU32::new(phase.messages_per_second.min(u32::MAX as u64) as u32)
             .map(|r| RateLimiter::direct(Quota::per_second(r)))
     } else {
@@ -431,11 +446,18 @@ pub async fn run_phase_multi(
             break;
         }
 
+        // F17 (v9.4.0): anomaly multiplier в текущий момент. Сначала
+        // вычисляем базовый rate (load_shape или constant), затем домножаем
+        // на anomaly_multiplier(t). Это интуитивно: «всплеск поверх
+        // медленной утечки» даёт X-кратный всплеск относительно пониженной
+        // базы.
+        let t_now = started.elapsed().as_secs_f64();
+        let anomaly_m = planner.combined_rate_multiplier(t_now);
+
         // Ограничение скорости.
         if let Some(shape) = &phase.load_shape {
             // Режим кривой: вычисляем мгновенный rate и выдерживаем интервал.
-            let t = started.elapsed().as_secs_f64();
-            let rate = shape.rate_at(t, shape_duration, base_rate);
+            let rate = shape.rate_at(t_now, shape_duration, base_rate) * anomaly_m;
             if rate > 0.0 {
                 let interval = Duration::from_secs_f64(1.0 / rate);
                 tokio::select! {
@@ -443,12 +465,27 @@ pub async fn run_phase_multi(
                     _ = shutdown.cancelled() => { break; }
                 }
             }
-            // rate <= 0 => мгновенно без паузы (эквивалент “без ограничения”).
+            // rate <= 0 => мгновенно без паузы (эквивалент "без ограничения").
         } else if let Some(lim) = &limiter {
-            // Режим постоянного rate: ждём токен-бакет, прерываемся на shutdown.
+            // Режим постоянного rate (без аномалий): ждём токен-бакет,
+            // прерываемся на shutdown.
             tokio::select! {
                 _ = lim.until_ready() => {}
                 _ = shutdown.cancelled() => { break; }
+            }
+        } else {
+            // Режим постоянного rate + аномалии (F17): sleep по
+            // base_rate * anomaly_multiplier(t). Это даёт точный контроль
+            // над динамическим rate (governor не подходит для аномалий —
+            // он burst-friendly и не реагирует на изменения мгновенного
+            // значения).
+            let rate = base_rate * anomaly_m;
+            if rate > 0.0 {
+                let interval = Duration::from_secs_f64(1.0 / rate);
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {}
+                    _ = shutdown.cancelled() => { break; }
+                }
             }
         }
 
@@ -466,6 +503,41 @@ pub async fn run_phase_multi(
             .messages_by_format_total
             .with_label_values(&[phase.format_type()])
             .inc();
+
+        // F17: учёт применения rate-аномалий. Если multiplier != 1.0 —
+        // хотя бы одна rate-аномалия активна. Считаем по каждой аномалии,
+        // чтобы можно было разделить burst и slow-drip в метриках.
+        if has_anomalies {
+            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                let m = crate::anomaly::rate_multiplier(&a.kind, t_now);
+                if (m - 1.0).abs() > f64::EPSILON {
+                    metrics
+                        .anomalies_applied_total
+                        .with_label_values(&[&phase.name, a.type_name()])
+                        .inc();
+                }
+            }
+        }
+
+        // F17: packet-loss — drop до отправки. Детерминирован по
+        // (phase.seed, seq) — см. anomaly::should_drop_packet.
+        if planner.should_drop(phase.seed, seq) {
+            // Учитываем дроп в метрике (по типу первой сработавшей
+            // аномалии — для остальных не инкрементируем, чтобы не было
+            // двойного счёта при нескольких packet-loss в фазе).
+            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                if let crate::anomaly::AnomalyKind::PacketLoss { .. } = &a.kind {
+                    metrics
+                        .anomalies_dropped_total
+                        .with_label_values(&[&phase.name, a.type_name()])
+                        .inc();
+                    break;
+                }
+            }
+            // Пропускаем tx.send для дропнутого сообщения.
+            continue;
+        }
+
         if distribution == "broadcast" {
             for tx in &txs {
                 let _ = tx.send(msg.clone()).await;

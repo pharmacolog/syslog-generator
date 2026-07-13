@@ -2197,3 +2197,335 @@ fn test_n4_mtls_validation_rejects_bad_min_protocol() {
         "ожидалась InvalidTlsMinProtocolVersion, получено: {errs:?}"
     );
 }
+
+// ===== F17 (v9.4.0): сценарии аномалий =====
+
+/// F17: burst-injection увеличивает объём сообщений относительно базы.
+/// Сравниваем burst-фазу с baseline-фазой (без аномалий) и проверяем,
+/// что burst даёт существенно больше сообщений.
+#[tokio::test]
+async fn test_f17_burst_injection_increases_volume() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-burst.log";
+    let _ = fs::remove_file(file_path);
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "burst".into(),
+            duration_secs: 2,
+            messages_per_second: 100,
+            format: Some("raw".into()),
+            templates: vec!["burst {{sequence}}".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: 10.0,
+                    interval_secs: 1.0,
+                    duration_secs: 0.3,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // baseline 100 msg/s * 2s = 200, но burst ×10 каждые 1с на 0.3с даёт
+    // дополнительно ~9×100×0.3 = 270, итого ожидаемо > 250.
+    assert!(lines > 250, "burst volume too low: {}", lines);
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: slow-drip уменьшает объём сообщений относительно базы.
+#[tokio::test]
+async fn test_f17_slow_drip_decreases_volume() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-slow.log";
+    let _ = fs::remove_file(file_path);
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "slow".into(),
+            duration_secs: 2,
+            messages_per_second: 100,
+            format: Some("raw".into()),
+            templates: vec!["slow {{sequence}}".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::SlowDrip {
+                    rate_divisor: 5.0,
+                    duration_secs: 1.0,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // baseline 100 msg/s * 2s = 200, slow-drip ÷5 первые 1с даёт ~100*0.2 = 20,
+    // плюс вторая секунда на полном rate = 100. Итого ~120.
+    assert!(
+        lines < 200,
+        "slow_drip should decrease volume, got: {}",
+        lines
+    );
+    assert!(lines > 80, "slow_drip volume too low: {}", lines);
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: packet-loss дропает примерно loss_percent сообщений.
+#[tokio::test]
+async fn test_f17_packet_loss_drops_about_percent() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-loss.log";
+    let _ = fs::remove_file(file_path);
+    let total = 1000_u64;
+    let loss_percent = 30.0_f64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "loss".into(),
+            total_messages: Some(total),
+            messages_per_second: 0, // max speed
+            format: Some("raw".into()),
+            templates: vec!["loss {{sequence}}".into()],
+            seed: Some(42),
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::PacketLoss { loss_percent },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let delivered = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // Ожидаемо доставлено ~ (100 - loss_percent)% от total.
+    let expected = (total as f64) * (1.0 - loss_percent / 100.0);
+    let delta = (delivered as f64 - expected).abs();
+    let tolerance = (total as f64) * 0.15;
+    assert!(
+        delta < tolerance,
+        "delivered={delivered}, expected≈{expected:.0}, delta={delta:.0}, tolerance={tolerance:.0}"
+    );
+    // Метрика дропов ≥1.
+    let dropped = metrics
+        .anomalies_dropped_total
+        .with_label_values(&["loss", "packet-loss"])
+        .get();
+    assert!(
+        dropped >= 1.0,
+        "anomalies_dropped_total должно быть ≥1, got: {dropped}"
+    );
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: anomalies=None эквивалентно отсутствию аномалий (backward-compat).
+#[tokio::test]
+async fn test_f17_no_anomalies_behaves_like_baseline() {
+    let file_path = "f17-none.log";
+    let _ = fs::remove_file(file_path);
+    let count = 50_u64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "baseline".into(),
+            total_messages: Some(count),
+            messages_per_second: 0,
+            format: Some("raw".into()),
+            templates: vec!["baseline {{sequence}}".into()],
+            anomalies: None,
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let lines = content.lines().filter(|l| !l.trim().is_empty()).count();
+    assert_eq!(
+        lines, count as usize,
+        "anomalies=None должен доставить ровно total_messages"
+    );
+    let _ = fs::remove_file(file_path);
+}
+
+/// F17: validate_profile отклоняет невалидный burst (multiplier <= 0).
+#[test]
+fn test_f17_validate_rejects_bad_burst_multiplier() {
+    use syslog_generator::{Anomaly, AnomalyKind, ValidationError};
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:514".into(),
+            transport: "tcp".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "bad".into(),
+            total_messages: Some(10),
+            messages_per_second: 10,
+            templates: vec!["x".into()],
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: -1.0,
+                    interval_secs: 1.0,
+                    duration_secs: 0.1,
+                },
+            }]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let errs = validate_profile(&profile);
+    assert!(errs
+        .iter()
+        .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+}
+
+/// F17: JSON Schema принимает валидные anomalies.
+#[test]
+fn test_f17_schema_check_accepts_anomalies() {
+    use syslog_generator::{load_profile_from_json_str, validate_against_embedded_schema};
+    let json = r#"{
+        "distribution": "round-robin",
+        "targets": [{"address": "127.0.0.1:514", "transport": "tcp"}],
+        "phases": [{
+            "name": "f17-schema",
+            "duration_secs": 5,
+            "messages_per_second": 10,
+            "templates": ["x"],
+            "anomalies": [
+                {"type": "burst-injection", "rate_multiplier": 5.0, "interval_secs": 1.0, "duration_secs": 0.5},
+                {"type": "slow-drip", "rate_divisor": 10.0, "duration_secs": 60.0},
+                {"type": "packet-loss", "loss_percent": 25.0}
+            ]
+        }]
+    }"#;
+    let profile = load_profile_from_json_str(json).expect("parse json");
+    validate_against_embedded_schema(&profile)
+        .expect("валидный профиль с anomalies должен проходить JSON Schema");
+}
+
+/// F17: JSON Schema отклоняет невалидный packet-loss (loss_percent > 100).
+#[test]
+fn test_f17_schema_check_rejects_invalid_packet_loss() {
+    use syslog_generator::{load_profile_from_json_str, validate_against_embedded_schema};
+    let json = r#"{
+        "distribution": "round-robin",
+        "targets": [{"address": "127.0.0.1:514", "transport": "tcp"}],
+        "phases": [{
+            "name": "f17-bad",
+            "duration_secs": 5,
+            "messages_per_second": 10,
+            "templates": ["x"],
+            "anomalies": [
+                {"type": "packet-loss", "loss_percent": 150.0}
+            ]
+        }]
+    }"#;
+    let profile = load_profile_from_json_str(json).expect("parse json");
+    assert!(validate_against_embedded_schema(&profile).is_err());
+}
+
+/// F17: комбинация burst + packet-loss в одной фазе.
+/// Burst увеличивает объём генерируемых, packet-loss дропает часть.
+#[tokio::test]
+async fn test_f17_burst_and_packet_loss_combined() {
+    use syslog_generator::{Anomaly, AnomalyKind};
+    let file_path = "f17-combo.log";
+    let _ = fs::remove_file(file_path);
+    let total = 500_u64;
+    let loss_percent = 20.0_f64;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: file_path.into(),
+            transport: "file".into(),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "combo".into(),
+            total_messages: Some(total),
+            messages_per_second: 0,
+            format: Some("raw".into()),
+            templates: vec!["combo {{sequence}}".into()],
+            seed: Some(7),
+            anomalies: Some(vec![
+                Anomaly {
+                    kind: AnomalyKind::BurstInjection {
+                        rate_multiplier: 2.0,
+                        interval_secs: 1.0,
+                        duration_secs: 0.5,
+                    },
+                },
+                Anomaly {
+                    kind: AnomalyKind::PacketLoss { loss_percent },
+                },
+            ]),
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let metrics = create_metrics().expect("create_metrics ok");
+    run_profile(&profile, metrics.clone()).await.unwrap();
+    let content = fs::read_to_string(file_path).unwrap();
+    let delivered = content.lines().filter(|l| !l.trim().is_empty()).count();
+    // Сгенерировано ~total (или чуть больше если burst сработал дважды),
+    // доставлено ~ (1 - loss_percent) от сгенерированного.
+    let expected = (total as f64) * (1.0 - loss_percent / 100.0);
+    let delta = (delivered as f64 - expected).abs();
+    let tolerance = (total as f64) * 0.20;
+    assert!(
+        delta < tolerance,
+        "combo: delivered={delivered}, expected≈{expected:.0}, delta={delta:.0}, tolerance={tolerance:.0}"
+    );
+    // Метрики аномалий должны быть заполнены.
+    let burst_applied = metrics
+        .anomalies_applied_total
+        .with_label_values(&["combo", "burst-injection"])
+        .get();
+    assert!(
+        burst_applied >= 1.0,
+        "burst-injection должно быть применено ≥1 раз, got: {burst_applied}"
+    );
+    let dropped = metrics
+        .anomalies_dropped_total
+        .with_label_values(&["combo", "packet-loss"])
+        .get();
+    assert!(
+        dropped >= 1.0,
+        "packet-loss должно дропнуть ≥1, got: {dropped}"
+    );
+    let _ = fs::remove_file(file_path);
+}

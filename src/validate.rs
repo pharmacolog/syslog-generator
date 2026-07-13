@@ -9,6 +9,7 @@
 //! Валидация — чисто структурная и семантическая проверка полей `Profile`; она
 //! не открывает сокеты и не читает `*_file`-ресурсы (это делает рантайм).
 
+use crate::anomaly::AnomalyKind;
 use crate::config::{Phase, Profile, SyslogConfig, TargetConfig};
 use crate::load_shape::LoadShape;
 use thiserror::Error;
@@ -187,6 +188,55 @@ pub enum ValidationError {
         index: usize,
         name: String,
         field: String,
+        value: f64,
+    },
+
+    // ===== F17 (v9.4.0): сценарии аномалий =====
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.rate_multiplier={value} должно быть > 0")]
+    InvalidAnomalyBurstMultiplier {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.interval_secs={value} должно быть > 0")]
+    InvalidAnomalyBurstInterval {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].burst-injection.duration_secs={value} должно быть >= 0")]
+    InvalidAnomalyBurstDuration {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].slow-drip.rate_divisor={value} должно быть > 1 (rate_divisor=1 даст отсутствие эффекта, <1 — ускорение вместо замедления)")]
+    InvalidAnomalySlowDripDivisor {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].slow-drip.duration_secs={value} должно быть > 0")]
+    InvalidAnomalySlowDripDuration {
+        index: usize,
+        name: String,
+        a_index: usize,
+        value: f64,
+    },
+
+    #[error("phase[{index}] ({name:?}): anomalies[{a_index}].packet-loss.loss_percent={value} вне диапазона 0..=100")]
+    InvalidAnomalyPacketLossPercent {
+        index: usize,
+        name: String,
+        a_index: usize,
         value: f64,
     },
 }
@@ -387,6 +437,88 @@ fn validate_phase(index: usize, p: &Phase, errors: &mut Vec<ValidationError>) {
     // load_shape
     if let Some(ls) = &p.load_shape {
         validate_load_shape(index, &name, ls, errors);
+    }
+
+    // F17 (v9.4.0): сценарии аномалий.
+    if let Some(anomalies) = &p.anomalies {
+        for (a_index, a) in anomalies.iter().enumerate() {
+            validate_anomaly_kind(index, &name, a_index, &a.kind, errors);
+        }
+    }
+}
+
+fn validate_anomaly_kind(
+    index: usize,
+    name: &str,
+    a_index: usize,
+    kind: &AnomalyKind,
+    errors: &mut Vec<ValidationError>,
+) {
+    match kind {
+        AnomalyKind::BurstInjection {
+            rate_multiplier,
+            interval_secs,
+            duration_secs,
+        } => {
+            if !rate_multiplier.is_finite() || *rate_multiplier <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstMultiplier {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *rate_multiplier,
+                });
+            }
+            if !interval_secs.is_finite() || *interval_secs <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstInterval {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *interval_secs,
+                });
+            }
+            if !duration_secs.is_finite() || *duration_secs < 0.0 {
+                errors.push(ValidationError::InvalidAnomalyBurstDuration {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *duration_secs,
+                });
+            }
+        }
+        AnomalyKind::SlowDrip {
+            rate_divisor,
+            duration_secs,
+        } => {
+            // divisor > 1 (иначе нет смысла в "drip" — divisor=1 даст rate*=1,
+            // divisor<1 ускорит фазу, что не slow-drip по семантике).
+            if !rate_divisor.is_finite() || *rate_divisor <= 1.0 {
+                errors.push(ValidationError::InvalidAnomalySlowDripDivisor {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *rate_divisor,
+                });
+            }
+            if !duration_secs.is_finite() || *duration_secs <= 0.0 {
+                errors.push(ValidationError::InvalidAnomalySlowDripDuration {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *duration_secs,
+                });
+            }
+        }
+        AnomalyKind::PacketLoss { loss_percent } => {
+            // 0..=100. NaN тоже отклоняем.
+            if !loss_percent.is_finite() || *loss_percent < 0.0 || *loss_percent > 100.0 {
+                errors.push(ValidationError::InvalidAnomalyPacketLossPercent {
+                    index,
+                    name: name.to_string(),
+                    a_index,
+                    value: *loss_percent,
+                });
+            }
+        }
     }
 }
 
@@ -653,5 +785,196 @@ mod tests {
         p.phases.clear();
         let errs = validate_profile(&p);
         assert!(errs.len() >= 3);
+    }
+
+    // ===== F17 (v9.4.0): сценарии аномалий =====
+
+    fn anomaly_phase_with(kind: crate::anomaly::AnomalyKind) -> Phase {
+        let mut p = valid_phase();
+        p.anomalies = Some(vec![crate::anomaly::Anomaly { kind }]);
+        p
+    }
+
+    #[test]
+    fn f17_accepts_valid_burst_injection() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_accepts_valid_slow_drip() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 10.0,
+            duration_secs: 60.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_accepts_valid_packet_loss() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: 30.0 });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        assert!(validate_profile(&profile).is_empty());
+    }
+
+    #[test]
+    fn f17_rejects_burst_zero_multiplier() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 0.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_negative_multiplier() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: -1.0,
+            interval_secs: 30.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_zero_interval() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 0.0,
+            duration_secs: 2.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstInterval { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_burst_negative_duration() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::BurstInjection {
+            rate_multiplier: 5.0,
+            interval_secs: 30.0,
+            duration_secs: -1.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstDuration { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_slow_drip_divisor_le_one() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 1.0,
+            duration_secs: 10.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalySlowDripDivisor { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_slow_drip_zero_duration() {
+        let p = anomaly_phase_with(crate::anomaly::AnomalyKind::SlowDrip {
+            rate_divisor: 5.0,
+            duration_secs: 0.0,
+        });
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalySlowDripDuration { .. })));
+    }
+
+    #[test]
+    fn f17_rejects_packet_loss_out_of_range() {
+        for bad in [-1.0, 100.5, f64::NAN] {
+            let p =
+                anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: bad });
+            let mut profile = valid_profile();
+            profile.phases = vec![p];
+            let errs = validate_profile(&profile);
+            assert!(
+                errs.iter()
+                    .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })),
+                "loss_percent={bad} должно быть отклонено"
+            );
+        }
+    }
+
+    #[test]
+    fn f17_accepts_packet_loss_boundary_values() {
+        for ok in [0.0, 100.0] {
+            let p =
+                anomaly_phase_with(crate::anomaly::AnomalyKind::PacketLoss { loss_percent: ok });
+            let mut profile = valid_profile();
+            profile.phases = vec![p];
+            let errs = validate_profile(&profile);
+            assert!(
+                !errs
+                    .iter()
+                    .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })),
+                "loss_percent={ok} на границе должно быть принято"
+            );
+        }
+    }
+
+    #[test]
+    fn f17_collects_multiple_anomaly_errors() {
+        let mut p = valid_phase();
+        p.anomalies = Some(vec![
+            crate::anomaly::Anomaly {
+                kind: crate::anomaly::AnomalyKind::BurstInjection {
+                    rate_multiplier: 0.0, // ошибка
+                    interval_secs: 0.0,   // тоже ошибка
+                    duration_secs: 2.0,
+                },
+            },
+            crate::anomaly::Anomaly {
+                kind: crate::anomaly::AnomalyKind::PacketLoss {
+                    loss_percent: 150.0, // ошибка
+                },
+            },
+        ]);
+        let mut profile = valid_profile();
+        profile.phases = vec![p];
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstMultiplier { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyBurstInterval { .. })));
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })));
     }
 }

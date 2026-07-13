@@ -1,6 +1,88 @@
 
 # Changelog
 
+## v9.4.0 - 2026-07-13
+
+F17: сценарии аномалий нагрузки — для тестирования SIEM-правил и
+MITRE ATT&CK-подобных последовательностей. Третий релиз вехи E
+(P2 «Зрелость»). 0 breaking changes — добавлены новые поля и модуль
+без изменения сигнатур существующих API.
+
+### Added
+- **`src/anomaly.rs`** (новый модуль): tagged enum `AnomalyKind` с тремя
+  сценариями аномалий:
+  - `BurstInjection { rate_multiplier, interval_secs, duration_secs }` —
+    каждые `interval_secs` секунд окно `duration_secs` с rate ×
+    `rate_multiplier`. Use case: DDoS-всплеск, spike-нагрузка.
+  - `SlowDrip { rate_divisor, duration_secs }` — первые `duration_secs`
+    секунд rate / `rate_divisor`. Use case: low-and-slow атаки.
+  - `PacketLoss { loss_percent }` — каждое сообщение с вероятностью
+    `loss_percent` (0..=100) дропается до отправки. Детерминировано по
+    `(phase.seed, seq)` через F4-derive_rng с F17-salt в seq.
+- `struct Anomaly { kind: AnomalyKind }` с `#[serde(flatten)]` —
+  плоский tagged-формат в YAML/JSON (`{type: burst-injection, ...}`),
+  готов под будущие общие поля (name, enabled).
+- `struct AnomalyPlanner` с `combined_rate_multiplier(t)` (произведение
+  активных rate-множителей) и `should_drop(seed, seq)` (OR-логика
+  packet-loss'ов).
+- **`Phase.anomalies: Option<Vec<Anomaly>>`** (`#[serde(default,
+  skip_serializing_if = "Option::is_none"]`) — backward-compat:
+  существующие профили без поля работают без изменений.
+- **`src/generator/core.rs::run_phase_multi`**: интеграция аномалий в
+  rate-loop. Multiplicative composition: при наличии аномалий
+  переключаемся с governor (burst-friendly, несовместим с динамическим
+  rate) на честный sleep-планировщик по `base_rate *
+  anomaly_multiplier(t)` (или `shape.rate_at(t) * anomaly_multiplier(t)`
+  для load_shape). Constant rate без аномалий остаётся на governor
+  (поведение неизменно).
+- **Prometheus-метрики**: `syslog_anomalies_applied_total{phase, type}`
+  (сколько раз rate-аномалия реально модифицировала rate) и
+  `syslog_anomalies_dropped_total{phase, type}` (сколько сообщений
+  дропнуто packet-loss'ом).
+- **F13 валидация** (`src/validate.rs`): 6 новых вариантов
+  `ValidationError`:
+  - `InvalidAnomalyBurstMultiplier` (rate_multiplier > 0)
+  - `InvalidAnomalyBurstInterval` (interval_secs > 0)
+  - `InvalidAnomalyBurstDuration` (duration_secs >= 0)
+  - `InvalidAnomalySlowDripDivisor` (rate_divisor > 1)
+  - `InvalidAnomalySlowDripDuration` (duration_secs > 0)
+  - `InvalidAnomalyPacketLossPercent` (0..=100)
+- **`schemas/profile.schema.json`**: новый `$defs/Anomaly` (oneOf для
+  трёх типов) + `Phase.anomalies` (array of Anomaly, опциональный).
+- **`examples/profile-f17-anomalies.yaml`**: пример с тремя аномалиями
+  в одной фазе (burst ×10 каждые 30с + slow-drip ÷5 первые 60с +
+  packet-loss 20%), Prometheus /metrics на 127.0.0.1:9090.
+- 13 unit-тестов в `src/anomaly.rs::tests` (round-trip serde,
+  rate_multiplier по времени, packet-loss детерминизм, planner
+  композиция).
+- 2 unit-теста в `src/observability/metrics.rs::tests` (anomalies_applied
+  и anomalies_dropped после inc с правильными лейблами).
+- 8 unit-тестов в `src/validate.rs::tests::f17_*` (принимает валидные
+  параметры, отклоняет невалидные, boundary 0/100 для loss_percent,
+  собирает все ошибки за проход).
+- 8 интеграционных тестов в `tests/integration_tests.rs::test_f17_*`:
+  - burst увеличивает объём (>= 250 за 2с при base=100)
+  - slow-drip уменьшает объём (80..200 за 2с при base=100)
+  - packet-loss дропает ~30% (±15% допуск)
+  - burst + packet-loss комбинируются (combo)
+  - `anomalies: None` = baseline
+  - `anomalies: Some(vec![])` = no-op
+  - validate_profile отклоняет невалидный burst
+  - JSON Schema принимает/отклоняет по anomalies
+
+### Notes
+- **0 breaking changes**: новый optional-поле `Phase.anomalies` со
+  serde-дефолтом; добавлены новые публичные типы (`Anomaly`,
+  `AnomalyKind`, `AnomalyPlanner`).
+- **180 тестов** (161 unit + 69 integration + 11 N7 = 241; из них
+  13 новых unit + 8 новых integration = 21 новый) — все зелёные.
+- **9 бенчей** (3 + 6) — все зелёные (cargo bench --quick).
+- `cargo clippy --all-targets -- -D warnings` — чисто.
+- `cargo fmt --all -- --check` — clean.
+
+Следующие релизы вехи E: v9.5.0 (N4.cipher_policy),
+v9.6.0 (N12: Docker/musl/docker-compose).
+
 ## v9.1.0 - 2026-07-13
 
 Первый релиз вехи E (P2 «Зрелость»). N10: полная реализация trait

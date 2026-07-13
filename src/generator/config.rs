@@ -208,6 +208,11 @@ pub struct Phase {
     /// F6: паддинг тела сообщения до указанного размера в байтах (0/None = выкл).
     #[serde(default)]
     pub pad_to_bytes: Option<usize>,
+    /// F17 (v9.4.0): сценарии аномалий нагрузки (burst-injection,
+    /// slow-drip, packet-loss). `None` или пустой массив — аномалии
+    /// не применяются (обратная совместимость).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anomalies: Option<Vec<crate::anomaly::Anomaly>>,
 }
 impl Phase {
     pub fn format_type(&self) -> &str {

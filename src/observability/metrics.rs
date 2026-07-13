@@ -42,6 +42,14 @@ pub struct Metrics {
     pub drain_duration: Histogram,
     pub drain_timeouts_total: IntCounter,
     pub messages_drained_total: CounterVec,
+    /// F17 (v9.4.0): число применений аномалии в фазе (для каждой аномалии —
+    /// насколько часто её rate_multiplier был != 1.0). Полезно для понимания,
+    /// какие сценарии реально сработали в прогоне.
+    pub anomalies_applied_total: CounterVec,
+    /// F17 (v9.4.0): число сообщений, дропнутых packet-loss-аномалией
+    /// (не дошли до транспорта). Дополняет `syslog_messages_total` —
+    /// сумма = общее число сгенерированных.
+    pub anomalies_dropped_total: CounterVec,
 }
 
 /// Создать набор Prometheus-метрик и зарегистрировать их в собственном registry.
@@ -146,6 +154,20 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         "Messages drained during shutdown",
         &["target"],
     )?;
+    // F17 (v9.4.0): счётчик применений аномалий. Лейблы phase + type
+    // (burst-injection/slow-drip/packet-loss) — для дашборда "anomalies by phase/type".
+    let anomalies_applied_total = make_counter_vec(
+        "syslog_anomalies_applied_total",
+        "Anomaly rule applications (each tick where the multiplier != 1.0)",
+        &["phase", "type"],
+    )?;
+    // F17 (v9.4.0): счётчик дропов по packet-loss. Дополняет
+    // syslog_messages_total — сумма обоих = общее число сгенерированных.
+    let anomalies_dropped_total = make_counter_vec(
+        "syslog_anomalies_dropped_total",
+        "Messages dropped by packet-loss anomalies before transport send",
+        &["phase", "type"],
+    )?;
 
     // Регистрируем все метрики. Имя для каждой позиции хранится рядом, чтобы
     // при ошибке регистрации сообщение содержало его. Это убирает последний
@@ -204,6 +226,14 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
             "syslog_messages_drained_total",
             Box::new(messages_drained_total.clone()),
         ),
+        (
+            "syslog_anomalies_applied_total",
+            Box::new(anomalies_applied_total.clone()),
+        ),
+        (
+            "syslog_anomalies_dropped_total",
+            Box::new(anomalies_dropped_total.clone()),
+        ),
     ];
     for (name, c) in pairs {
         registry
@@ -230,6 +260,8 @@ pub fn create_metrics() -> Result<Metrics, MetricsError> {
         drain_duration,
         drain_timeouts_total,
         messages_drained_total,
+        anomalies_applied_total,
+        anomalies_dropped_total,
     })
 }
 
@@ -368,6 +400,53 @@ mod tests {
                     && l.trim_end().ends_with(" 3")
             }),
             "raw должно быть = 3, got:\n{s}"
+        );
+    }
+
+    /// F17 (v9.4.0): `syslog_anomalies_applied_total` экспортируется с
+    /// правильными лейблами phase/type после `inc()`.
+    #[test]
+    fn f17_anomalies_applied_total_after_inc() {
+        let m = create_metrics().expect("create_metrics ok");
+        m.anomalies_applied_total
+            .with_label_values(&["p1", "burst-injection"])
+            .inc_by(7.0);
+        m.anomalies_applied_total
+            .with_label_values(&["p1", "slow-drip"])
+            .inc_by(3.0);
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with(
+                    "syslog_anomalies_applied_total{phase=\"p1\",type=\"burst-injection\"}",
+                ) && l.trim_end().ends_with(" 7")
+            }),
+            "burst-injection должно быть = 7, got:\n{s}"
+        );
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_anomalies_applied_total{phase=\"p1\",type=\"slow-drip\"}")
+                    && l.trim_end().ends_with(" 3")
+            }),
+            "slow-drip должно быть = 3, got:\n{s}"
+        );
+    }
+
+    /// F17 (v9.4.0): `syslog_anomalies_dropped_total` экспортируется с
+    /// правильными лейблами phase/type.
+    #[test]
+    fn f17_anomalies_dropped_total_after_inc() {
+        let m = create_metrics().expect("create_metrics ok");
+        m.anomalies_dropped_total
+            .with_label_values(&["p1", "packet-loss"])
+            .inc_by(42.0);
+        let s = gather_metrics(&m).expect("gather_metrics ok");
+        assert!(
+            s.lines().any(|l| {
+                l.starts_with("syslog_anomalies_dropped_total{phase=\"p1\",type=\"packet-loss\"}")
+                    && l.trim_end().ends_with(" 42")
+            }),
+            "packet-loss должно быть = 42, got:\n{s}"
         );
     }
 }

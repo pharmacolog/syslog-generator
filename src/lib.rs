@@ -14,12 +14,14 @@
 //! - `template` — рендеринг `{{placeholder}}` (CompiledTemplate, F5).
 //! - `schema` — загрузка schema.json для F5 schema-per-phase.
 //! - `load_shape` — F3 профили нагрузки во времени.
+//! - `anomaly` — F17 сценарии аномалий нагрузки (burst-injection, slow-drip, packet-loss).
 //! - `shutdown` — graceful drain и shutdown listener.
 //!
 //! Старые модули `core`, `config`, `sender`, `syslog`, `metrics`,
 //! `metrics_server`, `protobuf` сохранены как backward-compat обёртки
 //! (thin re-export из новых слоёв). Сигнатура публичного API не меняется.
 
+pub mod anomaly;
 pub mod cli;
 pub mod error;
 pub mod format;
@@ -48,6 +50,7 @@ pub mod syslog; // → src/syslog.rs: pub use crate::format::* // → src/protob
 
 // === Re-exports: новые слои (предпочтительные пути для нового кода) ===
 
+pub use anomaly::{rate_multiplier, should_drop_packet, Anomaly, AnomalyKind, AnomalyPlanner};
 pub use cli::{apply_overrides, parse_target, Args, Overrides};
 pub use error::{ConfigError, DrainError, MetricsError, RuntimeError};
 pub use format::{

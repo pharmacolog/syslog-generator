@@ -1,6 +1,38 @@
 
 # Changelog
 
+## v10.4.3 - 2026-07-13
+
+**CI fix: стабильный coverage + arm64 только в release-ветке.**
+
+### Fixed
+
+- **`.github/workflows/ci.yml`**: заменён `taiki-e/install-action@v2` →
+  `cargo install cargo-llvm-cov --locked` в `coverage` job. Это устраняет
+  Dependabot-баг (`install-action: no tool specified...`) который приводил
+  к warning на каждом CI run и потенциально мог сломать установку `cargo-llvm-cov`.
+  Теперь используется официальный cargo registry (~30 сек на холодную
+  установку, кэшируется через `Swatinem/rust-cache@v2`).
+- **`.github/workflows/docker.yml`**: разделено на 2 jobs:
+  - `docker-amd64`: запускается на **всех** push/PR (быстрый smoke-test, ~10-15 мин).
+  - `docker-arm64`: запускается **ТОЛЬКО** на push в `release/v*.*.*`
+    ИЛИ push тега `v*.*.*` (multi-arch через QEMU emulation, ~30-40 мин).
+  - Это ускоряет CI для нерелизных веток ~50% (не тратим время на arm64).
+  - Условие: `if: (startsWith(github.ref, 'refs/heads/release/')) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))`.
+  - `docker-arm64` имеет `needs: docker-amd64` — arm64 build начнётся
+    только после успешного amd64 (гарантирует, что код валиден).
+
+### Notes
+
+- **Coverage stage** теперь гарантированно выполняется на CI:
+  `cargo install cargo-llvm-cov --locked` (через `run:` step) вместо
+  third-party action, который мог сломаться из-за Dependabot.
+- **CI на main run 29291534120** (предыдущий запуск v10.4.2): Coverage
+  baseline = `success`, но с warning от `taiki-e`. После фикса — без warning.
+- **Docker workflow**: arm64 builds теперь только на `release/v*.*.*` или
+  `v*.*.*` tag push (не на main, dev, feature/*, PR). Это экономит ~30-40 мин
+  на каждом push в main/dev.
+
 ## v10.4.2 - 2026-07-13
 
 **Patch: кэширование тестового сертификата в `make_test_cert` (фикс 2 flaky TLS mTLS тестов).**

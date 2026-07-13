@@ -129,5 +129,18 @@ jobs:
 
       - name: Smoke test (только amd64)
         if: matrix.platform == 'linux/amd64'
+        # Используем tag, который ТОЧНО есть в registry для текущего push:
+        # - main: $VERSION (например, 9.6.0)
+        # - tag push: $TAG_NAME (например, 9.6.0)
+        # - dev: dev-{short_sha} (например, dev-9d67323)
+        # Просто $VERSION ломается на dev-branch — тег ещё не существует.
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.VERSION }} --version
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="${{ steps.meta.outputs.VERSION }}"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="dev-${{ steps.meta.outputs.SHORT_SHA }}"
+          fi
+          echo "Smoke test image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+          docker run --rm "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}" --version

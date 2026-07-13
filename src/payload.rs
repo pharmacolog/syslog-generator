@@ -11,6 +11,7 @@
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::fmt::Write as _;
 
 /// Детерминированный вывод RNG из seed и порядкового номера сообщения.
 ///
@@ -53,32 +54,71 @@ const USER_NAMES: &[&str] = &[
 
 /// Реализация faker-генераторов. `kind` — часть после `faker.`
 /// (например `ipv4`, `http_status`). Неизвестный вид даёт пустую строку.
+///
+/// v10.2.0 (Performance ч.2): hot-path оптимизации для горячих faker —
+/// `String::with_capacity(N)` + `write!` через `std::fmt::Write` вместо
+/// многоэтапных `format!` и `Vec<String>::join()`. Это устраняет
+/// промежуточные аллокации в hot-path: один String на одну итоговую
+/// аллокацию. Особенно заметно на `faker.ipv4`, `faker.uuid`, `faker.ipv6`,
+/// `faker.url` — наиболее частых в нагрузочных профилях.
 pub fn faker(kind: &str, rng: &mut StdRng) -> String {
     match kind {
-        "ipv4" => format!(
-            "{}.{}.{}.{}",
-            rng.random_range(1..=223),
-            rng.random_range(0..=255),
-            rng.random_range(0..=255),
-            rng.random_range(1..=254)
-        ),
-        "ipv6" => (0..8)
-            .map(|_| format!("{:x}", rng.random_range(0u16..=0xffff)))
-            .collect::<Vec<_>>()
-            .join(":"),
-        "mac" => (0..6)
-            .map(|_| format!("{:02x}", rng.random_range(0u8..=255)))
-            .collect::<Vec<_>>()
-            .join(":"),
+        "ipv4" => {
+            // "255.255.255.255" = max 15 байт. Pre-alloc устраняет 2 re-alloc.
+            let mut s = String::with_capacity(15);
+            write!(
+                s,
+                "{}.{}.{}.{}",
+                rng.random_range(1..=223),
+                rng.random_range(0..=255),
+                rng.random_range(0..=255),
+                rng.random_range(1..=254)
+            )
+            .expect("String::write не падает");
+            s
+        }
+        "ipv6" => {
+            // "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff" = 39 байт.
+            // Было: 8×Vec<String> + join (8 аллокаций). Стало: 1 String.
+            let mut s = String::with_capacity(39);
+            for i in 0..8 {
+                if i > 0 {
+                    s.push(':');
+                }
+                write!(s, "{:x}", rng.random_range(0u16..=0xffff))
+                    .expect("String::write не падает");
+            }
+            s
+        }
+        "mac" => {
+            // "ff:ff:ff:ff:ff:ff" = 17 байт.
+            let mut s = String::with_capacity(17);
+            for i in 0..6 {
+                if i > 0 {
+                    s.push(':');
+                }
+                write!(s, "{:02x}", rng.random_range(0u8..=255))
+                    .expect("String::write не падает");
+            }
+            s
+        }
         "uuid" => uuid_v4(rng),
-        "hostname" => format!(
-            "{}-{:02}",
-            HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
-            rng.random_range(1..=99)
-        ),
+        "hostname" => {
+            // "edge-99" = max ~9 байт.
+            let mut s = String::with_capacity(9);
+            write!(
+                s,
+                "{}-{:02}",
+                HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
+                rng.random_range(1..=99)
+            )
+            .expect("String::write не падает");
+            s
+        }
         "username" => USER_NAMES[rng.random_range(0..USER_NAMES.len())].to_string(),
         "user_agent" => USER_AGENTS[rng.random_range(0..USER_AGENTS.len())].to_string(),
         "url" => {
+            // "https://edge-99.example.com/api/v1/users" = max ~48 байт.
             let paths = [
                 "/",
                 "/login",
@@ -87,12 +127,16 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 "/static/app.js",
                 "/search?q=x",
             ];
-            format!(
+            let mut s = String::with_capacity(48);
+            write!(
+                s,
                 "https://{}-{:02}.example.com{}",
                 HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
                 rng.random_range(1..=99),
                 paths[rng.random_range(0..paths.len())]
             )
+            .expect("String::write не падает");
+            s
         }
         "http_status" => HTTP_STATUSES[rng.random_range(0..HTTP_STATUSES.len())].to_string(),
         _ => String::new(),
@@ -100,15 +144,49 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
 }
 
 /// Случайный UUID версии 4 (RFC 4122): версия 4, вариант 10xx.
+///
+/// v10.2.0: одна аллокация `String::with_capacity(36)` + `write!` байт hex в
+/// нужные позиции (с дефисами на 8, 13, 18, 23). Было: format! с 16
+/// аргументами и промежуточными Display-форматированиями.
 fn uuid_v4(rng: &mut StdRng) -> String {
     let mut b = [0u8; 16];
     rng.fill(&mut b);
     b[6] = (b[6] & 0x0f) | 0x40; // версия 4
     b[8] = (b[8] & 0x3f) | 0x80; // вариант RFC 4122
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
-    )
+
+    // UUID формат: 8-4-4-4-12 hex digits + 4 дефиса = 36 байт.
+    let mut s = String::with_capacity(36);
+    // Группа 1 (8 hex): b[0..8]
+    write_hex_pair(&mut s, b[0]);
+    write_hex_pair(&mut s, b[1]);
+    write_hex_pair(&mut s, b[2]);
+    write_hex_pair(&mut s, b[3]);
+    s.push('-');
+    // Группа 2 (4 hex): b[4..6]
+    write_hex_pair(&mut s, b[4]);
+    write_hex_pair(&mut s, b[5]);
+    s.push('-');
+    // Группа 3 (4 hex): b[6..8]
+    write_hex_pair(&mut s, b[6]);
+    write_hex_pair(&mut s, b[7]);
+    s.push('-');
+    // Группа 4 (4 hex): b[8..10]
+    write_hex_pair(&mut s, b[8]);
+    write_hex_pair(&mut s, b[9]);
+    s.push('-');
+    // Группа 5 (12 hex): b[10..16]
+    for &byte in &b[10..16] {
+        write_hex_pair(&mut s, byte);
+    }
+    s
+}
+
+/// Хелпер для `uuid_v4`: пишет 2 hex-цифры (lowercase) в String.
+/// Формат `{:02x}` не выделяет промежуточный String — пишет прямо в `s`.
+fn write_hex_pair(s: &mut String, byte: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    s.push(HEX[(byte >> 4) as usize] as char);
+    s.push(HEX[(byte & 0x0f) as usize] as char);
 }
 
 /// Случайное целое в диапазоне [min, max] включительно. Если max < min —
@@ -122,11 +200,17 @@ pub fn int_in_range(min: i64, max: i64, rng: &mut StdRng) -> i64 {
 }
 
 /// Случайная строка длины `len` из букв и цифр (a-z, A-Z, 0-9).
+///
+/// v10.2.0: одна аллокация `String::with_capacity(len)` + `push` байт (не char,
+/// экономит UTF-8 валидацию в горячем пути). Было: `Vec<char>` (62 аллокации
+/// для len=62) + `.collect::<String>()` (ещё одна аллокация + re-encoding).
 pub fn random_string(len: usize, rng: &mut StdRng) -> String {
     const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    (0..len)
-        .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
-        .collect()
+    let mut s = String::with_capacity(len);
+    for _ in 0..len {
+        s.push(CHARSET[rng.random_range(0..CHARSET.len())] as char);
+    }
+    s
 }
 
 /// datetime в RFC3339 UTC: реальное «сейчас» плюс/минус случайный джиттер

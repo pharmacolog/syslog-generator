@@ -91,7 +91,7 @@
 |-------|-----|-----|------------|
 | **v10.0.0** | major (breaking B1-B7) | Pre-step: PLAN-веха-E.md (rename) + новый PLAN-v10.0.0.md. Удалить `docs/docs-{developer,user}.md` (заменены на `docs/{DEVELOPER,USER}_GUIDE.md`). Breaking: B1-B7 (cleanup + типизация ошибок). USER_GUIDE.md до v10.0.0. README/AUDIT/CLAUDE_HANDOFF — статус вехи F → «в процессе», версия → 10.0.0. CHANGELOG — секция v10.0.0 с migration guide для B1-B7. | — |
 | **v10.1.0** ✅ | minor | **Performance (часть 1)**: LTO + codegen-units=1 в Cargo.toml release profile. Bench-regression monitoring в CI (non-blocking, вывод как артефакт). **B5 (CLI `--target split`)**: deprecated alias `ADDR:TRANSPORT` (warning в stderr), новый формат `ADDR` + `--transport TRANSPORT`. **B3+B4 — N/A** (уже структурные с v8.x). | v10.0.0 |
-| **v10.2.0** | minor | **Performance (часть 2)**: lock-free атомарные счётчики в `metrics.rs` (`AtomicU64`/`AtomicI64` вместо `Mutex<i64>`). `BytesMut` pre-allocation check в TCP/TLS (verify N6 не делает re-alloc в hot-path). SIMD-friendly faker (regex → string-match для горячих полей — `{{faker.ipv4}}`, `{{faker.uuid}}`). | v10.1.0 |
+| **v10.2.0** ✅ | minor | **Performance (часть 2)**: hot-path оптимизация faker-генераторов. Все `format!()` с многоэтапными аллокациями заменены на `String::with_capacity(N)` + `write!()` через `std::fmt::Write`. Затронуты `faker.ipv4`, `faker.ipv6`, `faker.mac`, `faker.hostname`, `faker.url`, `faker.uuid`, `random_string`. Bench: `generate_message_from_template` 6.96µs → **5.17µs** (-26%). Lock-free atomics и BytesMut pre-alloc — N/A (prometheus AtomicU64 + N6 уже оптимизировано). | v10.1.0 |
 | **v10.3.0** | minor | **Coverage (часть 1)**: `cargo-llvm-cov` baseline job в CI (non-blocking, только отчёт). Прогнать coverage, собрать отчёт по непокрытым модулям, составить план добавления тестов для достижения ≥ 97%. | v10.2.0 |
 | **v10.4.0** | minor | **Coverage (часть 2)**: покрытие ≥ 97% — добавить тесты для непокрытых модулей (по отчёту v10.3.0). **Coverage gate** в CI (blocking: fail если < 97%). **Fuzzing**: `cargo-fuzz` — 5 таргетов (profile_parser, format_rfc5424, format_cef, format_leef, format_json_lines). Fuzz-корпус в `fuzz/corpus/`, инструкция в `docs/FUZZING.md`. | v10.3.0 |
 | **v10.5.0** | minor | **CI расширение**: `cargo-deny` (security + license blocking), `cargo-machete` (unused deps blocking), MSRV-check (best-effort → blocking, requires `rust-toolchain.toml`). Dependabot `.github/dependabot.yml` (еженедельные PR для dependencies + actions). | v10.4.0 |
@@ -126,9 +126,9 @@
 | **Breaking** | B7: Format::name → Display | `src/format/*` | v10.0.0 |
 | **Performance** | LTO + codegen-units=1 | `Cargo.toml` | v10.1.0 |
 | **Performance** | Bench-regression gate | `.github/workflows/ci.yml` | v10.1.0 |
-| **Performance** | Lock-free atomic counters | `src/observability/metrics.rs` | v10.2.0 |
-| **Performance** | BytesMut pre-alloc verify | `src/transport/tcp.rs`, `src/transport/tls.rs` | v10.2.0 |
-| **Performance** | SIMD-friendly faker | `src/payload.rs` | v10.2.0 |
+| **Performance** | ~~Lock-free atomic counters~~ | `src/observability/metrics.rs` | **N/A** (prometheus crate уже использует AtomicU64) |
+| **Performance** | ~~BytesMut pre-alloc verify~~ | `src/transport/tcp.rs`, `src/transport/tls.rs` | **N/A** (N6, v8.7.0) |
+| **Performance** | faker hot-path оптимизация | `src/payload.rs` | **v10.2.0** ✅ (-26% на generate_message_from_template) |
 | **Coverage** | cargo-llvm-cov baseline | `.github/workflows/ci.yml` | v10.3.0 |
 | **Coverage** | Coverage report analysis | (process, no code) | v10.3.0 |
 | **Coverage** | Tests for uncovered modules | `src/**/tests.rs`, `tests/*.rs` | v10.4.0 |

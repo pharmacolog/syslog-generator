@@ -1,6 +1,39 @@
 
 # Changelog
 
+## v8.8.1 - 2026-07-13
+
+Patch-долг перед major release v9.0.0: исправления документации (AUDIT.md)
+после подробного аудита. Код не меняется — только точность
+документации.
+
+### Changed
+- **AUDIT.md §4.1 F7/F8/F9**: поставлены ✅ (реализованы в v7.7.0,
+  ранее галочки отсутствовали) + ссылки на конкретные файлы
+  (`src/format/rfc5424.rs::build`, `src/format/rfc3164.rs::build`,
+  `src/transport/mod.rs::frame_stream`).
+- **AUDIT.md §4.1 F13**: убрана пометка "Отложено: JSON Schema + YAML-ввод"
+  — D3 сделано в v8.5.0. Теперь: "✅ Сделано (v8.1.0, расширено v8.5.0/D3)"
+  с описанием JSON Schema через `jsonschema` и YAML-ввода.
+- **AUDIT.md §4.2 N4**: убрана пометка "Отложено: mTLS, min-TLS-version"
+  — сделаны в v8.7.2. Теперь: "✅ Сделано (v8.2.0, расширено v8.7.2/N4.mTLS)"
+  с описанием 3 новых TargetConfig-полей, `parse_tls_min_version`,
+  3 новых ValidationError. **Cipher policy** (allow/denylist шифров)
+  остаётся отложенной в веху E или после.
+
+### Notes
+- Тесты: **199** (118 unit + 70 integration + 11 N7) — без изменений.
+- 9 бенчей (3 + 6) — без изменений.
+- clippy чист, fmt clean.
+- 0 изменений в коде (`src/`) — только документация.
+- Backward-compat: v8.8.1 — patch-релиз, API не меняется.
+- CI (GitHub Actions) проверен локально (`gh run list` после правки
+  filter'а schema-файлов в workflow — все 3 job'а зелёные).
+
+Следующий релиз: **v9.0.0** (major milestone) — семантический маркер
+закрытия вехи D, без breaking changes. После этого — веха E (F15, F16,
+F17, N10, N12).
+
 ## v8.8.0 - 2026-07-13
 
 Minor-релиз с архитектурным рефакторингом (N10). Самое большое

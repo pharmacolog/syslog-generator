@@ -128,18 +128,86 @@ pub(crate) fn frame_into(buf: &mut BytesMut, msg: &[u8], framing: Framing) {
     }
 }
 
-/// Trait `Transport` (планируется в вехе E для динамического выбора транспорта).
-/// Сейчас транспорты — это просто функции `target_sender_*`.
+/// Trait `Transport` (N10, v9.1.0) — абстракция для динамического выбора
+/// транспорта. Реализуется в [`TransportKind`] для static dispatch через
+/// enum (вместо `Box<dyn Transport>` — экономия heap-аллокаций на горячем
+/// пути). Используется в `run_phase_multi` через `TransportKind::from(target)`.
+/// `async fn` в trait работает нативно с Rust 1.75+ (наша версия 1.95).
+///
+/// В v9.3.0: добавим `Kafka(KafkaConfig)` вариант (F16 — Kafka/Redpanda).
 pub trait Transport: Send + Sync {
-    /// Имя транспорта для метрик ("file", "tcp", "udp", "tls").
+    /// Имя транспорта для метрик ("file", "tcp", "udp", "tls", "kafka").
     fn name(&self) -> &'static str;
     /// Запустить цикл отправки: читать из `rx`, отправлять через транспорт.
+    /// `addr` — конфигурация target'а (путь для file, host:port для tcp/udp/tls,
+    /// bootstrap_servers для kafka). Использует `async fn` (Rust 1.75+).
     fn run(
         &self,
+        addr: &str,
+        phase_name: &str,
         rx: SharedRx,
         metrics: Metrics,
         shutdown: CancellationToken,
-    ) -> anyhow::Result<()>;
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Конкретный выбор транспорта для фазы (N10, v9.1.0).
+/// Используется в `run_phase_multi` для static dispatch через enum —
+/// 0 heap-аллокаций, 0 vtable lookups.
+///
+/// В v9.3.0: добавим `Kafka(KafkaConfig)` (F16 — Kafka/Redpanda transport).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportKind {
+    File,
+    Tcp,
+    Udp,
+    Tls,
+}
+
+impl Transport for TransportKind {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Tcp => "tcp",
+            Self::Udp => "udp",
+            Self::Tls => "tls",
+        }
+    }
+
+    /// `async fn` в trait (Rust 1.75+). Для каждого варианта enum
+    /// вызываем соответствующую `target_sender_*` функцию с переданными
+    /// `addr`/`phase_name`. Это даёт static dispatch (0 vtable lookups).
+    ///
+    /// В v9.3.0: добавим `Kafka(KafkaConfig)` вариант с новой
+    /// `target_sender_kafka` функцией.
+    fn run(
+        &self,
+        addr: &str,
+        phase_name: &str,
+        rx: SharedRx,
+        metrics: Metrics,
+        shutdown: CancellationToken,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
+        async move {
+            match self {
+                Self::File => file::target_sender_file(
+                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
+                ).await,
+                Self::Tcp => tcp::target_sender_tcp(
+                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
+                    crate::transport::Framing::NonTransparent,
+                ).await,
+                Self::Udp => udp::target_sender_udp(
+                    addr.to_string(), phase_name.to_string(), rx, metrics, shutdown,
+                ).await,
+                Self::Tls => tls::target_sender_tls(
+                    addr.to_string(), crate::transport::tls::TlsParams::default(),
+                    phase_name.to_string(), rx, metrics, shutdown,
+                    crate::transport::Framing::NonTransparent,
+                ).await,
+            }
+        }
+    }
 }
 
 // Подмодули реализации конкретных транспортов.
@@ -157,3 +225,27 @@ pub use file::target_sender_file;
 pub use tcp::target_sender_tcp;
 pub use tls::{build_tls_connector, parse_tls_min_version, target_sender_tls, TlsParams};
 pub use udp::target_sender_udp;
+
+// ===== N10 (v9.1.0): тесты trait Transport =====
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// N10: `TransportKind::name()` возвращает правильное имя.
+    #[test]
+    fn n10_transportkind_name() {
+        assert_eq!(TransportKind::File.name(), "file");
+        assert_eq!(TransportKind::Tcp.name(), "tcp");
+        assert_eq!(TransportKind::Udp.name(), "udp");
+        assert_eq!(TransportKind::Tls.name(), "tls");
+    }
+
+    /// N10: `Transport` реализован для `TransportKind` (compile-time check).
+    /// Если сигнатура trait изменится, перестанет компилироваться.
+    #[allow(dead_code)]
+    fn _assert_transport_impl() {
+        fn assert_impl<T: Transport>() {
+            assert_impl::<TransportKind>();
+        }
+    }
+}

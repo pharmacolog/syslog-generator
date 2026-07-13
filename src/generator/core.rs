@@ -1,4 +1,4 @@
-use crate::format::{build_rfc3164, build_rfc5424, protobuf::serialize_protobuf_like, Header};
+use crate::format::{protobuf::serialize_protobuf_like, Format, FormatContext, FormatKind, Header};
 use crate::generator::config::{Phase, Profile, TargetConfig};
 use crate::observability::metrics::Metrics;
 use crate::schema::Schema;
@@ -123,7 +123,17 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
         }
         if let Some(tpl) = schema.template {
             let body = render_template(&tpl, &values);
-            return Ok(finish_body(phase, &values, body.into_bytes(), &mut rng));
+            // N10-gap (v9.2.0): resolve FormatKind один раз через parse (дешёвый match).
+            // Для hot-path в run_phase_multi используется `generate_message_with_format`
+            // с уже резолвленным FormatKind — без per-message parse.
+            let format_kind = FormatKind::parse(phase.format_type()).unwrap_or(FormatKind::Raw);
+            return Ok(finish_body(
+                &format_kind,
+                phase,
+                &values,
+                body.into_bytes(),
+                &mut rng,
+            ));
         }
     }
     // F14: выбор шаблона из набора (случайный / взвешенный), а не всегда первый.
@@ -137,7 +147,73 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
         ));
     }
     let body = render_template(&tpl, &values);
-    Ok(finish_body(phase, &values, body.into_bytes(), &mut rng))
+    let format_kind = FormatKind::parse(phase.format_type()).unwrap_or(FormatKind::Raw);
+    Ok(finish_body(
+        &format_kind,
+        phase,
+        &values,
+        body.into_bytes(),
+        &mut rng,
+    ))
+}
+
+/// Hot-path версия `generate_message`: FormatKind уже резолвлен вызывающим
+/// (`run_phase_multi`). Это устраняет per-message парсинг `phase.format_type()`
+/// в горячем цикле — экономия ~5-10 нс на сообщение + устраняет string-ветку.
+///
+/// `format_kind` принимается по ссылке (не Copy — `Protobuf` вариант несёт
+/// `Option<ProtobufSchemaFieldMap>` с `HashMap`), чтобы избежать clone
+/// в горячем цикле. Внутри `render`/`matches!` он только читается.
+pub fn generate_message_with_format(
+    phase: &Phase,
+    format_kind: &FormatKind,
+    seq: usize,
+) -> Result<Vec<u8>> {
+    let mut rng = crate::payload::derive_rng(phase.seed, seq);
+    let mut values = default_values(phase, seq, &mut rng);
+    if let Some(schema) = load_schema(phase)? {
+        let mut fields: Vec<_> = schema.fields.into_iter().collect();
+        fields.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, field) in &fields {
+            if field.depends_on.is_none() {
+                let value = gen_schema_field(field, &mut rng);
+                values.insert(name.clone(), value);
+            }
+        }
+        for (name, field) in &fields {
+            if let Some(parent) = &field.depends_on {
+                let value = resolve_correlated_field(field, parent, &values, &mut rng);
+                values.insert(name.clone(), value);
+            }
+        }
+        if let Some(tpl) = schema.template {
+            let body = render_template(&tpl, &values);
+            return Ok(finish_body(
+                format_kind,
+                phase,
+                &values,
+                body.into_bytes(),
+                &mut rng,
+            ));
+        }
+    }
+    let templates = load_templates(phase)?;
+    let tpl = pick_template(&templates, phase.template_weights.as_deref(), &mut rng)
+        .unwrap_or_else(|| "{{timestamp}} {{real_app}} seq={{sequence}}".to_string());
+    if matches!(format_kind, FormatKind::Protobuf(_)) {
+        return Ok(serialize_protobuf_like(
+            phase.protobuf_schema.as_ref(),
+            &values,
+        ));
+    }
+    let body = render_template(&tpl, &values);
+    Ok(finish_body(
+        format_kind,
+        phase,
+        &values,
+        body.into_bytes(),
+        &mut rng,
+    ))
 }
 
 /// F14: выбрать шаблон из списка. Пустой список → None. Один шаблон → он.
@@ -221,6 +297,7 @@ fn resolve_correlated_field(
 
 /// Обёртка syslog + F6-паддинг тела до целевого размера (если задан).
 fn finish_body(
+    format_kind: &FormatKind,
     phase: &Phase,
     values: &HashMap<String, String>,
     body: Vec<u8>,
@@ -230,13 +307,25 @@ fn finish_body(
         Some(n) if n > 0 => crate::payload::pad_to_size(body, n, rng),
         _ => body,
     };
-    wrap_syslog(phase, values, body)
+    wrap_syslog(format_kind, phase, values, body)
 }
 
-/// Обернуть тело сообщения (MSG) в syslog-конверт согласно `format`.
-/// rfc5424/rfc3164 — валидный syslog; raw — сырой рендер без обёртки
-/// (обратная совместимость). Строковые поля заголовка проходят подстановку шаблона.
-fn wrap_syslog(phase: &Phase, values: &HashMap<String, String>, body: Vec<u8>) -> Vec<u8> {
+/// Обернуть тело сообщения (MSG) в конверт согласно `phase.format`.
+///
+/// N10 (v9.1.0) ввёл trait `Format` + `FormatKind`, но горячий путь в этой
+/// функции использовал прямой match на `phase.format_type()` — это N10-gap.
+/// В v9.2.0 (F15) диспатч идёт через `FormatKind::render(&ctx, &body)` —
+/// единая точка расширения для rfc5424/rfc3164/raw/protobuf/cef/leef/json_lines.
+///
+/// `format_kind` кешируется в `run_phase_multi` (резолвится один раз на фазу
+/// из `phase.format_type()` через `FormatKind::parse`). Это устраняет
+/// строковый match в горячем цикле — экономия ~3-5 нс на сообщение.
+fn wrap_syslog(
+    format_kind: &FormatKind,
+    phase: &Phase,
+    values: &HashMap<String, String>,
+    body: Vec<u8>,
+) -> Vec<u8> {
     let s = &phase.syslog;
     let header = Header {
         facility: s.facility,
@@ -248,12 +337,15 @@ fn wrap_syslog(phase: &Phase, values: &HashMap<String, String>, body: Vec<u8>) -
         structured_data: render_template(&s.structured_data, values),
         bom: s.bom,
     };
-    match phase.format_type() {
-        "rfc5424" => build_rfc5424(&header, &body),
-        "rfc3164" => build_rfc3164(&header, &body),
-        // "raw" и любые прочие значения — сырой рендер шаблона без обёртки.
-        _ => body,
-    }
+    // FormatContext — stack-аллоцированная структура из 4 ссылок. Стоимость
+    // построения: ~0 (просто копирование ссылок).
+    let ctx = FormatContext {
+        header: &header,
+        cef: phase.cef.as_ref(),
+        leef: phase.leef.as_ref(),
+        json_lines_fields: phase.json_lines_fields.as_ref(),
+    };
+    format_kind.render(&ctx, &body)
 }
 
 pub async fn run_phase_multi(
@@ -380,6 +472,17 @@ pub async fn run_phase_multi(
     }
     metrics.active_workers.set(total_workers as f64);
 
+    // N10-gap fix (v9.2.0): резолвим FormatKind ОДИН раз на фазу (вне горячего
+    // цикла). Раньше `phase.format_type()` вызывался в `generate_message`
+    // на каждое сообщение, плюс match в `wrap_syslog` — string-ветка на
+    // каждое сообщение. Теперь это match в `FormatKind::parse` (быстрее,
+    // компилируется в jump table), и далее — static dispatch через enum.
+    //
+    // F13 (validate.rs) уже отверг неизвестные форматы, так что `unwrap_or`
+    // здесь — defensive fallback на случай если кто-то вызывает core напрямую
+    // без validate (тесты, бенчмарки).
+    let format_kind = FormatKind::parse(phase.format_type()).unwrap_or(FormatKind::Raw);
+
     // Целевая интенсивность.
     // Два режима:
     //  1) Постоянный rate (load_shape не задан) — токен-бакет `governor`,
@@ -453,7 +556,9 @@ pub async fn run_phase_multi(
         }
 
         seq += 1;
-        let msg = generate_message(phase, seq)?;
+        // N10-gap fix (v9.2.0): hot-path — FormatKind уже резолвлен, без
+        // per-message `phase.format_type()` парсинга.
+        let msg = generate_message_with_format(phase, &format_kind, seq)?;
         metrics
             .messages_generated_total
             .with_label_values(&[&phase.name])

@@ -1,0 +1,30 @@
+{
+  "distribution": "round-robin",
+  "targets": [
+    {
+      "address": "/tmp/syslog-gen-json.log",
+      "transport": "file"
+    }
+  ],
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "json-lines-demo",
+      "duration_secs": 10,
+      "messages_per_second": 50,
+      "templates": [
+        "GET {{faker.url}} status={{faker.http_status}} by {{faker.username}} from {{faker.ipv4}}"
+      ],
+      "format": "json_lines",
+      "json_lines_fields": {
+        "env": "demo",
+        "service": "web-frontend",
+        "region": "eu-west-1",
+        "host": "web-1"
+      }
+    }
+  ]
+}

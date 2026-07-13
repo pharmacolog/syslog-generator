@@ -1,0 +1,35 @@
+{
+  "distribution": "round-robin",
+  "targets": [
+    {
+      "address": "/tmp/syslog-gen-leef.log",
+      "transport": "file"
+    }
+  ],
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "leef-demo",
+      "duration_secs": 10,
+      "messages_per_second": 50,
+      "templates": [
+        "blocked connection from {{faker.ipv4}} to {{faker.url}}"
+      ],
+      "format": "leef",
+      "leef": {
+        "vendor": "Acme Corp",
+        "product": "WebProxy",
+        "version": "7.2.0",
+        "event_id": "blocked_request",
+        "attributes": {
+          "sev": "5",
+          "cat": "web",
+          "devTimeFormat": "yyyy-MM-dd HH:mm:ss"
+        }
+      }
+    }
+  ]
+}

@@ -1,11 +1,10 @@
 # PLAN: v9.x — Веха E «Зрелость» (P2)
 
-> Статус: **середина вехи E**. v9.1.0 (N10) **выпущен** ✅. v9.0.0 (закрытие вехи D)
-> выпущен ранее. Все P0+P1 задачи AUDIT.md §4 выполнены. Реализуем P2:
-> новые форматы (F15), транспорты (F16), сценарии аномалий (F17),
-> cipher_policy (N4), Docker (N12).
+> Статус: **середина вехи E**. v9.2.0 (F15) **выпущен** ✅.
+> v9.1.0 (N10) и v9.0.0 (закрытие вехи D) выпущены ранее.
+> Все P0+P1 задачи AUDIT.md §4 выполнены. Реализуем P2: F16, F17, N4, N12.
 
-Дата: 2026-07-13. Цель: v9.2.0 (F15) → v9.3.0 (F16) → v9.4.0 (F17) → v9.5.0 (N4) → v9.6.0 (N12).
+Дата: 2026-07-13. Цель: v9.3.0 (F16) → v9.4.0 (F17) → v9.5.0 (N4) → v9.6.0 (N12).
 
 ## Зафиксированные стратегические решения
 
@@ -22,8 +21,8 @@
 | Задача | Где в коде | Статус | План |
 |--------|------------|--------|------|
 | **N10** (✅ выпущен в v9.1.0) | `src/format/mod.rs` (`Format` trait + `FormatKind`), `src/transport/mod.rs` (`Transport` trait + `TransportKind`) | **DONE** | Trait'ы + static dispatch через enum. 0 breaking changes. |
-| **N10 (gap)** | `src/generator/core.rs:251` `wrap_syslog` — match на `phase.format_type()` обходит `FormatKind` | **GAP** | **Шаг 0 для v9.2.0**: перевести продьюсер на `FormatKind`-диспатч с кешированием (см. §3.2). |
-| **F15** | Не реализован. | pending | `src/format/{cef,leef,json_lines}.rs` через расширенный trait `Format` (см. §3.2). |
+| **N10 (gap)** ✅ | `src/generator/core.rs::wrap_syslog` — match на `phase.format_type()` обходит `FormatKind` | **DONE (v9.2.0)** | Переведён на `FormatKind`-диспатч с кешированием через `generate_message_with_format`. |
+| **F15** ✅ | `src/format/{cef,leef,json_lines}.rs` через расширенный trait `Format` (`FormatContext`) | **DONE (v9.2.0)** | Реализованы CEF (ArcSight), LEEF v2.0 (QRadar), JSON-lines (NDJSON). |
 | **F16** | `src/transport/{file,tcp,udp,tls}.rs` — sender'ы. Нет Kafka. | pending | `src/transport/kafka.rs` через `rskafka` (feature flag). Расширение `file` rotation. Reconnect: exponential backoff + jitter (см. §3.3). |
 | **F17** | Не реализован. | pending | `phases.anomalies: Option<Vec<Anomaly>>` в `Phase` — BurstInjection/SlowDrip/PacketLoss (расширенные сигнатуры, см. §3.4). |
 | **N4.cipher_policy** | Не реализован. Текущий TLS-стек — `native-tls` (Linux-only cipher selection). | pending | **D2**: миграция на `rustls` + `tls_cipher_suites: Option<Vec<String>>` в `TargetConfig` (см. §3.5). |
@@ -36,7 +35,7 @@
 | Релиз | Тип | Что | Зависит от |
 |-------|-----|-----|------------|
 | **v9.1.0** ✅ | minor | **N10**: trait `Format` + trait `Transport` (static dispatch через enum). Без breaking changes. | — |
-| **v9.2.0** | minor | **Шаг 0 (N10 gap)**: перевести `wrap_syslog` на `FormatKind`. **F15**: CEF + LEEF + JSON-lines через расширенный trait `Format`. | v9.1.0 |
+| **v9.2.0** ✅ | minor | **Шаг 0 (N10 gap)**: перевести `wrap_syslog` на `FormatKind`. **F15**: CEF + LEEF + JSON-lines через расширенный trait `Format`. | v9.1.0 |
 | **v9.3.0** | minor | **F16**: Kafka transport (`rskafka`, `feature = "kafka"`) + файловая ротация (расширение `file`, не новый вариант) + reconnect exponential backoff с jitter | v9.2.0 (FormatKind) |
 | **v9.4.0** | minor | **F17**: сценарии аномалий (`phases.anomalies: BurstInjection/SlowDrip/PacketLoss`, расширенные сигнатуры) + интеграционные тесты | — |
 | **v9.5.0** | minor | **N4.cipher_policy** + **миграция `native-tls → rustls`**: добавление `tls_cipher_suites: Option<Vec<String>>` через `rustls::ClientConfig::with_cipher_suites` | — |

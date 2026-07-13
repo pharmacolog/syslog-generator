@@ -1,0 +1,38 @@
+{
+  "distribution": "round-robin",
+  "targets": [
+    {
+      "address": "/tmp/syslog-gen-cef.log",
+      "transport": "file"
+    }
+  ],
+  "shutdown": {
+    "mode": "drain",
+    "drain_timeout_secs": 15
+  },
+  "phases": [
+    {
+      "name": "cef-demo",
+      "duration_secs": 10,
+      "messages_per_second": 50,
+      "templates": [
+        "user={{faker.username}} from {{faker.ipv4}} action=login"
+      ],
+      "format": "cef",
+      "cef": {
+        "device_vendor": "Acme Corp",
+        "device_product": "AuthGateway",
+        "device_version": "3.4.1",
+        "signature_id": "1001",
+        "name": "authentication_success",
+        "severity": 3,
+        "extensions": {
+          "cat": "authentication",
+          "act": "success",
+          "dst": "10.0.0.1",
+          "sproc": "authd"
+        }
+      }
+    }
+  ]
+}

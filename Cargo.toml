@@ -4,6 +4,13 @@ name = "syslog-generator"
 version = "9.5.1"
 edition = "2021"
 
+[features]
+## F16 (v9.3.0): Kafka/Redpanda transport через pure-Rust клиент `rskafka`.
+## Opt-in — НЕ включён по умолчанию (позволяет не тянуть зависимости
+## пользователям, которым Kafka не нужен). Включение: `--features kafka`.
+default = []
+kafka = ["dep:rskafka"]
+
 [dependencies]
 anyhow = "1"
 thiserror = "1"
@@ -31,11 +38,23 @@ rand = { version = "0.9", default-features = false, features = ["std", "std_rng"
 regex-syntax = "0.8"
 jsonschema = "0.18"
 bytes = "1"
+## F16 (v9.3.0): pure-Rust Kafka/Redpanda client (опциональная зависимость).
+## Поддерживает батчинг, сжатие (gzip/lz4/snappy/zstd), leader-recovery,
+## backoff/retry внутри PartitionClient. По умолчанию все compression-варианты
+## доступны (минимальные дополнительные крейты). Если пользователю нужен
+## только один тип сжатия — он может собрать свой вариант фичи `kafka`
+## через `rskafka = { ..., features = ["compression-snappy"] }` после
+## форка проекта.
+rskafka = { version = "0.5", optional = true, default-features = false, features = ["compression-gzip", "compression-lz4", "compression-snappy", "compression-zstd"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 regex = "1"
 proptest = "1"
+# F16 (v9.3.0): для integration-теста reconnect — RST через SO_LINGER=0.
+# tokio::net::TcpStream::set_linger deprecated, поэтому используем
+# socket2::Socket::set_linger напрямую.
+socket2 = "0.5"
 
 [[bench]]
 name = "message_generation"

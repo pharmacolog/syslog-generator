@@ -1,0 +1,43 @@
+# F16 (v9.3.0): пример профиля для Kafka/Redpanda транспорта.
+#
+# Требует cargo build --features kafka.
+# Топик должен существовать на брокере (auto-create включён на многих
+# dev-окружениях Redpanda/Kafka, но в проде — создавать заранее).
+#
+# Запуск:
+#   cargo build --release --features kafka
+#   ./target/release/syslog-generator --profile examples/kafka_redpanda.yaml
+#
+# Параметры:
+# - address: CSV-список bootstrap_servers (host:port).
+# - transport: "kafka" (новое в F16).
+# - kafka_topic: обязательное поле для Kafka-таргета.
+# - kafka_compression: "none" / "gzip" / "snappy" / "lz4" / "zstd".
+# - kafka_linger_ms: задержка перед flush батча (5ms = хороший батчинг).
+# - kafka_max_batch_size: размер батча (записей).
+# - kafka_client_id: идентификатор клиента в логах брокера.
+
+targets:
+  - address: "localhost:9092"
+    transport: kafka
+    connections: 1
+    kafka_topic: syslog-loadtest
+    kafka_client_id: syslog-generator-f16
+    kafka_compression: lz4
+    kafka_linger_ms: 5
+    kafka_max_batch_size: 1024
+    # acks (forward-compat, в rskafka 0.5 контролируется на стороне брокера):
+    # kafka_acks: "all"
+
+distribution: round-robin
+
+shutdown:
+  mode: drain
+  drain_timeout_secs: 30
+
+phases:
+  - name: kafka-warmup
+    duration_secs: 10
+    messages_per_second: 100
+    templates:
+      - "<165>1 {{timestamp}} host01 myapp 1234 ID47 - kafka warmup seq={{sequence}} {{faker.ipv4}} {{faker.uuid}}"

@@ -9,18 +9,23 @@
 //! rustls — pure Rust, кросс-платформенный, поддерживает явный выбор
 //! `cipher_suites` через `ClientConfig`. Это **breaking change** в
 //! публичном API транспорта (см. CHANGELOG v9.5.0).
+//!
+//! F16 (v9.3.0): reconnect с exponential backoff + jitter через
+//! `reconnect::reconnect_with_backoff` — аналогично tcp.rs.
 
 use crate::metrics::Metrics;
 use anyhow::{anyhow, Result};
 use bytes::BytesMut;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{PrivateKeyDer, ServerName};
+use rustls::ClientConfig;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio_rustls::{client::TlsStream, TlsConnector};
 use tokio_util::sync::CancellationToken;
 
+use super::reconnect::{reconnect_with_backoff, ReconnectConfig};
 use super::{
     drain_as_errors, frame_into, next_msg, record_error, record_reconnect, record_send,
     record_send_latency, Framing, SharedRx,
@@ -291,6 +296,14 @@ pub fn parse_tls_min_version(s: &str) -> Result<TlsVersion, String> {
     }
 }
 
+/// F16: TLS sender с настраиваемой reconnect-стратегией.
+///
+/// **Backward-compat**: при провале *первой* попытки connect'а (TCP+TLS
+/// handshake) sender НЕ уходит в exponential-backoff retry — он сразу
+/// drain'ит очередь и завершается (как в v9.1.0). Backoff-retry
+/// активируется ТОЛЬКО при ошибке записи в **успешно установленное**
+/// TLS-соединение.
+#[allow(clippy::too_many_arguments)]
 pub async fn target_sender_tls(
     addr: String,
     tls_params: TlsParams,
@@ -299,7 +312,9 @@ pub async fn target_sender_tls(
     metrics: Metrics,
     shutdown: CancellationToken,
     framing: Framing,
+    reconnect_config: Option<ReconnectConfig>,
 ) -> Result<()> {
+    let rcfg = reconnect_config.unwrap_or_default();
     let domain = tls_params.domain.clone();
     let config = match build_tls_connector(&tls_params) {
         Ok(c) => c,
@@ -310,15 +325,64 @@ pub async fn target_sender_tls(
             return Ok(());
         }
     };
-    let connector = TlsConnector::from(config);
-    let mut tls = match tls_connect(&connector, &addr, &domain).await {
+    let connector = TlsConnector::from(config.clone());
+    let tls = match tls_connect(&connector, &addr, &domain).await {
         Some(t) => t,
         None => {
+            // Backward-compat (F16): первая неудача connect'а → drain + return.
+            // Backoff-retry НЕ применяется (иначе при max_attempts=None
+            // sender зависнет на бесконечном backoff'е).
             record_error(&metrics, &addr).await;
             drain_as_errors(&rx, &metrics, &addr).await;
             return Ok(());
         }
     };
+    // F16: парсим domain → ServerName<'static> один раз (rustls API),
+    // переиспользуем для всех reconnect-попыток в run_send_loop.
+    let server_name = match ServerName::try_from(domain.clone()) {
+        Ok(sn) => sn,
+        Err(e) => {
+            eprintln!("TLS ({addr}): невалидный server_name {domain:?}: {e}");
+            record_error(&metrics, &addr).await;
+            drain_as_errors(&rx, &metrics, &addr).await;
+            return Ok(());
+        }
+    };
+    // F16: для reconnect нам нужен `Arc<ClientConfig>` (rustls API).
+    // `config: Arc<ClientConfig>` уже у нас из build_tls_connector.
+    run_send_loop(
+        tls,
+        addr,
+        phase_name,
+        rx,
+        metrics,
+        shutdown,
+        framing,
+        rcfg,
+        config,
+        server_name,
+    )
+    .await
+}
+
+/// F16: внутренний цикл отправки + reconnect при ошибке записи.
+/// Принимает `Arc<ClientConfig>` (rustls API) и `ServerName` вместо
+/// `tokio_native_tls::TlsConnector` + `&str` — адаптация под rustls.
+#[allow(clippy::too_many_arguments)]
+async fn run_send_loop(
+    mut tls: TlsStream<TcpStream>,
+    addr: String,
+    phase_name: String,
+    rx: SharedRx,
+    metrics: Metrics,
+    shutdown: CancellationToken,
+    framing: Framing,
+    rcfg: ReconnectConfig,
+    connector: Arc<ClientConfig>,
+    server_name: ServerName<'static>,
+) -> Result<()> {
+    // N6 (v8.7.0): `BytesMut` (8 KiB) переиспользуется — без аллокации
+    // на каждое сообщение. См. комментарий в `target_sender_tcp`.
     let mut buf = BytesMut::with_capacity(8 * 1024);
     while let Some(msg) = next_msg(&rx).await {
         frame_into(&mut buf, &msg, framing);
@@ -326,9 +390,11 @@ pub async fn target_sender_tls(
         if tls.write_all(&buf).await.is_err() {
             record_error(&metrics, &addr).await;
             buf.clear();
-            record_reconnect(&metrics, "tls", &addr);
-            match tls_connect(&connector, &addr, &domain).await {
-                Some(new_tls) => {
+            // F16: reconnect через exponential backoff (rustls API).
+            let outcome =
+                try_tls_connect(&addr, &connector, &server_name, &rcfg, &shutdown, &metrics).await;
+            match outcome {
+                Some(Ok(new_tls)) => {
                     tls = new_tls;
                     frame_into(&mut buf, &msg, framing);
                     let t1 = std::time::Instant::now();
@@ -347,7 +413,7 @@ pub async fn target_sender_tls(
                         record_error(&metrics, &addr).await;
                     }
                 }
-                None => {
+                Some(Err(_)) | None => {
                     drain_as_errors(&rx, &metrics, &addr).await;
                     return Ok(());
                 }
@@ -369,6 +435,45 @@ pub async fn target_sender_tls(
     Ok(())
 }
 
+/// F16: вспомогательная функция — exponential backoff для TLS-подключения
+/// (TCP connect + rustls handshake). Принимает `Arc<ClientConfig>` и
+/// `ServerName` (rustls API) вместо `tokio_native_tls::TlsConnector` +
+/// `&str` (native-tls API).
+async fn try_tls_connect(
+    addr: &str,
+    connector: &Arc<ClientConfig>,
+    server_name: &ServerName<'static>,
+    rcfg: &ReconnectConfig,
+    shutdown: &CancellationToken,
+    metrics: &Metrics,
+) -> Option<Result<TlsStream<TcpStream>, ()>> {
+    let connector_clone = connector.clone();
+    let server_name_clone = server_name.clone();
+    let addr_owned = addr.to_string();
+    reconnect_with_backoff(
+        rcfg,
+        shutdown,
+        || {
+            record_reconnect(metrics, "tls", addr);
+        },
+        move || {
+            let c = connector_clone.clone();
+            let sn = server_name_clone.clone();
+            let a = addr_owned.clone();
+            async move {
+                // На каждый backoff attempt — новый TcpStream (rustls
+                // не переиспользует stream; см. rustls::ClientConnection).
+                let tcp = TcpStream::connect(&a).await.map_err(|_| ())?;
+                let conn = TlsConnector::from(c);
+                conn.connect(sn, tcp).await.map_err(|_| ())
+            }
+        },
+    )
+    .await
+}
+
+/// Backward-compat: оригинальная `tls_connect` (одна попытка).
+#[allow(dead_code)]
 pub(crate) async fn tls_connect(
     connector: &TlsConnector,
     addr: &str,

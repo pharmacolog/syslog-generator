@@ -2,23 +2,14 @@
 
 Дата аудита: 2026-07-11. Базис аудита: реальный компилируемый код v7.4.0 (проверен `cargo build/test/bench/clippy`), документация (`README.md`, `docs/`, `examples/`, `REVIEW.md`), Grafana-дашборд.
 
-> **Статус на v8.8.0 (2026-07-13):** вехи A, B и C закрыты полностью (v8.0.0).
-> **Веха D (P1) закрыта полностью — текущая версия v8.8.0.** Закрыты:
-> F11 (расширенный CLI, v8.1.0), F13 (валидация профиля, v8.1.0),
-> **F12 (HTTP-эндпоинт /metrics, v8.2.0)**, **безопасный TLS (N4, v8.2.0)**,
-> **типизированные ошибки рантайма (N7, v8.3.0)**, починка 3 упавших TLS-тестов
-> (v8.3.1), **CI-пайплайн GitHub Actions (N9, v8.4.0)**, починка
-> `sender_throughput` бенчмарков (v8.4.1), **формальная JSON Schema + YAML-ввод
-> (D3, v8.5.0)**, **синхронизация Grafana-дашборда (N2, v8.6.0)**,
-> **CompiledTemplate (N5, v8.6.1)**, **round-trip RFC 5424 (N8, v8.6.1)**,
-> **документация (N11, v8.6.1)**, **zero-copy/буферизация (N6, v8.7.0)**,
-> **property-based тесты (N8, v8.7.1)**, **mTLS + min_protocol (N4.mTLS, v8.7.2)**,
-> **рефакторинг слоёв format/transport/observability/generator (N10, v8.8.0)**.
-> Следующие релизы: **v8.8.1** (правки AUDIT.md — поставить ✅ на F7/F8/F9,
-> убрать "Отложено" из F13 и N4) и **v9.0.0** (milestone release —
-> семантический маркер закрытия вехи D, без breaking changes). Потом
-> веха E (P2): F15 (CEF/LEEF/JSON-lines), F16 (Kafka/Redpanda), F17
-> (сценарии аномалий), N12 (Docker/musl). См. §4.1 P2.
+> **Статус на v9.3.0 (2026-07-13):** вехи A, B, C, D закрыты полностью
+> (v9.0.0). **Веха E (P2 «Зрелость») в процессе.** N10 (v9.1.0) +
+> F15 (v9.2.0, CEF/LEEF/JSON-lines) + **F16 (v9.3.0)** сделаны. F16:
+> Kafka/Redpanda transport через `rskafka` (opt-in feature `kafka`) +
+> файловая ротация (size/time/max_files с LRU cleanup) + exponential
+> backoff reconnect с jitter для TCP/TLS. 0 breaking changes.
+> Следующие: v9.4.0 (F17: сценарии аномалий), v9.5.0 (N4.cipher_policy
+> + rustls), v9.6.0 (N12: Docker/musl/compose).
 > Ранее отложенные опциональные задачи A/B/C (F5 regex, F6 корреляции,
 > F10 честный protobuf, N3 метрики) закрыты в v8.0.0.
 > Разделы 1–2 ниже описывают исходное

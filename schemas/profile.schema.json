@@ -15,10 +15,10 @@
           "minLength": 1,
           "description": "Адрес target'а: для file — путь к файлу; для tcp/udp/tls — host:port. tls_domain по умолчанию берёт host-часть."
         },
-        "transport": {
+"transport": {
           "type": "string",
-          "enum": ["tcp", "udp", "tls", "file"],
-          "description": "Транспорт доставки. Семантическая валидация (диапазоны и т.п.) — в validate.rs."
+          "enum": ["tcp", "udp", "tls", "file", "kafka"],
+          "description": "Транспорт доставки. Семантическая валидация (диапазоны и т.п.) — в validate.rs. `kafka` требует cargo build --features kafka."
         },
         "connections": {
           "type": "integer",
@@ -67,6 +67,71 @@
           "type": ["string", "null"],
           "enum": ["1.2", "1.3", null],
           "description": "N4.mTLS: минимально допустимая версия TLS-протокола. Защита от downgrade-атак (None = системная, обычно 1.0)."
+        },
+        "kafka_topic": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "F16 (v9.3.0): Kafka topic. Обязателен если transport=\"kafka\". Требует cargo build --features kafka."
+        },
+        "kafka_client_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "F16: Kafka client_id (для логов брокера). None → \"syslog-generator\"."
+        },
+        "kafka_compression": {
+          "type": ["string", "null"],
+          "enum": ["none", "gzip", "snappy", "lz4", "zstd", null],
+          "description": "F16: тип сжатия для Kafka-сообщений."
+        },
+        "kafka_acks": {
+          "type": ["string", "null"],
+          "enum": ["0", "1", "all", null],
+          "description": "F16: Kafka acks (forward-compat; в rskafka 0.5 контролируется на стороне брокера)."
+        },
+        "kafka_linger_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "F16: задержка перед flush батча в Kafka (мс). None → 5."
+        },
+        "kafka_max_batch_size": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: максимальный размер батча Kafka (число записей). None → 1024."
+        },
+        "file_rotation_size_mb": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: ротация файла по размеру (МБ). None → без ротации по размеру. Применяется только для transport=\"file\"."
+        },
+        "file_rotation_interval_secs": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: ротация файла по интервалу (сек). None → без ротации по времени."
+        },
+        "file_rotation_max_files": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: максимум файлов (текущий + ротированные). None → 10. Старые сверх лимита удаляются (LRU)."
+        },
+        "reconnect_max_attempts": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "F16: максимум попыток reconnect (TCP/TLS). None → бесконечно. 0 → отключить auto-reconnect."
+        },
+        "reconnect_initial_backoff_ms": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: начальная задержка между попытками reconnect (мс). None → 100."
+        },
+        "reconnect_max_backoff_ms": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "F16: максимальная задержка между попытками reconnect (мс). None → 30000."
+        },
+        "reconnect_multiplier": {
+          "type": ["number", "null"],
+          "minimum": 1.0,
+          "description": "F16: множитель backoff (backoff *= multiplier после каждой попытки). None → 2.0."
         },
         "tls_cipher_suites": {
           "type": ["array", "null"],

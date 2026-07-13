@@ -1,6 +1,67 @@
 
 # Changelog
 
+## v10.2.0 - 2026-07-13
+
+**Performance (часть 2): hot-path оптимизация faker-генераторов.**
+
+### Changed
+
+- **`faker()` hot-path** в `src/payload.rs`:
+  - Все `format!()` с многоэтапными аллокациями заменены на `String::with_capacity(N)`
+    + `write!()` через `std::fmt::Write`. Это **устраняет промежуточные
+    аллокации в hot-path**: одна итоговая String на одну аллокацию.
+  - `faker.ipv4`: было 4×Display-форматирования → одна String с capacity 15.
+  - `faker.ipv6`: было 8×`Vec<String>` + `join()` → одна String с capacity 39.
+  - `faker.mac`: было 6×`Vec<String>` + `join()` → одна String с capacity 17.
+  - `faker.hostname`: было 2×Display-форматирования → одна String с capacity 9.
+  - `faker.url`: было 3×Display-форматирования → одна String с capacity 48.
+  - `faker.uuid` (`uuid_v4`): было `format!()` с 16 аргументами →
+    `String::with_capacity(36)` + прямой push hex-цифр через lookup-таблицу
+    (без Display-форматирования).
+- **`random_string()`**: было `(0..len).map(...).collect::<String>()` →
+  `String::with_capacity(len)` + push в loop (экономит 62 аллокации
+  для типичного `len=62`).
+
+### Added
+
+- **Хелпер `write_hex_pair(s: &mut String, byte: u8)`** в `src/payload.rs` —
+  прямой push 2 hex-цифр через const-lookup-таблицу `b"0123456789abcdef"`.
+  Используется в `uuid_v4`.
+
+### Bench results (v10.2.0 vs v10.1.0)
+
+| Bench | v10.1.0 | v10.2.0 | Δ |
+|---|---|---|---|
+| `template_render_realistic` | 758 ns | **720 ns** | **-5%** |
+| `generate_message_from_template` | 6.96 µs | **5.17 µs** | **-26%** ✅ |
+| `create_dispatcher_weighted` | 60 ns | **52 ns** | **-13%** |
+
+`generate_message_from_template` — главный hot-path (использует
+`faker.username` + `faker.ipv4`).
+
+### Notes
+
+- **311 тестов** (214 unit + 86 integration + 11 n7) — все зелёные.
+  `cargo bench --no-run --locked` clean.
+- **`cargo clippy --all-targets --features kafka -- -D warnings`** — clean.
+- **Lock-free atomics** в `metrics.rs` — **N/A**: prometheus crate уже
+  использует `AtomicU64` под капотом для `Counter`/`CounterVec`/`IntCounter`.
+  Никакого `Mutex<i64>` в нашем коде нет.
+- **`BytesMut` pre-alloc в TCP/TLS** — **N/A**: уже сделано в N6 (v8.7.0):
+  `BytesMut::with_capacity(8 * 1024)` + `buf.clear()` после каждого сообщения
+  сохраняет capacity. См. `src/transport/tcp.rs:78`, `src/transport/tls.rs:386`.
+- **Benchmark regression check**: все 3 бенчмарка показали улучшение,
+  никакой регрессии > 10%.
+
+### Следующие релизы
+
+- **v10.3.0** — Coverage (часть 1): cargo-llvm-cov baseline.
+- **v10.4.0** — Coverage (часть 2): ≥ 97%, fuzzing.
+- **v10.5.0** — CI расширение (полный bench-regression gate + cargo-deny и т.д.).
+- **v10.6.0** — Usability (часть 1).
+- **v10.7.0** — Usability (часть 2) + закрытие вехи F.
+
 ## v10.1.0 - 2026-07-13
 
 **Performance (часть 1) + breaking B5.** B3+B4 оказались уже выполненными

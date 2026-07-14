@@ -1,0 +1,11 @@
+# v10.5.0: явное указание toolchain для MSRV-check в CI.
+#
+# С этим файлом job `msrv` в `.github/workflows/ci.yml` использует
+# `dtolnay/rust-toolchain@master` (см. `toolchains` ниже) вместо
+# best-effort. Без файла job пропускается (best effort).
+[toolchain]
+# MSRV = 1.95 (минимальная версия, на которой проект собирается).
+# См. Cargo.toml `[package].rust-version = "1.95"`.
+channel = "1.95"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+profile = "minimal"

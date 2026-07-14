@@ -100,8 +100,12 @@ jobs:
         # Полноценный bench-regression gate с persistent baseline запланирован
         # в v10.5.0 (CI расширение — cargo-benchcmp или c5h/bench-regression-action).
         # Допуск по контракту v9.6.0 §11: ±10% relative throughput.
+        #
+        # v10.7.1: явное `--bench <name>` — `cargo bench` без `--bench`
+        # запускает lib unit tests (которые не понимают `--quick`).
+        # Перечисляем все benches явно: message_generation + sender_throughput.
         continue-on-error: true
-        run: cargo bench --locked -- --quick 2>&1 | tee bench-output.txt
+        run: cargo bench --locked --bench message_generation --bench sender_throughput -- --quick 2>&1 | tee bench-output.txt
 
       - name: Upload bench output (artifact)
         if: always()

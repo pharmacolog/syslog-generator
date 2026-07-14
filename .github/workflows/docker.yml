@@ -57,9 +57,9 @@ jobs:
     name: Build & push (amd64)
     runs-on: ubuntu-latest
     # Skip на release — docker-multiarch сделает multi-arch.
-    if: |
-      !(startsWith(github.ref, 'refs/heads/release/')) &&
-      !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: >-
+      !startsWith(github.ref, 'refs/heads/release/')
+      && !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
@@ -143,9 +143,9 @@ jobs:
   docker-multiarch:
     name: Build & push (multi-arch, release-only)
     runs-on: ubuntu-latest
-    if: |
-      (startsWith(github.ref, 'refs/heads/release/')) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: >-
+      startsWith(github.ref, 'refs/heads/release/')
+      || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write

@@ -155,7 +155,7 @@ jobs:
     name: MSRV check (blocking, v10.5.0)
     runs-on: ubuntu-latest
     # Skip job если rust-toolchain.toml не существует.
-    if: hashFiles('rust-toolchain.toml') != ''
+    if: "hashFiles('rust-toolchain.toml') != ''"
     steps:
       - uses: actions/checkout@v4
 

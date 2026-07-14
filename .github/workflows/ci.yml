@@ -17,6 +17,12 @@ on:
   pull_request:
     branches: [main]
 
+# v10.7.1: явные permissions на уровне workflow (Code Scanning
+# actions/missing-workflow-permissions). Принцип least privilege.
+# Глобальные permissions: только contents: read для checkout.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   # -Dwarnings: предупреждения Rust == ошибки CI (для lib + bins).
@@ -27,6 +33,8 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       # На macOS отказы TLS-тестов исторически воспроизводились реже,
       # чем на Linux; пускаем обе платформы параллельно и суммируем.
@@ -158,6 +166,8 @@ jobs:
     # PR, который поднимает MSRV, CI упадёт и merge заблокируется.
     name: MSRV check (blocking, v10.5.0)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -204,6 +214,8 @@ jobs:
   cargo-deny:
     name: cargo-deny (advisories + licenses, blocking)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
@@ -230,6 +242,8 @@ jobs:
   cargo-machete:
     name: cargo-machete (unused deps, blocking)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain
@@ -258,6 +272,8 @@ jobs:
   test-kafka:
     name: Test kafka feature (ubuntu-latest)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -306,6 +322,8 @@ jobs:
   coverage:
     name: Coverage baseline (cargo-llvm-cov, non-blocking)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     continue-on-error: true
     steps:
       - name: Checkout

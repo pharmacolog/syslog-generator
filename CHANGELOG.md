@@ -1,6 +1,73 @@
 
 # Changelog
 
+## v10.7.4 - 2026-07-14
+
+**Patch-release (PR-2): safety & correctness по результатам аудита v10.7.2.**
+
+### Fixed (PR-2: safety & correctness)
+
+- **H5: SIGTERM handler** ✅ — `shutdown_listener` теперь обрабатывает
+  **SIGTERM** в дополнение к SIGINT (важно для Docker/Kubernetes, где стандартный
+  shutdown signal — SIGTERM). Через `tokio::signal::unix::signal(SignalKind::terminate())`
+  с `tokio::select!` для одновременного ожидания. Общий counter двойного нажатия
+  разделяется между SIGINT и SIGTERM. На не-unix платформах fallback на только SIGINT.
+- **N6: hoist CancellationToken в `run_profile`** ✅ — ранее `run_phase_multi` создавал
+  свой `CancellationToken` и спавнил `shutdown_listener` per-phase → counter двойного
+  нажатия сбрасывался между фазами, Ctrl-C в фазе N не останавливал фазу N+1. Теперь:
+  `shutdown` создаётся в `run_profile`, передаётся в каждую `run_phase_multi`, listener
+  спавнится ОДИН раз.
+- **N12: TLS `close_notify` перед exit** ✅ — `target_sender_tls` теперь делает
+  `tls.shutdown().await` перед `Ok(())` на happy path. Раньше rustls просто drop'ал stream
+  без `close_notify` → TLS-aware приёмники (syslog-ng strict mode) могли зависнуть.
+- **M7: JoinHandle tracking для HTTP server** ✅ — `serve` теперь трекает JoinHandle
+  каждого `handle_conn` и ждёт их завершения при shutdown (с 5-секундным таймаутом).
+  Раньше in-flight HTTP запросы были orphan.
+- **N5: `reconnect_config` + `tls_params` через `Transport` trait** ✅ — `Transport::run`
+  расширен параметрами `reconnect: Option<ReconnectConfig>` и `tls_params: Option<TlsParams>`.
+  Раньше hard-coded `None`/`TlsParams::default()`. PR-4 переключит `run_phase_multi` на
+  использование trait — параметры заработают end-to-end.
+- **N19: Dockerfile MSRV mismatch** ✅ — `Dockerfile` использовал `rust:1.97-bookworm`,
+  но `Cargo.toml rust-version = "1.95"`. Теперь `rust:1.95-bookworm` для соответствия
+  blocking MSRV-check в CI (v10.5.0).
+- **N14: `ensure_rustls_provider_for_tests` gating** ✅ — функция была `pub` без cfg,
+  загрязняла публичный API. Теперь под `#[cfg(any(test, feature = "test-helpers"))]`.
+  Добавлен feature flag `test-helpers`. Integration tests помечены
+  `required-features = ["test-helpers"]`. CI обновлён.
+
+### Added
+
+- **feature `test-helpers`** ✅ — открывает доступ к `ensure_rustls_provider_for_tests`
+  и связанным функциям. По умолчанию выключен.
+
+### Changed (CI)
+
+- `cargo test` в CI теперь с `--features test-helpers` (для integration tests).
+- `cargo test --features kafka` в CI теперь с `--features kafka,test-helpers`.
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean
+- `cargo test --locked --features test-helpers`: **339 passed** (242 unit + 86 integration + 11 n7)
+- `cargo test --locked --features kafka,test-helpers`: все зелёные
+- `cargo bench --no-run --locked`: success
+- CI: Test (ubuntu + macos), test-kafka, msrv, cargo-deny, cargo-machete, coverage baseline, Docker — все зелёные
+
+### Tests
+
+- + 2 unit-теста для `handle_signal` (graceful на первом нажатии, counter общий).
+
+### Deferred
+
+- **PR-2.6 (pub use audit)** — удаление orphan re-exports требует breaking changes.
+  Отложено в **v11.0.0** (major) с deprecation warnings.
+
+Refs: аудит v10.7.2 (c1c9722), PLAN-v10.0.0.md.
+
 ## v10.7.3 - 2026-07-14
 
 **Patch-release (PR-1): critical fixes по результатам аудита v10.7.2 + CI hardening.**

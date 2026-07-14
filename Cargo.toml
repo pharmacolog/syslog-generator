@@ -27,6 +27,12 @@ kafka = ["dep:rskafka"]
 anyhow = "1"
 thiserror = "1"
 clap = { version = "4", features = ["derive"] }
+# v10.6.0: shell completions (bash, zsh, fish, powershell, elvish).
+clap_complete = "4"
+# v10.6.0: generate man page (subcommand `man`).
+clap_mangen = "0.2"
+# v10.6.0: colored output для ошибок (auto-detect NO_COLOR env).
+owo-colors = { version = "4", features = ["supports-colors"] }
 prometheus = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

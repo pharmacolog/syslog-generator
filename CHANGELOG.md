@@ -1,6 +1,26 @@
 
 # Changelog
 
+## v10.7.2 - 2026-07-14
+
+**Dependabot maintenance: clap_mangen 0.3 + indicatif 0.18 + rand 0.9 (откат от 0.10).**
+
+### Changed
+
+- **clap_mangen 0.2 → 0.3** ✅ (без изменений в коде, API совместимо).
+- **indicatif 0.17 → 0.18** ✅ (без изменений в коде, API совместимо).
+- **rand 0.10 ОТКАЧЕНО до 0.9** ⚠️ — breaking API 0.10 (StandardUniform distribution,
+  removed `from_os_rng`, новый `RngExt` trait pattern) требует переписывания
+  hot-path в `src/payload.rs` (15+ мест `rng.random_range(...)`) и
+  `src/transport/reconnect.rs` (jitter calculation). Миграция перенесена
+  в v10.7.3+.
+
+### Notes
+
+- **351 тестов** (252 unit + 88 integration + 11 n7) — все зелёные.
+- **cargo fmt/clippy/build** — clean.
+- **cargo machete** — no unused deps.
+
 ## v10.7.1 - 2026-07-13
 
 **Закрытие вехи F: breaking deps миграция + indicatif + double Ctrl-C + --config алиас.**

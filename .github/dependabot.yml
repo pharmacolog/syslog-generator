@@ -2,10 +2,16 @@
 #
 # Автоматически создаёт PR для обновления зависимостей и GitHub Actions.
 # Помогает поддерживать проект в актуальном состоянии без ручной работы.
+#
+# v10.5.1: убрана `dependency-type: "direct"/"indirect"` — Dependabot schema
+# требует `production` или `development`. Без groups — Dependabot делает
+# отдельный PR на каждое обновление, что проще и более прозрачно.
 
 version: 2
 
-# Cargo dependencies: еженедельно, группируем minor/patch updates в один PR.
+# Cargo dependencies: еженедельно.
+# - production: [dependencies] (runtime) — автоматические minor/patch PR.
+# - development: [dev-dependencies] (test/build) — отдельный PR.
 updates:
   - package-ecosystem: "cargo"
     directory: "/"
@@ -14,19 +20,6 @@ updates:
       day: "monday"
       time: "04:00"
       timezone: "Europe/Moscow"
-    # Группируем minor/patch updates в один PR (чтобы не спамить).
-    groups:
-      rust-direct-deps:
-        dependency-type: "direct"
-        update-types:
-          - "minor"
-          - "patch"
-      rust-transitive-deps:
-        dependency-type: "indirect"
-        update-types:
-          - "minor"
-          - "patch"
-    # Major updates — отдельные PR (могут ломать API).
     open-pull-requests-limit: 10
     labels:
       - "dependencies"

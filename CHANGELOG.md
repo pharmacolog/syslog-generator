@@ -1,6 +1,24 @@
 
 # Changelog
 
+## v10.5.1 - 2026-07-13
+
+**Hotfix: `.github/dependabot.yml` — убрана невалидная `dependency-type: "direct"/"indirect"`.**
+
+Dependabot отклонил v10.5.0 config с ошибкой:
+> The property '#/updates/0/groups/.../dependency-type' value "direct" did not match
+> one of the following values: production, development
+
+Dependabot schema допускает только `production` или `development`
+для `dependency-type`, не `direct`/`indirect`.
+
+### Fixed
+
+- **`.github/dependabot.yml`**: убран `groups:` блок с `dependency-type: "direct"/"indirect"`.
+  Вместо группировки Dependabot создаёт отдельный PR на каждое обновление
+  (по `open-pull-requests-limit: 10` для cargo, `5` для github-actions).
+  Это проще и более прозрачно — каждое обновление видно отдельно.
+
 ## v10.5.0 - 2026-07-13
 
 **CI расширение: cargo-deny + cargo-machete + MSRV-blocking + Dependabot + замена deprecated rustls-pemfile.**

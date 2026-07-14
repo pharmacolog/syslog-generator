@@ -1,6 +1,46 @@
 
 # Changelog
 
+## v10.5.3 - 2026-07-13
+
+**Dependabot updates batch: 6 PR (3 merge, 5 close).**
+
+### Merged (3 PR — все GREEN, безопасные)
+
+| PR | Изменение | Обоснование |
+|---|---|---|
+| #1 | docker/setup-qemu-action 3→4 | GH Actions major, backward-compat. |
+| #2 | webpki-roots 0.26→1.0 | Rust crate major, API совместим (Mozilla CA bundle). CI green. |
+| #3 | docker/setup-buildx-action 3→4 | GH Actions major. |
+| #4 | docker/login-action 3→4 | GH Actions major. |
+| #5 | docker/build-push-action 6→7 | GH Actions major. |
+| #6 | actions/upload-artifact 4→7 | GH Actions major. |
+| #9 | prometheus 0.13→0.14 | Rust crate minor (0.14.x — backward-compat). CI green. |
+
+### Closed (5 PR — все FAIL с breaking changes)
+
+| PR | Изменение | Причина close |
+|---|---|---|
+| #7 | jsonschema 0.18→0.47 | Слишком большой скачок (0.30+ breaking: API полностью изменился). Требует миграции `src/schema_check.rs`. План: v10.7.0+. |
+| #8 | rand 0.9→0.10 | Major API breaking (deprecated API). План: v10.7.0+ с миграцией `src/payload.rs`. |
+| #10 | socket2 0.5→0.6 | Major API реорганизация (0.6+ listener/stream). План: v10.7.0+ с миграцией `tests/integration_tests.rs`. |
+| #11 | criterion 0.5→0.8 | Major API breaking (async_trait + criterion-core). План: v10.7.0+ с миграцией `benches/`. |
+| #12 | thiserror 1→2 | Major, derive API изменился. Конфликт с main. План: v10.7.0+ с миграцией `src/error.rs`, `src/validate.rs`, `src/cli.rs`. |
+| #13 | rskafka 0.5→0.6 | Конфликт с main (PR #2 переписал Cargo.lock). План: v10.7.0+ rebase. |
+
+### Changed (cleanup)
+
+- **`deny.toml`**: удалён `RUSTSEC-2024-0437` (protobuf 2.28.0) из `ignore`.
+  После merge PR #9 (prometheus 0.13→0.14) уязвимость больше не transitive dep
+  (prometheus 0.14 использует protobuf 3.x).
+
+### Notes
+
+- **339 тестов** (240 unit + 88 integration + 11 n7) — все зелёные.
+- **`cargo deny`**: `advisories ok, bans ok, licenses ok, sources ok`.
+- **`cargo machete`**: `no unused dependencies`.
+- **`cargo fmt/clippy/build`** — clean.
+
 ## v10.5.2 - 2026-07-13
 
 **Hotfix: Docker Smoke test на PR + Dependabot groups optimization.**

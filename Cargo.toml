@@ -68,7 +68,7 @@ proptest = "1"
 # F16 (v9.3.0): для integration-теста reconnect — RST через SO_LINGER=0.
 # tokio::net::TcpStream::set_linger deprecated, поэтому используем
 # socket2::Socket::set_linger напрямую.
-socket2 = "0.5"
+socket2 = "0.6"
 
 [[bench]]
 name = "message_generation"

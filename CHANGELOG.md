@@ -1,6 +1,53 @@
 
 # Changelog
 
+## v10.7.1 - 2026-07-13
+
+**Закрытие вехи F: breaking deps миграция + indicatif + double Ctrl-C + --config алиас.**
+
+🎉 **Веха F «Production-hardened» ЗАКРЫТА** — все 6 breaking Dependabot PR merged/closed,
+3 новые usability features реализованы.
+
+### Changed (breaking deps migration)
+
+- **#7 jsonschema 0.18 → 0.47** ✅ — миграция `src/schema_check.rs`:
+  - `JSONSchema::compile(&schema)` → `validator_for(&schema)` (new builder API).
+  - `validator.validate(&instance)` теперь возвращает `Result<(), ValidationError>`
+    (single error), для multi-error mode — `validator.iter_errors(&instance)`.
+  - `black_box` в `benches/message_generation.rs` → `std::hint::black_box`
+    (deprecated в criterion 0.8).
+- **#8 rand 0.9** ✅ (без изменений в коде) — 0.10 требует breaking API
+  изменений (StandardUniform distribution). Откатил до 0.9, TODO v10.7.2.
+- **#10 socket2 0.5 → 0.6** ✅ — без изменений в коде, API совместимо.
+- **#11 criterion 0.5 → 0.8** ✅ — без изменений в нашем коде, но в `benches/`
+  пришлось заменить `criterion::black_box` → `std::hint::black_box` (deprecated).
+- **#12 thiserror 1 → 2** ✅ — без изменений в нашем коде, derive API совместимо.
+- **#13 rskafka 0.5 → 0.6** ✅ — без изменений в коде, API совместимо.
+
+### Added (Usability ч.2 завершение)
+
+- **indicatif 0.17** — progress bar (только при `duration_secs > 30` И TTY).
+  В `run_profile` оборачивает каждый phase в `ProgressBar` с template
+  `"{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}"`.
+  На non-TTY (CI pipe) или коротких фазах (< 30s) — PB НЕ показывается.
+- **Двойной Ctrl-C = hard shutdown** (`src/shutdown.rs`): первое нажатие —
+  graceful (cancel token, `shutdowns_total.inc()`), второе (если процесс
+  не завершился) — `std::process::exit(2)` с warning в stderr. Counter
+  через `AtomicUsize` для выживания между await points.
+- **--config** алиас (src/cli.rs): `--config` теперь алиас для `--profile`.
+  В `--help` показывается как `[aliases: --config]`. Совместимо с
+  semantic YAML config files (`config.yaml`).
+- **deny.toml**: `RUSTSEC-2025-0119` (number_prefix — transitive от indicatif)
+  ignore. Удалён `RUSTSEC-2024-0437` (уже не transitive после prometheus 0.14).
+  Добавлен `MIT-0` (borrow-or-share transitive от jsonschema 0.47).
+
+### Notes
+
+- **347 тестов** (248 unit + 88 integration + 11 n7) — все зелёные.
+- **Локально**: cargo fmt/clippy/build — clean. cargo deny: all ok. cargo machete: no unused.
+- **Breaking deps миграция завершена** — все 6 закрытые Dependabot PR теперь
+  в main (кроме #8 rand 0.10, откаченного до 0.9 в этом релизе).
+
 ## v10.7.0 - 2026-07-13
 
 **Usability (часть 2): tracing + RUST_LOG + --dry-run.**

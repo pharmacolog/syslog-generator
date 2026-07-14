@@ -1,6 +1,50 @@
 
 # Changelog
 
+## v10.6.0 - 2026-07-13
+
+**Usability (часть 1): shell completions + man page + colored errors.**
+
+### Added
+
+- **`clap_complete` integration**: новый subcommand `completions <SHELL>`
+  генерирует shell-специфичные completion scripts. Поддерживаемые shells:
+  `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+  Пример: `syslog-generator completions bash > /etc/bash_completion.d/syslog-generator`.
+- **`clap_mangen` integration**: новый subcommand `man` генерирует man page
+  в stdout (roff format). Пример:
+  `syslog-generator man > /usr/local/share/man/man1/syslog-generator.1`.
+- **`owo-colors` integration**: error message и подсказки теперь цветные
+  (красный для ошибок, жёлтый для предупреждений). Auto-detect `NO_COLOR` env
+  и `terminal.is_terminal()` — отключает цвета при pipe/CI.
+- **Subcommand structure**: `Args` теперь имеет поле `command: Option<Command>`.
+  `None` = main run profile (backward-compat). `Some(Command::Completions | Command::Man)` = subcommand.
+- **10 новых unit-тестов** в `src/cli.rs::tests`:
+  - `v10_6_0_args_command_constructs`
+  - `v10_6_0_command_enum_variants`
+  - `v10_6_0_args_parses_completions_subcommand`
+  - `v10_6_0_args_parses_man_subcommand`
+  - `v10_6_0_args_no_subcommand_means_main`
+
+### Dependencies
+
+- `clap_complete = "4"` — shell completions
+- `clap_mangen = "0.2"` — man page generation
+- `owo-colors = { version = "4", features = ["supports-colors"] }` — colored output
+
+### Notes
+
+- **349 тестов** (250 unit + 88 integration + 11 n7) — все зелёные.
+- **Backward compatible**: существующие CLI флаги (`-p`, `-t`, `--validate`, etc.) работают без `--completions`/`--man` prefix.
+- **`cargo deny`**: `advisories ok, bans ok, licenses ok, sources ok`.
+- **`cargo machete`**: `no unused dependencies`.
+
+### Следующие релизы
+
+- **v10.7.0** — Usability (часть 2) + **закрытие вехи F**: `tracing-subscriber`,
+  `indicatif` (progress bar), `--dry-run`, double `Ctrl-C` = hard shutdown,
+  breaking deps (#7/#8/#10/#11/#12/#13) миграция.
+
 ## v10.5.3 - 2026-07-13
 
 **Dependabot updates batch: 6 PR (3 merge, 5 close).**

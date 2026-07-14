@@ -71,7 +71,7 @@ pub mod syslog; // → src/syslog.rs: pub use crate::format::* // → src/protob
 // === Re-exports: новые слои (предпочтительные пути для нового кода) ===
 
 pub use anomaly::{rate_multiplier, should_drop_packet, Anomaly, AnomalyKind, AnomalyPlanner};
-pub use cli::{apply_overrides, parse_target, Args, Overrides};
+pub use cli::{apply_overrides, parse_target, Args, Command, Overrides};
 pub use error::{ConfigError, DrainError, MetricsError, RuntimeError};
 pub use format::{
     build_rfc3164, build_rfc5424, escape_sd_value, prival, raw, rfc3164, rfc5424, Header,

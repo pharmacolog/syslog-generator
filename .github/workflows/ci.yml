@@ -318,10 +318,32 @@ jobs:
       - name: Compile benches (--features kafka)
         run: cargo bench --no-run --locked --features kafka
 
-      - name: Validate kafka example
+      - name: Validate ALL examples with kafka feature
+        # PR-1: было только "Validate kafka example" с одним файлом. Это
+        # пропускало регрессии в schema/profile при включённой kafka фиче
+        # (не-kafka примеры могут сломаться, если изменится shared-код).
+        # Теперь — полный цикл по ВСЕМ примерам, как в основном Test job,
+        # но с --features kafka. Это даёт двойное покрытие:
+        #  - основной Test job (без kafka): ловит регрессии в default build
+        #  - test-kafka (с kafka): ловит регрессии в kafka-enabled build
+        # Оба запускают cargo run --bin syslog-generator, поэтому дешёвые.
         run: |
-          cargo run --quiet --bin syslog-generator --features kafka -- \
-            --validate --schema-strict --profile examples/kafka_redpanda.yaml
+          set -e
+          status=0
+          for f in examples/*.json examples/*.yaml examples/*.yml; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+              schema_*.json|proto*_schema.json|*_schema.json) continue ;;
+              *.meta.json) continue ;;
+            esac
+            echo "checking $f"
+            if ! cargo run --quiet --bin syslog-generator --features kafka -- \
+              --validate --schema-strict --profile "$f"; then
+              echo "FAILED: $f"
+              status=1
+            fi
+          done
+          exit $status
 
   # v10.3.0 (Coverage ч.1): baseline coverage через cargo-llvm-cov.
   # **Non-blocking** — только отчёт и артефакт lcov.info. Blocking gate

@@ -62,7 +62,7 @@ bytes = "1"
 rskafka = { version = "0.5", optional = true, default-features = false, features = ["compression-gzip", "compression-lz4", "compression-snappy", "compression-zstd"] }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 regex = "1"
 proptest = "1"
 # F16 (v9.3.0): для integration-теста reconnect — RST через SO_LINGER=0.

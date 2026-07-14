@@ -1,6 +1,26 @@
 
 # Changelog
 
+## v10.5.2 - 2026-07-13
+
+**Hotfix: Docker Smoke test на PR + Dependabot groups optimization.**
+
+### Fixed
+
+- **`.github/workflows/docker.yml`**: `Smoke test` step теперь `if: github.event_name != 'pull_request'`.
+  На PR build (refs/pull/N/merge) `push: false`, поэтому тег НЕ существует в
+  ghcr.io — `docker run` падал с `unauthorized: dev-4c9f475`.
+  На push (main/dev/release/tag) — образ запушен, smoke test OK.
+- **`.github/dependabot.yml`**: `groups` с `dependency-type: "production"` (валидное
+  значение в Dependabot schema) — все production minor/patch updates в ОДИН PR
+  в неделю (`production-deps` + `development-deps`). Это устраняет 2-3 параллельных
+  Dependabot PR (как было v10.5.0 + v10.5.1).
+
+### Notes
+
+- **339 тестов** (240 unit + 88 integration + 11 n7) — все зелёные.
+- **`cargo fmt/clippy/build`** — clean.
+
 ## v10.5.1 - 2026-07-13
 
 **Hotfix: `.github/dependabot.yml` — убрана невалидная `dependency-type: "direct"/"indirect"`.**

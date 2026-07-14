@@ -30,14 +30,14 @@ clap = { version = "4", features = ["derive"] }
 # v10.6.0: shell completions (bash, zsh, fish, powershell, elvish).
 clap_complete = "4"
 # v10.6.0: generate man page (subcommand `man`).
-clap_mangen = "0.2"
+clap_mangen = "0.3"
 # v10.6.0: colored output для ошибок (auto-detect NO_COLOR env).
 owo-colors = { version = "4", features = ["supports-colors"] }
 # v10.7.0: structured logging (tracing macros) + RUST_LOG поддержка.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # v10.7.1: progress bar — только при duration_secs > 30s И TTY.
-indicatif = "0.17"
+indicatif = "0.18"
 # Будет добавлен в v10.7.1 одновременно с имплементацией progress bar.
 prometheus = "0.14"
 serde = { version = "1", features = ["derive"] }

@@ -145,6 +145,13 @@ jobs:
             case "$(basename "$f")" in
               schema_*.json|proto*_schema.json|*_schema.json) continue ;;
               *.meta.json) continue ;;
+              # Kafka-примеры требуют `--features kafka` — валидируются в
+              # отдельном job `test-kafka` (см. ниже). PR-1: после введения
+              # ValidationError::KafkaFeatureDisabled (для защиты от silent
+              # fail при kafka target без фичи) без feature flag этот
+              # пример будет валиться с осмысленной ошибкой, поэтому
+              # пропускаем его здесь.
+              kafka_*) continue ;;
             esac
             echo "checking $f"
             if ! cargo run --quiet --bin syslog-generator -- \

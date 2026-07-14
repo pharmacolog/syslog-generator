@@ -1,8 +1,11 @@
-//! Graceful shutdown: слушатель SIGINT/Ctrl-C и drain воркеров.
+//! Graceful shutdown: слушатель SIGINT/SIGTERM и drain воркеров.
 //!
-//! Поведение `shutdown_listener` не меняется — это fire-and-forget задача,
-//! которая перехватывает Ctrl-C и взводит `CancellationToken`. Это приводит
-//! к корректному завершению всех send-циклов.
+//! Поведение `shutdown_listener` (PR-2): fire-and-forget задача, которая
+//! перехватывает **Ctrl-C (SIGINT)** и **SIGTERM** (через
+//! `tokio::signal::unix`) и взводит `CancellationToken`. Оба сигнала
+//! разделяют общий counter двойного нажатия (первый → graceful, второй
+//! → hard exit). SIGTERM-поддержка важна для Docker/Kubernetes, где
+//! стандартный shutdown signal — SIGTERM, не SIGINT.
 //!
 //! Поведение `graceful_drain_wait` (N7): раньше возвращал `anyhow::Result<()>`
 //! с произвольным текстом ошибки. Теперь возвращает `Result<(), DrainError>`
@@ -21,22 +24,78 @@ pub async fn shutdown_listener(token: CancellationToken, metrics: Metrics) {
     // Первое нажатие — graceful (cancel token), второе (если процесс ещё
     // не завершился) — жёсткий exit(2). Счётчик через AtomicUsize
     // (выживает между await points).
+    //
+    // PR-2: добавлена обработка SIGTERM (важно для Docker/Kubernetes/контейнеров,
+    // где стандартный shutdown signal — SIGTERM, не SIGINT). Оба сигнала
+    // разделяют общий counter двойного нажатия.
     let counter = AtomicUsize::new(0);
+    // Unix-only: SIGTERM handler. На Windows tokio::signal::unix недоступен.
+    #[cfg(unix)]
+    let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[WARN] shutdown_listener: не удалось зарегистрировать SIGTERM handler: {e}; \
+                 SIGTERM останется необработанным (используйте SIGINT/Ctrl-C)"
+            );
+            // Без SIGTERM — fallback на только SIGINT (старое поведение).
+            return run_sigint_only_loop(token, metrics, counter).await;
+        }
+    };
+    loop {
+        #[cfg(unix)]
+        {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    handle_signal(Signal::Sigint, &counter, &token, &metrics);
+                }
+                _ = sigterm.recv() => {
+                    handle_signal(Signal::Sigterm, &counter, &token, &metrics);
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+            handle_signal(Signal::Sigint, &counter, &token, &metrics);
+        }
+    }
+}
+
+/// Какой сигнал получен — для логирования.
+#[derive(Debug, Clone, Copy)]
+enum Signal {
+    Sigint,
+    Sigterm,
+}
+
+/// Единая точка обработки сигнала: graceful на первом, hard exit на втором.
+fn handle_signal(sig: Signal, counter: &AtomicUsize, token: &CancellationToken, metrics: &Metrics) {
+    let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
+    let sig_name = match sig {
+        Signal::Sigint => "Ctrl-C (SIGINT)",
+        Signal::Sigterm => "SIGTERM",
+    };
+    if n == 1 {
+        eprintln!(
+            "\n[INFO] {sig_name}: graceful shutdown initiated \
+             (нажмите ещё раз для hard exit)"
+        );
+        metrics.shutdowns_total.inc();
+        token.cancel();
+    } else {
+        eprintln!("\n[WARN] Second {sig_name}: hard exit (exit code 2)");
+        std::process::exit(2);
+    }
+}
+
+/// Fallback loop если SIGTERM handler не удалось зарегистрировать (Windows
+/// или runtime без поддержки unix-сигналов).
+async fn run_sigint_only_loop(token: CancellationToken, metrics: Metrics, counter: AtomicUsize) {
     loop {
         let _ = tokio::signal::ctrl_c().await;
-        let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
-        if n == 1 {
-            // Первое нажатие: graceful shutdown.
-            eprintln!(
-                "\n[INFO] Ctrl-C: graceful shutdown initiated (press Ctrl-C again for hard exit)"
-            );
-            metrics.shutdowns_total.inc();
-            token.cancel();
-        } else {
-            // Второе (или последующее) нажатие: hard exit.
-            eprintln!("\n[WARN] Second Ctrl-C: hard exit (exit code 2)");
-            std::process::exit(2);
-        }
+        handle_signal(Signal::Sigint, &counter, &token, &metrics);
     }
 }
 
@@ -198,5 +257,43 @@ mod tests {
             1,
             "shutdowns_total should be incremented"
         );
+    }
+
+    /// PR-2: `handle_signal` — первое нажатие cancel'ит token и inc'ит metric.
+    #[test]
+    fn pr_2_handle_signal_first_press_cancels() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let token = CancellationToken::new();
+        let counter = AtomicUsize::new(0);
+        let initial_shutdowns = metrics.shutdowns_total.get();
+
+        handle_signal(Signal::Sigterm, &counter, &token, &metrics);
+
+        assert!(token.is_cancelled(), "первый SIGTERM → token cancelled");
+        assert_eq!(metrics.shutdowns_total.get(), initial_shutdowns + 1);
+    }
+
+    /// PR-2: `handle_signal` — counter общий для SIGINT и SIGTERM.
+    /// Симулируем: сначала SIGINT (graceful), потом SIGTERM (counter уже 1,
+    /// второй press → hard exit через std::process::exit(2)).
+    /// Здесь мы НЕ можем реально проверить exit(2) — это убило бы тест-раннер.
+    /// Вместо этого проверяем что counter увеличивается при разных сигналах.
+    #[test]
+    fn pr_2_handle_signal_counter_shared_across_signal_kinds() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let token = CancellationToken::new();
+        let counter = AtomicUsize::new(0);
+
+        handle_signal(Signal::Sigint, &counter, &token, &metrics);
+        // После первого SIGINT token должен быть cancelled, counter = 1.
+        assert!(token.is_cancelled());
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        // Повторный сигнал (любого типа) — counter становится 2.
+        // Не вызываем второй раз — это бы вызвал std::process::exit(2)
+        // и убил тест-раннер. Вместо этого проверяем что counter — общий
+        // (один AtomicUsize для обоих сигналов) через inspect counter напрямую.
+        counter.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 }

@@ -146,34 +146,48 @@ jobs:
   msrv:
     # v10.5.0: MSRV-check теперь **blocking** (не best-effort). С rust-toolchain.toml
     # (channel="1.95") job гарантированно запускается и падает при несовместимости.
-    # Если rust-toolchain.toml НЕ существует — job автоматически skipped
-    # (через `if: hashFiles('rust-toolchain.toml') != ''`).
+    # Если rust-toolchain.toml НЕ существует — job завершается success без действий
+    # (skip логика в первом step, не в `if:` — `hashFiles()` не работает на job level).
     #
     # Этот job гарантирует, что мы не поднимаем MSRV случайно (использование
     # фичи Rust, которая не работает в старых версиях). При попытке merge
     # PR, который поднимает MSRV, CI упадёт и merge заблокируется.
     name: MSRV check (blocking, v10.5.0)
     runs-on: ubuntu-latest
-    # Skip job если rust-toolchain.toml не существует.
-    if: hashFiles('rust-toolchain.toml') != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if rust-toolchain.toml exists
+        id: check-toolchain
+        # `hashFiles()` доступен только в step context, не на job level (`if:`).
+        # Поэтому проверяем здесь. Если файла нет — skip остальные steps
+        # через `if: steps.check-toolchain.outputs.has_toolchain == 'true'`.
+        run: |
+          if [ -f rust-toolchain.toml ]; then
+            echo "has_toolchain=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_toolchain=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Read MSRV from rust-toolchain.toml
         id: msrv
+        if: steps.check-toolchain.outputs.has_toolchain == 'true'
         run: |
           channel=$(grep -E '^channel' rust-toolchain.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: Install MSRV toolchain
+        if: steps.check-toolchain.outputs.has_toolchain == 'true'
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.channel }}
 
       - name: Build with MSRV
+        if: steps.check-toolchain.outputs.has_toolchain == 'true'
         run: cargo build --locked
 
       - name: Test with MSRV (smoke)
+        if: steps.check-toolchain.outputs.has_toolchain == 'true'
         run: cargo test --locked --lib --bins
 
   # v10.5.0: cargo-deny — security advisories + license compliance.

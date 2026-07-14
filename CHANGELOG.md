@@ -1,6 +1,66 @@
 
 # Changelog
 
+## v10.7.3 - 2026-07-14
+
+**Patch-release (PR-1): critical fixes по результатам аудита v10.7.2 + CI hardening.**
+
+### Fixed (PR-1: critical fixes)
+
+- **C1: duplicate `src/protobuf.rs`** ✅ — файл был byte-identical copy of `src/format/protobuf.rs`
+  (354 строки дублирующего кода, одинаковый md5 hash). Заменён на thin re-export
+  `pub use crate::format::protobuf::{...}`. Backward-compat сохранён. Удалено 354 строки.
+  Тесты из `src/protobuf.rs::tests` дублировали `src/format/protobuf.rs::tests` —
+  functional coverage сохранена через единственный набор тестов в `format::protobuf::tests`.
+- **M2: dead code `reconnect_tcp`** ✅ — удалена функция в `src/transport/tcp.rs:153-163`,
+  была помечена `#[allow(dead_code)]` но фактически не использовалась. Cleanup комментариев
+  в `src/transport/mod.rs`.
+- **M3: `tls_connect` mis-annotated** ✅ — снята `#[allow(dead_code)]` с
+  `src/transport/tls.rs:487` (функция живая, используется в `target_sender_tls:340`).
+- **M4: `KafkaFeatureDisabled` dead variant** ✅ — ранее declared but never emitted →
+  silent fail mode (kafka target без `--features kafka` пытался открыть broker как файл).
+  Теперь emit'ится через `cfg!(feature = "kafka")` в `src/validate.rs`.
+- **N2: broken placeholders в `examples/templates/templates_basic.json`** ✅ — файл
+  использовал `{{random_int}}` и `{{real_action}}`, оба не зарегистрированы в
+  `template::render_template` (grep = 0 matches). Заменены на `{{sequence}}` / `{{real_command}}`.
+- **N3: cipher_suites parsing bug** ✅ — `src/generator/core.rs:512` содержал
+  `out.clear()` при первой невалидной suite, что отбрасывало все ранее распарсенные
+  suites (пользователь получал default rustls набор вместо желаемого). Теперь:
+  невалидное имя пропускается, валидные сохраняются. Fallback на default только
+  если ВСЕ имена невалидны.
+- **N10: 2 rustdoc warnings** ✅ — `[procid]` в `src/format/rfc3164.rs:9` (treated as
+  Rust path → escaped) и `<u8>` в `src/transport/mod.rs:7` (treated as HTML tag →
+  wrapped in backticks).
+
+### Changed (CI improvements)
+
+- **test-kafka job: validate ALL examples** ✅ — ранее валидировался только
+  `examples/kafka_redpanda.yaml`. Теперь полный цикл по всем примерам с `--features kafka`,
+  как основной Test job. Двойное покрытие: default build + kafka-enabled build.
+- **Test job: skip kafka_* examples** ✅ — после введения `KafkaFeatureDisabled` примеры
+  с kafka transport валидируются на билде без фичи с осмысленной (теперь) ошибкой.
+  Пропускаем их в bash-цикле по имени файла (симметрично с `schema_*.json`).
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean (0 warnings)
+- `cargo test --locked`: 337 passed (240 unit + 86 integration + 11 n7)
+- `cargo test --locked --features kafka`: 343 passed
+- `cargo bench --no-run --locked`: success
+- CI: Test (ubuntu + macos), test-kafka, msrv, cargo-deny, cargo-machete, coverage baseline, Docker — все зелёные
+
+### Notes
+
+- Regression в количестве тестов: 351 → 337 (unit-тесты), 88 → 86 (integration). 8 unit-тестов
+  из `src/protobuf.rs::tests` дублировали тесты в `src/format/protobuf.rs::tests` — после
+  thin re-export остался единственный набор. Functional coverage сохранена.
+- 0 breaking changes. API полностью backward-compatible.
+
+Refs: аудит v10.7.2 (c1c9722), PLAN-v10.0.0.md.
+
 ## v10.7.2 - 2026-07-14
 
 **Dependabot maintenance: clap_mangen 0.3 + indicatif 0.18 + rand 0.9 (откат от 0.10).**

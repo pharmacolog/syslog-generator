@@ -3,15 +3,15 @@
 # Автоматически создаёт PR для обновления зависимостей и GitHub Actions.
 # Помогает поддерживать проект в актуальном состоянии без ручной работы.
 #
-# v10.5.1: убрана `dependency-type: "direct"/"indirect"` — Dependabot schema
-# требует `production` или `development`. Без groups — Dependabot делает
-# отдельный PR на каждое обновление, что проще и более прозрачно.
+# v10.5.2: `groups` с `dependency-type: "production"` (валидное значение в
+# Dependabot schema) — все production minor/patch updates в ОДИН PR в неделю.
+# Это устраняет 2-3 параллельных Dependabot PR (v10.5.0 и v10.5.1 были
+# выпущены 2 раза подряд из-за того, что v10.5.0 забыл про groups).
+# development-deps — отдельный PR (обычно test/build tools).
 
 version: 2
 
-# Cargo dependencies: еженедельно.
-# - production: [dependencies] (runtime) — автоматические minor/patch PR.
-# - development: [dev-dependencies] (test/build) — отдельный PR.
+# Cargo dependencies: еженедельно, с groups.
 updates:
   - package-ecosystem: "cargo"
     directory: "/"
@@ -20,12 +20,26 @@ updates:
       day: "monday"
       time: "04:00"
       timezone: "Europe/Moscow"
-    open-pull-requests-limit: 10
+    groups:
+      # production-deps: все minor/patch updates runtime deps в ОДИН PR.
+      production-deps:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      # development-deps: minor/patch updates test/build deps в ОДИН PR.
+      development-deps:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Major updates — отдельные PR (могут ломать API).
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "cargo"
 
-  # GitHub Actions: еженедельно.
+  # GitHub Actions: еженедельно, все updates в ОДИН PR.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -33,7 +47,12 @@ updates:
       day: "monday"
       time: "04:30"
       timezone: "Europe/Moscow"
-    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "github-actions"

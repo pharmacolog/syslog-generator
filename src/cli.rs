@@ -97,6 +97,12 @@ pub struct Args {
     #[arg(long)]
     pub validate: bool,
 
+    /// v10.7.0: --dry-run — загрузить и валидировать профиль, но НЕ отправлять.
+    /// Полезно для CI: проверяет профиль без реальной нагрузки.
+    /// Требует --profile (иначе нечего валидировать).
+    #[arg(long)]
+    pub dry_run: bool,
+
     /// D3: дополнительно к семантической валидации (F13) проверить профиль
     /// против формальной JSON Schema (`schemas/profile.schema.json`). Полезно
     /// для CI и для отлова структурных ошибок (неправильные типы, неизвестные
@@ -450,6 +456,26 @@ mod tests {
         let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
         assert!(args.command.is_none(), "default subcommand не задан");
         assert_eq!(args.profile.as_deref(), Some("x.json"));
+    }
+
+    // === v10.7.0 (Usability ч.2): тесты для --dry-run ===
+
+    /// `--dry-run` парсится корректно.
+    #[test]
+    fn v10_7_0_dry_run_flag_parses() {
+        use clap::Parser;
+        let args = Args::parse_from(["syslog-generator", "-p", "x.json", "--dry-run"]);
+        assert!(args.dry_run, "--dry-run должен быть true");
+        // --dry-run не отменяет другие флаги.
+        assert_eq!(args.profile.as_deref(), Some("x.json"));
+    }
+
+    /// `--dry-run` по умолчанию false.
+    #[test]
+    fn v10_7_0_dry_run_default_false() {
+        use clap::Parser;
+        let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
+        assert!(!args.dry_run, "--dry-run по умолчанию false");
     }
 }
 

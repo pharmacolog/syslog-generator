@@ -1,6 +1,20 @@
 
 # Changelog
 
+## v10.6.0 - 2026-07-13 (post-release bump)
+
+**Hotfix: Cargo.toml bump 10.5.3 → 10.6.0.**
+
+В release commit 2add0bb (release: v10.6.0 — Usability ч.1) bump был пропущен.
+Release binary показывал `--version = 10.5.3` (не соответствует тегу).
+
+### Fixed
+
+- **`Cargo.toml`**: bump `version = "10.5.3"` → `10.6.0`.
+  Release binary теперь показывает `syslog-generator 10.6.0` корректно.
+  Архив `syslog-generator-v10.6.0-verified.zip` пересобран с правильной версией.
+  Тег v10.6.0 force-pushed на hotfix commit.
+
 ## v10.6.0 - 2026-07-13
 
 **Usability (часть 1): shell completions + man page + colored errors.**

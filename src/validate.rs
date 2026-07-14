@@ -579,6 +579,17 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
 
     // === F16 (v9.3.0): Kafka/ротация/reconnect ===
 
+    // PR-1 fix: Kafka-целевой transport требует feature flag `kafka`.
+    // Без флага валидация ниже (`#[cfg(feature = "kafka")]`) компилируется out,
+    // и target молча попадает в fallback на file-sender (silent fail).
+    // Теперь emit'им явную ошибку, если feature выключен.
+    if t.transport == "kafka" && !cfg!(feature = "kafka") {
+        errors.push(ValidationError::KafkaFeatureDisabled {
+            index,
+            address: t.address.clone(),
+        });
+    }
+
     // F16: Kafka-специфичная валидация (только при feature flag).
     #[cfg(feature = "kafka")]
     if t.transport == "kafka" {

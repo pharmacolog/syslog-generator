@@ -6,7 +6,7 @@ use chrono::Local;
 /// Собрать сообщение RFC 3164 (BSD):
 /// `<PRI>Mmm dd hh:mm:ssHOSTNAME TAG: MSG`
 /// TIMESTAMP — локальное время; день с ведущим пробелом для 1..9.
-/// TAG формируется из app_name (+ [procid], если не NILVALUE).
+/// TAG формируется из app_name (+ `procid` в квадратных скобках, если не NILVALUE).
 pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
     let pri = super::prival(h.facility, h.severity);
     let ts = Local::now().format("%b %e %H:%M:%S").to_string();

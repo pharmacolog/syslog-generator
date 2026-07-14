@@ -501,20 +501,27 @@ pub async fn run_phase_multi(
                         cipher_suites: match &target.tls_cipher_suites {
                             Some(names) => {
                                 let mut out = Vec::with_capacity(names.len());
+                                let mut had_invalid = false;
                                 for name in names {
                                     match crate::transport::tls::parse_cipher_suite(name) {
                                         Ok(s) => out.push(s),
                                         Err(e) => {
+                                            // PR-1 fix: ранее out.clear() отбрасывал
+                                            // все ранее распарсенные suites при первой
+                                            // ошибке. Теперь пропускаем только невалидное
+                                            // имя, оставляя валидные suites в out.
                                             eprintln!(
-                                                "TLS ({addr}): не удалось распарсить cipher_suites={name:?}: {e}; \
-                                                 используется дефолтный набор"
+                                                "TLS ({addr}): пропускаю невалидный cipher_suite={name:?}: {e}"
                                             );
-                                            out.clear();
-                                            break;
+                                            had_invalid = true;
                                         }
                                     }
                                 }
-                                if out.is_empty() {
+                                // Если ВСЕ имена невалидны — fallback на дефолтный набор.
+                                if out.is_empty() && had_invalid {
+                                    eprintln!(
+                                        "TLS ({addr}): ни один из cipher_suites не распознан; используется дефолтный набор"
+                                    );
                                     None
                                 } else {
                                     Some(out)

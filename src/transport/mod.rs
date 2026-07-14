@@ -4,11 +4,11 @@
 //! транспорт реализует свою функцию `target_sender_*`. До N10 всё было
 //! в одном `src/sender.rs` (~554 строк). После рефакторинга:
 //!
-//! - `mod.rs` — общая инфраструктура: `SharedRx` (Arc<Mutex<Receiver<Vec<u8>>>>),
+//! - `mod.rs` — общая инфраструктура: `SharedRx` (Arc<Mutex<Receiver<`Vec<u8>`>>>),
 //!   `Framing` (RFC 6587), `record_send`/`record_send_latency`/`record_reconnect`/
 //!   `record_error`/`drain_as_errors`/`next_msg` (приватные).
 //! - `file` — `target_sender_file` (BufWriter, N6 zero-copy).
-//! - `tcp` — `target_sender_tcp` + `reconnect_tcp` (BytesMut, N6 zero-copy).
+//! - `tcp` — `target_sender_tcp` (BytesMut, N6 zero-copy).
 //! - `udp` — `target_sender_udp` (zero-copy по дизайну).
 //! - `tls` — `target_sender_tls` + `tls_connect` + `TlsParams` +
 //!   `build_tls_connector` + `parse_tls_min_version` (N4.mTLS).
@@ -257,8 +257,9 @@ pub mod tls;
 pub mod udp;
 
 // Re-exports для API, экспортируемого из `pub use` в `lib.rs`.
-// (`reconnect_tcp` и `tls_connect` остаются pub(crate) — это внутренние
-// helpers sender'ов, не часть публичного API.)
+// (`tls_connect` остаётся pub(crate) — это внутренний helper sender'а,
+// не часть публичного API. До PR-1 здесь также был `reconnect_tcp`,
+// который был мёртвым кодом и удалён.)
 
 // Обёртки для backward-compat: `syslog_generator::target_sender_file` и т.д.
 pub use file::target_sender_file;

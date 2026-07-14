@@ -443,6 +443,13 @@ async fn run_send_loop(
         }
         buf.clear();
     }
+    // PR-2: graceful TLS shutdown. Без явного shutdown() rustls/tokio-rustls
+    // просто drop'ает stream — receiver не получает close_notify и может
+    // зависнуть (особенно TLS-aware приёмники типа syslog-ng с TLS strict mode).
+    // На error path (drain_as_errors / return) мы НЕ shutdown'им — там
+    // соединение уже сломано (reconnect exhausted / cancelled).
+    // `shutdown()` внутри себя flush'ит и посылает close_notify.
+    let _ = tls.shutdown().await;
     Ok(())
 }
 

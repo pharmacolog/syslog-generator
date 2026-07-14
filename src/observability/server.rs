@@ -101,17 +101,47 @@ pub async fn serve(addr: &str, metrics: Metrics, shutdown: CancellationToken) ->
         .map(|a| a.to_string())
         .unwrap_or_else(|_| addr.to_string());
     eprintln!("F12: HTTP /metrics слушает на http://{local}/metrics");
+    // PR-2: трекаем JoinHandle каждого handle_conn, чтобы дождаться их при
+    // shutdown (раньше они были orphan — при отмене accept-цикл выходил
+    // немедленно, а in-flight HTTP-запросы продолжали работать на
+    // background tokio runtime, теряя свой завершение в основном потоке).
+    let mut in_flight: Vec<tokio::task::JoinHandle<()>> = Vec::new();
     loop {
         tokio::select! {
             _ = shutdown.cancelled() => {
-                eprintln!("F12: HTTP /metrics остановлен");
+                eprintln!("F12: HTTP /metrics останавливается; \
+                          ждём завершения {} in-flight запросов",
+                          in_flight.len());
+                // Даём in-flight запросам шанс завершиться (с коротким таймаутом).
+                let drain_deadline = std::time::Duration::from_secs(5);
+                let drain_result = tokio::time::timeout(
+                    drain_deadline,
+                    async {
+                        // Удаляем завершённые handles; await оставшихся.
+                        in_flight.retain_mut(|h| !h.is_finished());
+                        for h in in_flight.drain(..) {
+                            let _ = h.await;
+                        }
+                    },
+                )
+                .await;
+                match drain_result {
+                    Ok(_) => eprintln!("F12: HTTP /metrics остановлен (все запросы завершены)"),
+                    Err(_) => eprintln!(
+                        "F12: HTTP /metrics остановлен (timeout {drain_deadline:?}; \
+                         часть in-flight запросов прервана)"
+                    ),
+                }
                 return Ok(());
             }
             accepted = listener.accept() => {
                 match accepted {
                     Ok((stream, _peer)) => {
                         let m = metrics.clone();
-                        tokio::spawn(handle_conn(stream, m));
+                        let h = tokio::spawn(handle_conn(stream, m));
+                        in_flight.push(h);
+                        // Чистим завершённые handles чтобы не накапливать.
+                        in_flight.retain(|h| !h.is_finished());
                     }
                     Err(e) => {
                         eprintln!("F12: ошибка accept на /metrics: {e}");

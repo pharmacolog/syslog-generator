@@ -12,13 +12,32 @@
 
 use crate::error::DrainError;
 use crate::metrics::Metrics;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 pub async fn shutdown_listener(token: CancellationToken, metrics: Metrics) {
-    let _ = tokio::signal::ctrl_c().await;
-    metrics.shutdowns_total.inc();
-    token.cancel();
+    // v10.7.1: двойной Ctrl-C = hard shutdown.
+    // Первое нажатие — graceful (cancel token), второе (если процесс ещё
+    // не завершился) — жёсткий exit(2). Счётчик через AtomicUsize
+    // (выживает между await points).
+    let counter = AtomicUsize::new(0);
+    loop {
+        let _ = tokio::signal::ctrl_c().await;
+        let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
+        if n == 1 {
+            // Первое нажатие: graceful shutdown.
+            eprintln!(
+                "\n[INFO] Ctrl-C: graceful shutdown initiated (press Ctrl-C again for hard exit)"
+            );
+            metrics.shutdowns_total.inc();
+            token.cancel();
+        } else {
+            // Второе (или последующее) нажатие: hard exit.
+            eprintln!("\n[WARN] Second Ctrl-C: hard exit (exit code 2)");
+            std::process::exit(2);
+        }
+    }
 }
 
 /// Дождаться завершения всех sender-задач после остановки продюсера.

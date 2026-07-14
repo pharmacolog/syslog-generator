@@ -12,6 +12,13 @@
 [graph]
 all-features = false
 
+[advisories]
+# v10.7.1: number_prefix (RUSTSEC-2025-0119) — transitive от indicatif 0.17.
+# Не наш выбор (indicatif зависит). TODO: перенести indicatif в отдельный
+# workspace или ждать обновления indicatif. Игнорируем пока.
+ignore = ["RUSTSEC-2025-0119"]
+yanked = "warn"
+
 [bans]
 # Запрещаем crates с known security issues или дублирующие функциональность.
 multiple-versions = "warn"
@@ -27,6 +34,7 @@ allow-git = []
 [licenses]
 allow = [
     "MIT",
+    "MIT-0",                   # v10.7.1: borrow-or-share (через jsonschema 0.47 transitive)
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
@@ -40,8 +48,3 @@ allow = [
 ]
 confidence-threshold = 0.8
 
-[advisories]
-# v10.5.3: RUSTSEC-2024-0437 (protobuf 2.28.0 transitive от prometheus 0.13)
-# УДАЛЁН — prometheus 0.14 (через Dependabot PR #9) перешёл на protobuf 3.x.
-# Уязвимость больше не transitive dep. Если появится снова — добавить в ignore.
-yanked = "warn"

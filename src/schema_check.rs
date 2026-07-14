@@ -15,6 +15,7 @@
 //! компилируется в бинарник.
 
 use crate::config::Profile;
+use jsonschema::ValidationError;
 use serde_json::Value;
 use thiserror::Error;
 
@@ -53,27 +54,28 @@ pub fn validate_against_schema(profile: &Profile, schema: &Value) -> Result<(), 
     let instance = serde_json::to_value(profile)
         .map_err(|e| SchemaCheckError::InvalidSchema(format!("profile→json: {e}")))?;
 
-    // Компилируем схему. ValidationError изоморфен валидатору; в случае
-    // несовместимости схемы возвращается InvalidSchema. jsonschema 0.18
-    // экспонирует ошибки через `validate(&instance).collect::<Vec<_>>()`.
-    let validator = jsonschema::JSONSchema::compile(schema)
+    // v10.7.1: jsonschema 0.47 использует builder API.
+    // JSONSchema::compile → Validator::validate через validator_for() + .validate().
+    let validator = jsonschema::validator_for(schema)
         .map_err(|e| SchemaCheckError::InvalidSchema(format!("compile: {e}")))?;
 
+    // v10.7.1: jsonschema 0.47 — validate() возвращает Result<(), ValidationError>,
+    // а iter_errors() возвращает ErrorIterator (если хотим несколько ошибок).
     let result = validator.validate(&instance);
-    match result {
-        Ok(()) => Ok(()),
-        Err(iter) => {
-            let messages: Vec<String> = iter.map(|e| e.to_string()).collect();
-            let count = messages.len();
-            let list = messages
-                .iter()
-                .enumerate()
-                .map(|(i, m)| format!("  {}. {}", i + 1, m))
-                .collect::<Vec<_>>()
-                .join("\n");
-            Err(SchemaCheckError::ValidationFailed { count, list })
-        }
-    }
+    let errors: Vec<ValidationError<'_>> = match result {
+        Ok(()) => return Ok(()),
+        Err(e) => vec![e],
+    };
+    // Дополнительно: собираем все ошибки через iter_errors (multi-error mode).
+    let all_errors: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();
+    let count = all_errors.len();
+    let list = all_errors
+        .into_iter()
+        .enumerate()
+        .map(|(i, m)| format!("  {}. {}", i + 1, m))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Err(SchemaCheckError::ValidationFailed { count, list })
 }
 
 #[cfg(test)]
@@ -170,7 +172,7 @@ mod tests {
         let s = serde_json::to_string(&v).unwrap();
         // Прямой тест против raw JSON (минуя serde) — это то, что делает schema.
         let schema: Value = serde_json::from_str(PROFILE_SCHEMA).unwrap();
-        let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
+        let validator = jsonschema::validator_for(&schema).unwrap();
         let err_iter = validator.validate(&v);
         assert!(
             err_iter.is_err(),

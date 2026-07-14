@@ -43,9 +43,9 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// Путь к JSON-профилю нагрузки. Без него профиль собирается из CLI-флагов
+    /// Путь к JSON/YAML-профилю нагрузки. Без него профиль собирается из CLI-флагов
     /// (нужен хотя бы один --target и источник контента, напр. --message).
-    #[arg(short, long)]
+    #[arg(short, long, visible_alias = "config")]
     pub profile: Option<String>,
 
     /// Цель в форме ADDR (адрес). Транспорт задаётся отдельно через --transport.

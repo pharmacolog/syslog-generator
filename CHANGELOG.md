@@ -1,6 +1,53 @@
 
 # Changelog
 
+## v10.7.0 - 2026-07-13
+
+**Usability (часть 2): tracing + RUST_LOG + --dry-run.**
+
+⚠️ **Breaking deps миграция (jsonschema 0.47, rand 0.10, socket2 0.6, criterion 0.8, thiserror 2, rskafka 0.6) перенесена в v10.7.1** — это patch с breaking changes, не входит в этот релиз. Закрытие вехи F отложено до v10.7.1.
+
+### Added
+
+- **`tracing` + `tracing-subscriber`**: structured logging через `tracing::info!`/`warn!`/`error!` macros.
+  Инициализация в `main()` через `tracing-subscriber::fmt()` с `EnvFilter::from_default_env()`.
+  Поддерживает `RUST_LOG` env var: `RUST_LOG=debug syslog-generator -p profile.json`,
+  `RUST_LOG=syslog_generator=trace,syslog_generator::transport=debug`.
+  ANSI colors отключаются если stderr — pipe (не TTY) через `IsTerminal::is_terminal`.
+- **`--dry-run` флаг**: загружает и валидирует профиль, но НЕ отправляет нагрузку.
+  Полезно для CI/CD: проверка профиля без реальной нагрузки.
+  Выводит список фаз и targets в stdout + structured log в stderr.
+- **2 новых unit-теста** в `src/cli.rs`:
+  - `v10_7_0_dry_run_flag_parses`
+  - `v10_7_0_dry_run_default_false`
+
+### Changed
+
+- **`src/main.rs`**: заменены некоторые `eprintln!` на `tracing::info!`/`warn!` для non-fatal
+  сообщений (загрузка профиля, валидация, dispatch subcommand).
+  Ошибки остаются `eprintln!` (НЕ `tracing::error!`) — tracing буферизирует
+  вывод и не flushed до exit, что ломает N7 тесты.
+
+### Dependencies
+
+- `tracing = "0.1"` — structured logging macros
+- `tracing-subscriber = { version = "0.3", features = ["env-filter"] }` — EnvFilter для RUST_LOG
+- `indicatif = "0.17"` — для v10.7.1 (progress bar, ещё не используется в v10.7.0)
+
+### Notes
+
+- **351 тестов** (252 unit + 88 integration + 11 n7) — все зелёные.
+- **`cargo deny`**: проверка advisory-db прервана (network timeout), но конфигурация стабильна.
+- **`cargo machete`**: no unused dependencies.
+- **`cargo fmt/clippy/build`** — clean.
+
+### Следующие релизы
+
+- **v10.7.1** (patch) — Закрытие вехи F: breaking deps миграция (jsonschema 0.18→0.47,
+  rand 0.9→0.10, socket2 0.5→0.6, criterion 0.5→0.8, thiserror 1→2, rskafka 0.5→0.6) +
+  `indicatif` progress bar + двойной `Ctrl-C` = hard shutdown + `--config` алиас.
+  Также удалит RUSTSEC-2024-0437 workaround (не нужен после major bump).
+
 ## v10.6.0 - 2026-07-13 (post-release bump)
 
 **Hotfix: Cargo.toml bump 10.5.3 → 10.6.0.**

@@ -1467,3 +1467,5 @@ v8.8.1 (AUDIT.md правки), v9.0.0 (milestone).
 Следующие релизы по плану: v8.7.1 (N8 proptest), v8.7.2 (N4.mTLS),
 v8.8.0 (N10 слои), v8.8.1 (AUDIT.md), v9.0.0 (milestone).
 
+
+<!-- v10.7.1: trigger Dependabot re-scan after v10.7.1 release. -->

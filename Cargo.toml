@@ -50,7 +50,7 @@ governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
 regex-syntax = "0.8"
-jsonschema = "0.18"
+jsonschema = "0.47"
 bytes = "1"
 ## F16 (v9.3.0): pure-Rust Kafka/Redpanda client (опциональная зависимость).
 ## Поддерживает батчинг, сжатие (gzip/lz4/snappy/zstd), leader-recovery,

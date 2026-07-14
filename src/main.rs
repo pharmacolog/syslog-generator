@@ -6,7 +6,7 @@ use syslog_generator::{
     apply_overrides, create_metrics, format_errors, load_profile_from_path, run_profile,
     validate_against_embedded_schema, validate_profile, Args, Command, Profile,
 };
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> ExitCode {

@@ -265,20 +265,21 @@ async fn spawn_tls_collector(
     let key_pem = tls.key_pem.clone();
     let handle = tokio::spawn(async move {
         // v9.5.0: TLS-сервер для тестов на rustls (миграция с native-tls).
-        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+        use rustls::pki_types::CertificateDer;
+        use rustls_pki_types::pem::PemObject;
         use tokio_rustls::TlsAcceptor;
         // Установка crypto provider — первый вызов TLS в тестах.
         syslog_generator::ensure_rustls_provider_for_tests();
-        let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_pem.as_slice())
-            .map(|r| r.unwrap())
-            .collect();
-        // rustls_pemfile::pkcs8_private_keys возвращает PrivatePkcs8KeyDer<'a>;
-        // оборачиваем в PrivateKeyDer::Pkcs8.
-        let pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_slice())
+        // v10.5.0: rustls_pki_types::PemObject вместо deprecated rustls_pemfile.
+        let certs: Vec<CertificateDer<'static>> =
+            rustls_pki_types::CertificateDer::pem_slice_iter(cert_pem.as_slice())
+                .map(|r| r.unwrap())
+                .collect();
+        // pem_slice_iter возвращает PrivateKeyDer<'a> напрямую (не оборачиваем).
+        let key = rustls_pki_types::PrivateKeyDer::pem_slice_iter(key_pem.as_slice())
             .map(|r| r.unwrap())
             .next()
             .expect("at least one key");
-        let key = PrivateKeyDer::Pkcs8(pkcs8);
         let config = rustls::ServerConfig::builder_with_protocol_versions(&[
             &rustls::version::TLS12,
             &rustls::version::TLS13,

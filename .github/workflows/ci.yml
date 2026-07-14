@@ -144,45 +144,93 @@ jobs:
           exit $status
 
   msrv:
-    # MSRV (Minimum Supported Rust Version). Этот job — best effort:
-    # падение здесь не блокирует merge, но сигнализирует о росте MSRV.
-    # Активируется только если в репозитории есть rust-toolchain.toml
-    # с полем `channel` — иначе весь job skipped (continue-on-error: true
-    # на job всё равно делает skip невозможным, но мы используем
-    # `needs: test` чтобы он запускался параллельно и проваливался тихо).
+    # v10.5.0: MSRV-check теперь **blocking** (не best-effort). С rust-toolchain.toml
+    # (channel="1.95") job гарантированно запускается и падает при несовместимости.
+    # Если rust-toolchain.toml НЕ существует — job автоматически skipped
+    # (через `if: hashFiles('rust-toolchain.toml') != ''`).
     #
-    # ВАЖНО: на уровне `jobs.<job_id>.if` доступны только specific contexts
-    # (например `github.event_name`), но НЕ `hashFiles` (доступен только
-    # внутри steps). Поэтому невозможно условно запустить весь job только
-    # когда файл существует. Workaround: job всегда запускается, но
-    # step Install MSRV сам проверяет наличие файла и выходит success'ом
-    # если файла нет (через `if: always() && file_exists`). В результате:
-    # - если rust-toolchain.toml есть → читаем channel → ставим toolchain
-    #   → билдим → MSRV-test проходит или падает (continue-on-error).
-    # - если нет → Install MSRV skip'ает (file_exists == false), и job
-    #   автоматически проходит (continue-on-error: true).
-    name: MSRV check (best effort)
+    # Этот job гарантирует, что мы не поднимаем MSRV случайно (использование
+    # фичи Rust, которая не работает в старых версиях). При попытке merge
+    # PR, который поднимает MSRV, CI упадёт и merge заблокируется.
+    name: MSRV check (blocking, v10.5.0)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Skip job если rust-toolchain.toml не существует.
+    if: hashFiles('rust-toolchain.toml') != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Read MSRV from rust-toolchain.toml
         id: msrv
-        if: hashFiles('rust-toolchain.toml') != ''
         run: |
           channel=$(grep -E '^channel' rust-toolchain.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: Install MSRV toolchain
-        if: steps.msrv.outputs.channel != ''
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.channel }}
 
       - name: Build with MSRV
-        if: steps.msrv.outputs.channel != ''
         run: cargo build --locked
+
+      - name: Test with MSRV (smoke)
+        run: cargo test --locked --lib --bins
+
+  # v10.5.0: cargo-deny — security advisories + license compliance.
+  # Блокирует merge при:
+  # - уязвимостях в зависимостях (RUSTSEC advisories)
+  # - неизвестных registry/git источниках
+  # - запрещённых лицензиях
+  # - duplicate crate versions
+  # Документация: https://github.com/embarkstudios/cargo-deny
+  cargo-deny:
+    name: cargo-deny (advisories + licenses, blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-deny
+      - name: Install cargo-deny
+        # v10.4.3: cargo install вместо third-party action (taiki-e).
+        # Аналогично fix в coverage job.
+        run: cargo install cargo-deny --locked
+      - name: Run cargo-deny check
+        # Проверяет advisories, bans, sources, licenses по deny.toml.
+        run: cargo deny check
+
+  # v10.5.0: cargo-machete — unused dependencies detection.
+  # Блокирует merge при наличии unused deps в Cargo.toml (которые
+  # увеличивают время компиляции и binary size без пользы).
+  # Документация: https://github.com/bnjbvr/cargo-machete
+  cargo-machete:
+    name: cargo-machete (unused deps, blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-machete
+      - name: Install cargo-machete
+        # v10.4.3: cargo install вместо third-party action.
+        run: cargo install cargo-machete --locked
+      - name: Run cargo-machete
+        # cargo-machete по умолчанию проверяет все crates в workspace.
+        # exit code 1 = найдены unused deps (блокирует merge).
+        # exit code 0 = всё чисто.
+        run: cargo machete
 
   # F16 (v9.3.0): отдельный job для проверки feature flag `kafka` —
   # гарантирует что Kafka/Redpanda транспорт через `rskafka` компилируется

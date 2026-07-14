@@ -1,0 +1,46 @@
+# v10.5.0: Dependabot configuration.
+#
+# Автоматически создаёт PR для обновления зависимостей и GitHub Actions.
+# Помогает поддерживать проект в актуальном состоянии без ручной работы.
+
+version: 2
+
+# Cargo dependencies: еженедельно, группируем minor/patch updates в один PR.
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Moscow"
+    # Группируем minor/patch updates в один PR (чтобы не спамить).
+    groups:
+      rust-direct-deps:
+        dependency-type: "direct"
+        update-types:
+          - "minor"
+          - "patch"
+      rust-transitive-deps:
+        dependency-type: "indirect"
+        update-types:
+          - "minor"
+          - "patch"
+    # Major updates — отдельные PR (могут ломать API).
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "cargo"
+
+  # GitHub Actions: еженедельно.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

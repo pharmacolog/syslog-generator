@@ -1,6 +1,47 @@
 
 # Changelog
 
+## v10.5.0 - 2026-07-13
+
+**CI расширение: cargo-deny + cargo-machete + MSRV-blocking + Dependabot + замена deprecated rustls-pemfile.**
+
+### Added
+
+- **`.github/workflows/ci.yml`**: добавлены 2 blocking jobs:
+  - `cargo-deny`: security advisories (RUSTSEC), license compliance, trusted sources.
+    `deny.toml` — конфиг с whitelist лицензий (MIT/Apache-2.0/BSD/ISC/Zlib/CC0-1.0/MPL-2.0/CDLA-Permissive-2.0).
+    Blocking — fail CI при уязвимостях или нарушениях лицензий.
+  - `cargo-machete`: unused dependencies detection. Blocking — fail CI при наличии unused deps.
+- **`deny.toml`**: конфигурация cargo-deny (advisories, bans, sources, licenses).
+  Игнорирует только RUSTSEC-2024-0437 (protobuf 2.28.0 transitive от prometheus 0.13, не наш выбор).
+- **`rust-toolchain.toml`**: явный MSRV toolchain (channel = "1.95", components = rustfmt, clippy, llvm-tools-preview).
+  Активирует `msrv` job в **blocking** режиме (раньше был best-effort).
+- **`.github/dependabot.yml`**: еженедельные Dependabot PR для:
+  - Cargo dependencies (группируются minor/patch в один PR, major — отдельные)
+  - GitHub Actions
+  - Schedule: понедельник 04:00 (Europe/Moscow)
+
+### Changed (CI fix)
+
+- **`Cargo.toml`**: `rustls-pemfile = "2"` → `rustls-pki-types = { version = "1.15", features = ["std"] }`.
+  `rustls-pemfile` deprecated (RUSTSEC-2025-0134, unmaintained с августа 2025).
+  Новый рекомендуемый API — `rustls_pki_types::pem::PemObject` trait.
+- **`src/transport/tls.rs` + `tests/integration_tests.rs`**: миграция
+  `rustls_pemfile::certs/pkcs8_private_keys` → `rustls_pki_types::pem::PemObject::pem_slice_iter`.
+  API unified — больше не нужна обёртка `PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer)`.
+- **`.github/workflows/ci.yml`**: `msrv` job — `continue-on-error: true` →
+  **blocking** (без `continue-on-error`). Если `rust-toolchain.toml` существует —
+  job падает при несовместимости с MSRV. Если не существует — job skipped
+  через `if: hashFiles('rust-toolchain.toml') != ''`.
+
+### Notes
+
+- **339 тестов** (240 unit + 88 integration + 11 n7) — все зелёные.
+- **cargo deny**: `advisories ok, bans ok, licenses ok, sources ok`.
+- **cargo machete**: `no unused dependencies`.
+- **MSRV check** теперь blocking — PR с `?` (Rust 1.96+) фичи упадёт на MSRV job.
+- **Dependabot PRs** появятся автоматически каждый понедельник.
+
 ## v10.4.4 - 2026-07-13
 
 **CI fix: правильный multi-arch Docker build для релизов.**

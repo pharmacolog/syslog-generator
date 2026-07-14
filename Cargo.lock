@@ -2042,7 +2042,7 @@ dependencies = [
 
 [[package]]
 name = "syslog-generator"
-version = "10.5.3"
+version = "10.6.0"
 dependencies = [
  "anyhow",
  "bytes",

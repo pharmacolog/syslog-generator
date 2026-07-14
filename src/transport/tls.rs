@@ -484,7 +484,10 @@ async fn try_tls_connect(
 }
 
 /// Backward-compat: оригинальная `tls_connect` (одна попытка).
-#[allow(dead_code)]
+///
+/// Используется внутри `target_sender_tls` (см. `crate::transport::tls::target_sender_tls`)
+/// как helper для первого подключения до перехода в `try_tls_connect` (с backoff).
+/// До PR-1 был ошибочно помечен `#[allow(dead_code)]` — функция реально живая.
 pub(crate) async fn tls_connect(
     connector: &TlsConnector,
     addr: &str,

@@ -149,16 +149,3 @@ async fn run_send_loop(
     }
     Ok(())
 }
-
-/// Backward-compat: оригинальная сигнатура `reconnect_tcp` (одна попытка).
-/// Сохранена как обёртка для тестов и внешнего использования, которые
-/// ожидают именно одну попытку без backoff.
-#[allow(dead_code)]
-pub(crate) async fn reconnect_tcp(
-    addr: &str,
-    metrics: &Metrics,
-    transport: &str,
-) -> Option<TcpStream> {
-    record_reconnect(metrics, transport, addr);
-    TcpStream::connect(addr).await.ok()
-}

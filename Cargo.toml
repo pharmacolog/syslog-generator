@@ -27,7 +27,7 @@ kafka = ["dep:rskafka"]
 anyhow = "1"
 thiserror = "1"
 clap = { version = "4", features = ["derive"] }
-prometheus = "0.13"
+prometheus = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
@@ -45,7 +45,7 @@ tokio-rustls = "0.26"
 # rustls-pki-types напрямую (PemObject trait). rustls-pki-types уже есть
 # как transitive dep через rustls 0.23.
 rustls-pki-types = { version = "1.15", features = ["std"] }
-webpki-roots = "0.26"
+webpki-roots = "1.0"
 governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }

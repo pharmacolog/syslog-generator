@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.4.4"
+version = "10.5.0"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -41,7 +41,10 @@ tokio-util = { version = "0.7", features = ["rt"] }
 # Это **breaking change** в публичном API транспорта (см. CHANGELOG).
 rustls = { version = "0.23", default-features = false, features = ["std", "logging", "tls12", "ring"] }
 tokio-rustls = "0.26"
-rustls-pemfile = "2"
+# v10.5.0: rustls-pemfile deprecated (RUSTSEC-2025-0134) → используем
+# rustls-pki-types напрямую (PemObject trait). rustls-pki-types уже есть
+# как transitive dep через rustls 0.23.
+rustls-pki-types = { version = "1.15", features = ["std"] }
 webpki-roots = "0.26"
 governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

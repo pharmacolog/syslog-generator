@@ -17,7 +17,7 @@ use crate::metrics::Metrics;
 use anyhow::{anyhow, Result};
 use bytes::BytesMut;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{PrivateKeyDer, ServerName};
+use rustls::pki_types::ServerName;
 use rustls::ClientConfig;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
@@ -155,7 +155,10 @@ pub fn build_tls_connector(params: &TlsParams) -> Result<Arc<rustls::ClientConfi
     // 1. Корневые сертификаты.
     let mut root_store = rustls::RootCertStore::empty();
     if let Some(pem) = &params.ca_pem {
-        let certs = rustls_pemfile::certs(&mut pem.as_slice())
+        // v10.5.0: используем `rustls_pki_types::pem::PemObject` вместо
+        // deprecated `rustls_pemfile` (RUSTSEC-2025-0134, unmaintained).
+        use rustls_pki_types::pem::PemObject;
+        let certs: Vec<_> = rustls_pki_types::CertificateDer::pem_slice_iter(pem.as_slice())
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| anyhow!("ошибка парсинга PEM в ca_pem: {e}"))?;
         if certs.is_empty() {
@@ -211,19 +214,27 @@ pub fn build_tls_connector(params: &TlsParams) -> Result<Arc<rustls::ClientConfi
 
     let config = match (&params.client_cert_pem, &params.client_key_pem) {
         (Some(cert_pem), Some(key_pem)) => {
-            let certs: Vec<_> = rustls_pemfile::certs(&mut cert_pem.as_slice())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| anyhow!("ошибка парсинга PEM в client_cert_pem: {e}"))?;
+            // v10.5.0: rustls_pki_types::PemObject вместо deprecated rustls_pemfile.
+            use rustls_pki_types::pem::PemObject;
+            let certs: Vec<_> =
+                rustls_pki_types::CertificateDer::pem_slice_iter(cert_pem.as_slice())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| anyhow!("ошибка парсинга PEM в client_cert_pem: {e}"))?;
             if certs.is_empty() {
                 return Err(anyhow!("client_cert_pem не содержит сертификатов"));
             }
-            let mut keys: Vec<_> = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_slice())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| anyhow!("ошибка парсинга PKCS#8 в client_key_pem: {e}"))?;
+            // v10.5.0: pem_slice_iter возвращает PrivateKeyDer напрямую.
+            // Раньше использовался rustls_pemfile который возвращал
+            // PrivatePkcs8KeyDer, требовавший обёртки в PrivateKeyDer::Pkcs8.
+            // Теперь API rustls_pki_types unified — передаём напрямую.
+            let mut keys: Vec<_> =
+                rustls_pki_types::PrivateKeyDer::pem_slice_iter(key_pem.as_slice())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| anyhow!("ошибка парсинга PKCS#8 в client_key_pem: {e}"))?;
             if keys.is_empty() {
                 return Err(anyhow!("client_key_pem не содержит ключей"));
             }
-            let key = PrivateKeyDer::Pkcs8(keys.remove(0));
+            let key = keys.remove(0);
             wants_client_cert.with_client_auth_cert(certs, key)?
         }
         _ => wants_client_cert.with_no_client_auth(),

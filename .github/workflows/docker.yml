@@ -127,6 +127,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test
+        # v10.5.2: skip на PR build. На PR push в registry выключен
+        # (`push: ${{ github.event_name != 'pull_request' }}`), поэтому тег
+        # НЕ существует в ghcr.io — `docker run` упадёт с "unauthorized".
+        # На push в main/dev/release/tag — образ запушен, smoke test OK.
+        if: github.event_name != 'pull_request'
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             TAG="${{ steps.meta.outputs.VERSION }}"

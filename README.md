@@ -2,7 +2,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v10.5.1-blue)]()
+[![Version](https://img.shields.io/badge/version-v10.5.2-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
 
 **Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)

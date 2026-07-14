@@ -134,6 +134,7 @@ gh pr checks <pr-number> --watch
 | **v10.5.0** | minor | **CI расширение**: `cargo-deny` (security + license blocking), `cargo-machete` (unused deps blocking), MSRV-check (best-effort → blocking, requires `rust-toolchain.toml`). Dependabot `.github/dependabot.yml` (еженедельные PR для dependencies + actions). | v10.4.0 |
 | **v10.6.0** ✅ | minor | **Usability (часть 1)**: `clap_complete` (bash/zsh/fish/powershell completions через subcommand `completions <shell>`). `clap_mangen` (man page через subcommand `man`). Цветной вывод ошибок (`owo-colors` + auto-detection `NO_COLOR` env). 10 новых unit-тестов. 349 тестов (250 unit + 88 integration + 11 n7) — все зелёные. | v10.5.3 |
 | **v10.7.0** ✅ | minor | **Usability (часть 2)**: `tracing` + `tracing-subscriber` (замена `println!`/`eprintln!` на `tracing::{info,warn,error}!`). `RUST_LOG` поддержка (EnvFilter). `--dry-run` флаг (печатает план, не отправляет). 2 новых unit-теста. 351 тестов (252 unit + 88 integration + 11 n7) — все зелёные. ⚠️ Закрытие вехи F (breaking deps + indicatif + double Ctrl-C) перенесено в **v10.7.1** patch. | v10.6.0 |
+| **v10.7.1** ✅ | minor | **Закрытие вехи F**: breaking deps миграция (jsonschema 0.18→0.47, socket2 0.5→0.6, criterion 0.5→0.8, thiserror 1→2, rskafka 0.5→0.6, rand 0.9 откачен до 0.10→0.9) + 3 usability features (indicatif progress bar, double Ctrl-C = hard exit, --config алиас). 347 тестов (248 unit + 88 integration + 11 n7) — все зелёные. **Веха F ЗАКРЫТА.** | v10.7.0 |
 
 ---
 

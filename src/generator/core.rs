@@ -19,6 +19,7 @@ use anyhow::Result;
 use governor::{Quota, RateLimiter};
 use std::collections::HashMap;
 use std::fs;
+use std::io::IsTerminal;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -812,6 +813,31 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
     }
     let result: Result<()> = async {
         for phase in &profile.phases {
+            // v10.7.1: progress bar (только при duration_secs > 30 И TTY).
+            // Если stdout не TTY (CI pipe) или фаза слишком короткая — skip PB.
+            use indicatif::{ProgressBar, ProgressStyle};
+            let show_pb = phase.duration_secs > 30 && std::io::stdout().is_terminal();
+            let pb = if show_pb {
+                let max = phase.total_messages.unwrap_or(0);
+                let pb = if max > 0 {
+                    ProgressBar::new(max)
+                } else {
+                    ProgressBar::new(phase.duration_secs)
+                };
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
+                         {pos}/{len} {msg}",
+                    )
+                    .unwrap()
+                    .progress_chars("##-"),
+                );
+                pb.set_message(format!("phase {}", phase.name));
+                Some(pb)
+            } else {
+                None
+            };
+
             run_phase_multi(
                 phase,
                 &profile.targets,
@@ -820,6 +846,10 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
                 metrics.clone(),
             )
             .await?;
+
+            if let Some(pb) = pb {
+                pb.finish_and_clear();
+            }
         }
         Ok(())
     }

@@ -95,7 +95,8 @@ jobs:
         # Полный прогон — в GitHub Actions нет таймаута sandbox из
         # CLAUDE_HANDOFF.md §2. Тесты используют уникальные порты
         # (127.0.0.1:0), параллельность не приводит к конфликтам.
-        run: cargo test --locked
+        # PR-2: --features test-helpers для доступа к ensure_rustls_provider_for_tests.
+        run: cargo test --locked --features test-helpers
 
       - name: Compile benches (Criterion)
         # Только компиляция — запуск бенчей в CI не имеет смысла
@@ -313,7 +314,7 @@ jobs:
         run: cargo test --no-run --locked --features kafka
 
       - name: Run tests (--features kafka)
-        run: cargo test --locked --features kafka
+        run: cargo test --locked --features kafka,test-helpers
 
       - name: Compile benches (--features kafka)
         run: cargo bench --no-run --locked --features kafka

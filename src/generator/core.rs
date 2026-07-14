@@ -362,13 +362,13 @@ pub async fn run_phase_multi(
     distribution: &str,
     shutdown_cfg: &crate::config::ShutdownConfig,
     metrics: Metrics,
+    shutdown: &CancellationToken,
 ) -> Result<()> {
-    let shutdown = CancellationToken::new();
-    let listener_token = shutdown.clone();
-    let listener_metrics = metrics.clone();
-    tokio::spawn(async move {
-        shutdown_listener(listener_token, listener_metrics).await;
-    });
+    // PR-2: `shutdown` token передаётся снаружи (из run_profile). Это даёт:
+    //  - единый CancellationToken на весь run_profile (не per-phase)
+    //  - двойной Ctrl-C counter работает между фазами (раньше сбрасывался
+    //    при каждом новом run_phase_multi)
+    //  - shutdown_listener спавнится ОДИН раз в run_profile
 
     let dispatch = create_dispatcher(targets, distribution);
     let mut txs = Vec::new();
@@ -818,6 +818,16 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
     if let Some(addr) = &profile.metrics_addr {
         crate::metrics_server::spawn(addr, metrics.clone(), metrics_shutdown.clone());
     }
+    // PR-2: единый CancellationToken на весь run_profile + shutdown_listener
+    // спавнится ОДИН раз (раньше спавнился per-phase — counter двойного
+    // нажатия сбрасывался, и при Ctrl-C в фазе N фаза N+1 не получала сигнал).
+    let shutdown = CancellationToken::new();
+    let listener_token = shutdown.clone();
+    let listener_metrics = metrics.clone();
+    tokio::spawn(async move {
+        shutdown_listener(listener_token, listener_metrics).await;
+    });
+
     let result: Result<()> = async {
         for phase in &profile.phases {
             // v10.7.1: progress bar (только при duration_secs > 30 И TTY).
@@ -851,6 +861,7 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
                 &profile.distribution,
                 &profile.shutdown,
                 metrics.clone(),
+                &shutdown,
             )
             .await?;
 
@@ -861,7 +872,7 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
         Ok(())
     }
     .await;
-    // Останавливаем HTTP-сервер метрик (если запускался).
+    // Гарантируем, что HTTP-сервер метрик будет остановлен.
     metrics_shutdown.cancel();
     result
 }

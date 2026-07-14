@@ -141,6 +141,16 @@ pub trait Transport: Send + Sync {
     /// Запустить цикл отправки: читать из `rx`, отправлять через транспорт.
     /// `addr` — конфигурация target'а (путь для file, host:port для tcp/udp/tls,
     /// bootstrap_servers для kafka). Использует `async fn` (Rust 1.75+).
+    ///
+    /// PR-2: добавлены `reconnect: Option<ReconnectConfig>` и
+    /// `tls_params: Option<TlsParams>` — ранее `Transport::run` hard-coded
+    /// `None` для reconnect и `TlsParams::default()` для TLS, что означало
+    /// что per-target reconnect + TLS cipher config игнорировались при
+    /// вызове через trait (раньше `run_phase_multi` звал конкретные
+    /// `target_sender_*` напрямую, поэтому проблема была скрыта).
+    /// PR-4 переключит `run_phase_multi` на использование trait —
+    /// эти параметры тогда заработают end-to-end.
+    #[allow(clippy::too_many_arguments)]
     fn run(
         &self,
         addr: &str,
@@ -148,6 +158,8 @@ pub trait Transport: Send + Sync {
         rx: SharedRx,
         metrics: Metrics,
         shutdown: CancellationToken,
+        reconnect: Option<crate::ReconnectConfig>,
+        tls_params: Option<tls::TlsParams>,
     ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -189,6 +201,7 @@ impl Transport for TransportKind {
     /// требовать feature `kafka` для пользователей без Kafka) — он
     /// собирается в `run_phase_multi` из полей `TargetConfig.kafka_*`
     /// и передаётся явно.
+    #[allow(clippy::too_many_arguments)]
     async fn run(
         &self,
         addr: &str,
@@ -196,6 +209,8 @@ impl Transport for TransportKind {
         rx: SharedRx,
         metrics: Metrics,
         shutdown: CancellationToken,
+        reconnect: Option<crate::ReconnectConfig>,
+        tls_params: Option<tls::TlsParams>,
     ) -> anyhow::Result<()> {
         match self {
             Self::File => {
@@ -216,7 +231,7 @@ impl Transport for TransportKind {
                     metrics,
                     shutdown,
                     crate::transport::Framing::NonTransparent,
-                    None, // default reconnect
+                    reconnect,
                 )
                 .await
             }
@@ -233,13 +248,13 @@ impl Transport for TransportKind {
             Self::Tls => {
                 tls::target_sender_tls(
                     addr.to_string(),
-                    crate::transport::tls::TlsParams::default(),
+                    tls_params.unwrap_or_default(),
                     phase_name.to_string(),
                     rx,
                     metrics,
                     shutdown,
                     crate::transport::Framing::NonTransparent,
-                    None, // default reconnect
+                    reconnect,
                 )
                 .await
             }

@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.7.7"
+version = "10.7.8"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -95,6 +95,38 @@ harness = false
 
 [[bench]]
 name = "sender_throughput"
+harness = false
+
+# PR-6 (v10.7.8): расширенное bench-coverage. Иерархическая структура:
+# benches/format/, benches/transport/. Каждый bench — отдельный бинарь.
+[[bench]]
+name = "format_cef"
+path = "benches/format/cef.rs"
+harness = false
+
+[[bench]]
+name = "format_leef"
+path = "benches/format/leef.rs"
+harness = false
+
+[[bench]]
+name = "format_json_lines"
+path = "benches/format/json_lines.rs"
+harness = false
+
+[[bench]]
+name = "transport_tls"
+path = "benches/transport/tls.rs"
+harness = false
+
+[[bench]]
+name = "transport_file_rotation"
+path = "benches/transport/file_rotation.rs"
+harness = false
+
+[[bench]]
+name = "transport_reconnect"
+path = "benches/transport/reconnect.rs"
 harness = false
 
 [[test]]

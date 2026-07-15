@@ -266,7 +266,7 @@ impl Transport for TransportKind {
 pub mod file;
 #[cfg(feature = "kafka")]
 pub mod kafka;
-pub(crate) mod reconnect;
+pub mod reconnect;
 pub mod tcp;
 pub mod tls;
 pub mod udp;

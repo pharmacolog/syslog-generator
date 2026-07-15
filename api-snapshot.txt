@@ -2051,6 +2051,44 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::Phase where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
+pub struct syslog_generator::generator::PhaseContext
+pub syslog_generator::generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
+pub syslog_generator::generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
+impl syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::resolve(&syslog_generator::generator::config::Phase) -> anyhow::Result<Self>
+impl core::marker::Freeze for syslog_generator::generator::core::PhaseContext
+impl core::marker::Send for syslog_generator::generator::core::PhaseContext
+impl core::marker::Sync for syslog_generator::generator::core::PhaseContext
+impl core::marker::Unpin for syslog_generator::generator::core::PhaseContext
+impl core::marker::UnsafeUnpin for syslog_generator::generator::core::PhaseContext
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::core::PhaseContext
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::core::PhaseContext
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::core::PhaseContext where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::core::PhaseContext where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::From<T>
+pub fn syslog_generator::generator::core::PhaseContext::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::Into<T>
+pub type syslog_generator::generator::core::PhaseContext::Error = core::convert::Infallible
+pub fn syslog_generator::generator::core::PhaseContext::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::core::PhaseContext::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::core::PhaseContext::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for syslog_generator::generator::core::PhaseContext where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::core::PhaseContext::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::core::PhaseContext
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::core::PhaseContext
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
 pub struct syslog_generator::generator::Profile
 pub syslog_generator::generator::Profile::distribution: alloc::string::String
 pub syslog_generator::generator::Profile::metrics_addr: core::option::Option<alloc::string::String>
@@ -5229,6 +5267,44 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::Phase where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
+pub struct syslog_generator::PhaseContext
+pub syslog_generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
+pub syslog_generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
+impl syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::resolve(&syslog_generator::generator::config::Phase) -> anyhow::Result<Self>
+impl core::marker::Freeze for syslog_generator::generator::core::PhaseContext
+impl core::marker::Send for syslog_generator::generator::core::PhaseContext
+impl core::marker::Sync for syslog_generator::generator::core::PhaseContext
+impl core::marker::Unpin for syslog_generator::generator::core::PhaseContext
+impl core::marker::UnsafeUnpin for syslog_generator::generator::core::PhaseContext
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::core::PhaseContext
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::core::PhaseContext
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::core::PhaseContext where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::core::PhaseContext where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::From<T>
+pub fn syslog_generator::generator::core::PhaseContext::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::Into<T>
+pub type syslog_generator::generator::core::PhaseContext::Error = core::convert::Infallible
+pub fn syslog_generator::generator::core::PhaseContext::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::core::PhaseContext where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::core::PhaseContext::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::core::PhaseContext::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for syslog_generator::generator::core::PhaseContext where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::PhaseContext::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::core::PhaseContext::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::core::PhaseContext
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::core::PhaseContext
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
 pub struct syslog_generator::Profile
 pub syslog_generator::Profile::distribution: alloc::string::String
 pub syslog_generator::Profile::metrics_addr: core::option::Option<alloc::string::String>

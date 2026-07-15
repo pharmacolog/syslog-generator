@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.7.9"
+version = "10.7.10"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -95,6 +95,12 @@ harness = false
 
 [[bench]]
 name = "sender_throughput"
+harness = false
+
+# PR-9: hot-path bench для per-message overhead (µs resolution).
+# Target: ≤ 2 µs/msg на generate_message_with_format (PR-10).
+[[bench]]
+name = "hot_path"
 harness = false
 
 # PR-6 (v10.7.8): расширенное bench-coverage. Иерархическая структура:

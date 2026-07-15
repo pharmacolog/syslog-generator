@@ -1,6 +1,60 @@
 
 # Changelog
 
+## v10.7.10 - 2026-07-15
+
+**Patch-release (PR-9): README overhaul + SSDLC baseline.**
+
+### Changed (README overhaul)
+
+- **README.md полностью переписан** по best practices open-source Rust проектов:
+  - Подробное описание продукта с tagline, key features, quick start, installation
+  - Полный набор бейджей статуса (CI, coverage, version, MSRV, license, security audit, fuzzing)
+  - Структурированные секции: features, installation, CLI, profile format, architecture,
+    performance, security, contributing, docs, license, acknowledgments
+  - Quick start в 3 команды
+  - Architecture overview со ссылками на DEVELOPER_GUIDE
+
+### Added (SSDLC docs)
+
+- **SECURITY.md** — vulnerability disclosure policy, supported versions matrix,
+  threat model, response timeline (Google Project Zero 90-day), cryptographic
+  inventory, dependency policy
+- **CONTRIBUTING.md** — полный contributing guide с workflow (feature → dev → release),
+  Quality Gates list (10 шагов), code style, testing requirements, format/transport
+  добавление чек-листы, commit messages (Conventional Commits), release process
+- **CODE_OF_CONDUCT.md** — Contributor Covenant v2.1
+- **scripts/quality-gates.sh** — единая точка запуска всех Quality Gates локально
+- **scripts/check-n7-invariant.sh** — проверка N7 (no unwrap/expect в non-test коде)
+- **scripts/check-changelog.sh** — проверка CHANGELOG.md/README.md/CLAUDE_HANDOFF.md
+  обновлены для новой версии (при release)
+- **codecov.yml** — codecov.io configuration (PR-9: coverage badge в README)
+- **benches/hot_path.rs** — bench для per-message overhead (µs resolution)
+  для PR-10 (perf audit, target ≤ 2 µs/msg)
+
+### Changed (CI)
+
+- **Coverage job**: добавлен upload в codecov.io через `codecov/codecov-action@v5`.
+  Badge в README будет обновляться автоматически.
+
+### Added (Public API)
+
+- **PhaseContext** теперь re-exported в root: `syslog_generator::PhaseContext`
+  (был доступен только через `syslog_generator::generator::core::PhaseContext`)
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: 339 passed
+- cargo bench --no-run --locked: 10 bench binaries (включая hot_path)
+- public-api snapshot: regenerated для PhaseContext
+
+Refs: PLAN-v10.0.0.md.
+
 ## v10.7.9 - 2026-07-15
 
 **Patch-release (PR-7): migrate to rand 0.10 + CI infrastructure fix.**

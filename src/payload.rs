@@ -10,8 +10,14 @@
 //! - F6: распределения выбора (uniform/weighted/zipf) и паддинг до размера.
 
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use std::fmt::Write as _;
+
+/// В rand 0.10 `from_os_rng` удалён, используем `from_rng` с системным RNG.
+fn fresh_os_rng() -> StdRng {
+    let mut sys_rng = rand::rng();
+    StdRng::from_rng(&mut sys_rng)
+}
 
 /// Детерминированный вывод RNG из seed и порядкового номера сообщения.
 ///
@@ -28,7 +34,7 @@ pub fn derive_rng(seed: Option<u64>, seq: usize) -> StdRng {
             z ^= z >> 31;
             StdRng::seed_from_u64(z)
         }
-        None => StdRng::from_os_rng(),
+        None => fresh_os_rng(),
     }
 }
 

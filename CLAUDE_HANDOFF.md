@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-15. Текущая версия: **v10.7.8** (patch-release: PR-6 extended bench coverage — 9 bench binaries с иерархической структурой `benches/format/` (CEF/LEEF/JSON-lines) + `benches/transport/` (TLS/file_rotation/reconnect). Покрытие всех F15/F16 форматов и транспортов). Веха F закрыта на v10.7.1.
+Дата: 2026-07-15. Текущая версия: **v10.7.9** (patch-release: PR-7 rand 0.10 миграция — `from_os_rng()` → `from_rng()` через `rand::rng()` thread-local, `random_range` через `RngExt` trait; + CI infra fix: macos job извлечён в отдельный `test-macos` non-blocking из-за GH Actions infrastructure issue с зависанием macos runners). Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

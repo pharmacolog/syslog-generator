@@ -1,6 +1,45 @@
 
 # Changelog
 
+## v10.7.8 - 2026-07-15
+
+**Patch-release (PR-6): extended bench coverage.**
+
+### Added (benches)
+
+Иерархическая структура `benches/format/` + `benches/transport/`:
+
+- `benches/format/cef.rs` — CEF build (F15, v9.2.0).
+- `benches/format/leef.rs` — LEEF build (F15, v9.2.0).
+- `benches/format/json_lines.rs` — JSON-lines build (F15, v9.2.0).
+- `benches/transport/tls.rs` — TLS connector build (rustls 0.23).
+- `benches/transport/file_rotation.rs` — RotationConfig API (F16, v9.3.0).
+- `benches/transport/reconnect.rs` — ReconnectConfig API (F16, v9.3.0).
+
+**Итого:** 9 bench binaries (было 2). Каждый компилируется отдельно,
+может запускаться независимо через `cargo bench --bench <name>`.
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `cargo test --locked --features test-helpers`: 339 passed
+- `cargo bench --no-run --locked`: 9 bench binaries (было 2)
+
+### Coverage
+
+| Bench file | Bench functions | Покрывает |
+|------------|-----------------|-----------|
+| `format/cef.rs` | `cef_build` | CEF формат |
+| `format/leef.rs` | `leef_build` | LEEF формат |
+| `format/json_lines.rs` | `json_lines_build` | NDJSON формат |
+| `transport/tls.rs` | `tls_build_connector_insecure`, `tls_build_connector_tls13` | TLS setup |
+| `transport/file_rotation.rs` | `is_enabled`, `effective_max_files`, `validate` | Rotation API |
+| `transport/reconnect.rs` | `default`, `resolve`, `resolve_full`, `validate` | Reconnect API |
+
+Refs: PLAN-v10.0.0.md §5 v10.7.0 — bench coverage, аудит v10.7.2.
+
 ## v10.7.7 - 2026-07-15
 
 **Patch-release (PR-5): hot-path performance optimizations.**

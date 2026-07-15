@@ -9,6 +9,7 @@
 
 use crate::payload::{derive_rng, faker, int_in_range, pad_to_size};
 use proptest::prelude::*;
+use rand::RngExt;
 
 /// N8: `int_in_range(min, max)` всегда возвращает значение в `[min, max]`.
 /// Edge cases: min == max, min > max, min == i64::MIN, max == i64::MAX.
@@ -36,8 +37,8 @@ fn prop_seed_determinism() {
         let mut b = derive_rng(Some(seed), 0);
         // Каждый seed даёт одну и ту же последовательность u64 (8 байт каждый).
         for i in 0..16 {
-            let av = rand::Rng::random::<u64>(&mut a);
-            let bv = rand::Rng::random::<u64>(&mut b);
+            let av = a.random::<u64>();
+            let bv = b.random::<u64>();
             assert_eq!(av, bv, "seed={} iter={}: {:?} != {:?}", seed, i, av, bv);
         }
     });

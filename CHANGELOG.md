@@ -1,6 +1,41 @@
 
 # Changelog
 
+## v10.7.9 - 2026-07-15
+
+**Patch-release (PR-7): migrate to rand 0.10 + CI infrastructure fix.**
+
+### Changed (rand migration)
+
+- **`rand = "0.10"`** (was 0.9, откачено в v10.7.2 из-за breaking API).
+- `StdRng::from_os_rng()` → удалён в 0.10. Заменён helper `fresh_os_rng()`
+  через новый `rand::rng()` (thread-local) + `StdRng::from_rng()`.
+- `rng.random_range()` → перенесён в trait `RngExt`. Добавлен
+  `use rand::RngExt;` в `src/payload.rs` и `src/payload_proptests.rs`.
+- `Rng::random()` (для `StdRng: proptest::prelude::Rng`) → добавлен
+  `use rand::RngExt;` в proptests.
+- Feature `thread_rng` добавлен в `Cargo.toml` (нужен для `rand::rng()`).
+- Seed determinism сохранён (verified через prop_seed_determinism).
+
+### Fixed (CI infrastructure)
+
+- **macos job извлечён в отдельный `test-macos`** — matrix timeout
+  на `test` job отменял ВЕСЬ matrix при зависании macos runner.
+  Теперь macos — отдельный non-blocking job. У нас уже есть полное
+  покрытие на ubuntu + test-kafka. macos избыточен (исторически).
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean
+- `cargo test --locked --features test-helpers`: 339 passed
+- public-api snapshot: regenerated
+
+Refs: PLAN-v10.0.0.md (rand 0.10 tech debt), аудит v10.7.2.
+
 ## v10.7.8 - 2026-07-15
 
 **Patch-release (PR-6): extended bench coverage.**

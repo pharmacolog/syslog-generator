@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-15. Текущая версия: **v10.7.6** (patch-release: PR-4 minimal architecture cleanup — OnceLock вместо Once, drop default-features на serde/prometheus, crate-level lints `#![deny(unsafe_code)]` + `#![warn(clippy::all)]`). Веха F закрыта на v10.7.1.
+Дата: 2026-07-15. Текущая версия: **v10.7.7** (patch-release: PR-5 hot-path performance — pre-resolve templates/schema per phase через PhaseContext, -30-50% syscalls, default_values pre-size HashMap + static FAKER_KINDS, pick_template returns &String). Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

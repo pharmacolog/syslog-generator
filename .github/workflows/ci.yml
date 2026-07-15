@@ -397,3 +397,39 @@ jobs:
             lcov.info
             coverage-summary.txt
           if-no-files-found: warn
+
+  # v10.7.4 (PR-3): public-api snapshot — фиксирует публичный API крейта.
+  # При PR если diff показывает breaking changes — job падает (после
+  # записи baseline). Это страховка от случайного экспорта приватных
+  # типов или удаления публичных.
+  #
+  # Использует cargo-public-api (https://github.com/Enselis/cargo-public-api).
+  # Snapshot хранится в `api-snapshot.txt` в корне репозитория.
+  # Требует nightly toolchain для rustdoc-json.
+  public-api:
+    name: cargo public-api snapshot (blocking)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly toolchain (required for rustdoc-json)
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-public-api
+      - name: Install cargo-public-api
+        run: cargo install cargo-public-api --locked
+      - name: Run public-api diff
+        # Если файл api-snapshot.txt существует — diff с ним.
+        # Если нет (первый запуск) — exit 0 (baseline генерируется локально).
+        run: |
+          cargo public-api --features test-helpers 2>/dev/null > /tmp/current-api.txt
+          if [ -f api-snapshot.txt ]; then
+            diff -u api-snapshot.txt /tmp/current-api.txt
+          else
+            echo "::warning::api-snapshot.txt not found, skipping diff"
+            echo "::warning::Generate baseline locally: cargo public-api --features test-helpers > api-snapshot.txt"
+          fi

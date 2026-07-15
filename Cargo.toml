@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.7.3"
+version = "10.7.4"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -22,6 +22,10 @@ codegen-units = 1
 ## пользователям, которым Kafka не нужен). Включение: `--features kafka`.
 default = []
 kafka = ["dep:rskafka"]
+## PR-2: test-helpers feature открывает доступ к функциям, которые
+## нужны integration-тестам (например `ensure_rustls_provider_for_tests`).
+## По умолчанию выключен — это не часть продакшн API.
+test-helpers = []
 
 [dependencies]
 anyhow = "1"
@@ -89,3 +93,11 @@ harness = false
 [[bench]]
 name = "sender_throughput"
 harness = false
+
+[[test]]
+name = "integration_tests"
+required-features = ["test-helpers"]
+
+[[test]]
+name = "n7_runtime_errors"
+required-features = ["test-helpers"]

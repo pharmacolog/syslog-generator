@@ -38,6 +38,13 @@ pub(crate) fn ensure_rustls_provider() {
 /// Публичный wrapper для интеграционных тестов, которые строят TLS-сервер
 /// напрямую через rustls (минуя наш `build_tls_connector`). Безопасный к
 /// множественным вызовам.
+///
+/// PR-2: gated под `#[cfg(test)]` или `#[cfg(feature = "test-helpers")]`.
+/// До PR-2 функция была `pub` без cfg — попадала в публичный API как
+/// dead-weight и загрязняла его. feature `test-helpers` позволяет
+/// downstream-тестам, которые используют наш крейт как библиотеку,
+/// получить доступ к этой функции явно.
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn ensure_rustls_provider_for_tests() {
     ensure_rustls_provider();
 }

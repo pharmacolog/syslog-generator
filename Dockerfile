@@ -3,10 +3,11 @@
 # N12 (v9.6.0): Dockerfile для syslog-generator.
 #
 # Multi-stage сборка:
-# 1) builder — rust:1.97-bookworm с cmake/pkg-config/libssl-dev.
-#    Нужны для dev-зависимостей (rcgen для TLS-сертификатов в тестах,
-#    criterion для бенчей). Если перейти на `cargo build --bin` — можно
-#    убрать эти apt-зависимости (бинарь syslog-generator pure Rust:
+# 1) builder — rust:1.95-bookworm с cmake/pkg-config/libssl-dev.
+#    Зафиксировано на MSRV = 1.95 (Cargo.toml rust-version = "1.95"),
+#    иначе Docker-сборка использует более новый toolchain, чем заявлено
+#    в MSRV-check CI job (v10.5.0). Если перейти на `cargo build --bin`
+#    можно убрать apt-зависимости (бинарь syslog-generator pure Rust:
 #    rskafka + rustls+ring + tokio + chrono).
 # 2) runtime — gcr.io/distroless/cc-debian12 (Debian 12 + libc, без shell).
 #    Минимальная поверхность атаки, ≈25 MB.
@@ -18,7 +19,7 @@
 #     --profile /examples/single_target.json
 
 # ============ Stage 1: builder ============
-FROM rust:1.97-bookworm AS builder
+FROM rust:1.95-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \

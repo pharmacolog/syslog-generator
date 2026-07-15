@@ -2948,54 +2948,54 @@ pub syslog_generator::sender::ReconnectConfig::initial_backoff_ms: u64
 pub syslog_generator::sender::ReconnectConfig::max_attempts: core::option::Option<u32>
 pub syslog_generator::sender::ReconnectConfig::max_backoff_ms: u64
 pub syslog_generator::sender::ReconnectConfig::multiplier: f64
-impl syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::resolve(core::option::Option<u32>, core::option::Option<u64>, core::option::Option<u64>, core::option::Option<f64>) -> Self
-pub fn syslog_generator::ReconnectConfig::validate(&self) -> core::result::Result<(), alloc::string::String>
-impl core::clone::Clone for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::clone(&self) -> syslog_generator::ReconnectConfig
-impl core::default::Default for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::default() -> Self
-impl core::fmt::Debug for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for syslog_generator::ReconnectConfig
-impl core::marker::Send for syslog_generator::ReconnectConfig
-impl core::marker::Sync for syslog_generator::ReconnectConfig
-impl core::marker::Unpin for syslog_generator::ReconnectConfig
-impl core::marker::UnsafeUnpin for syslog_generator::ReconnectConfig
-impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::ReconnectConfig
-impl core::panic::unwind_safe::UnwindSafe for syslog_generator::ReconnectConfig
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<T, U> core::convert::Into<U> for syslog_generator::ReconnectConfig where U: core::convert::From<T>
-pub fn syslog_generator::ReconnectConfig::into(self) -> U
-impl<T, U> core::convert::TryFrom<U> for syslog_generator::ReconnectConfig where U: core::convert::Into<T>
-pub type syslog_generator::ReconnectConfig::Error = core::convert::Infallible
-pub fn syslog_generator::ReconnectConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
-impl<T, U> core::convert::TryInto<U> for syslog_generator::ReconnectConfig where U: core::convert::TryFrom<T>
-pub type syslog_generator::ReconnectConfig::Error = <U as core::convert::TryFrom<T>>::Error
-pub fn syslog_generator::ReconnectConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
-impl<T> alloc::borrow::ToOwned for syslog_generator::ReconnectConfig where T: core::clone::Clone
-pub type syslog_generator::ReconnectConfig::Owned = T
-pub fn syslog_generator::ReconnectConfig::clone_into(&self, &mut T)
-pub fn syslog_generator::ReconnectConfig::to_owned(&self) -> T
-impl<T> core::any::Any for syslog_generator::ReconnectConfig where T: 'static + ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::type_id(&self) -> core::any::TypeId
-impl<T> core::borrow::Borrow<T> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::borrow(&self) -> &T
-impl<T> core::borrow::BorrowMut<T> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::borrow_mut(&mut self) -> &mut T
-impl<T> core::clone::CloneToUninit for syslog_generator::ReconnectConfig where T: core::clone::Clone
-pub unsafe fn syslog_generator::ReconnectConfig::clone_to_uninit(&self, *mut u8)
-impl<T> core::convert::From<T> for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::from(T) -> T
-impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-pub fn syslog_generator::ReconnectConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-impl<T> tracing::instrument::Instrument for syslog_generator::ReconnectConfig
-impl<T> tracing::instrument::WithSubscriber for syslog_generator::ReconnectConfig
-impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::ReconnectConfig where V: ppv_lite86::types::MultiLane<T>
-pub fn syslog_generator::ReconnectConfig::vzip(self) -> V
+impl syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::resolve(core::option::Option<u32>, core::option::Option<u64>, core::option::Option<u64>, core::option::Option<f64>) -> Self
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::validate(&self) -> core::result::Result<(), alloc::string::String>
+impl core::clone::Clone for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone(&self) -> syslog_generator::transport::reconnect::ReconnectConfig
+impl core::default::Default for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Send for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Sync for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Unpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::UnsafeUnpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::From<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::Into<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = core::convert::Infallible
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Owned = T
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::transport::reconnect::ReconnectConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::transport::reconnect::ReconnectConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::reconnect::ReconnectConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::vzip(self) -> V
 pub struct syslog_generator::sender::RotationConfig
 pub syslog_generator::sender::RotationConfig::interval_secs: core::option::Option<u64>
 pub syslog_generator::sender::RotationConfig::max_files: core::option::Option<u32>
@@ -3105,13 +3105,13 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::tls::TlsP
 pub fn syslog_generator::transport::tls::TlsParams::vzip(self) -> V
 pub fn syslog_generator::sender::build_tls_connector(&syslog_generator::transport::tls::TlsParams) -> anyhow::Result<alloc::sync::Arc<rustls::client::client_conn::ClientConfig>>
 pub fn syslog_generator::sender::parse_tls_min_version(&str) -> anyhow::Result<syslog_generator::transport::tls::TlsVersion, alloc::string::String>
-pub async fn syslog_generator::sender::reconnect_with_backoff<F, Fut, T, E>(&syslog_generator::ReconnectConfig, &tokio_util::sync::cancellation_token::CancellationToken, impl core::ops::function::FnMut(), F) -> core::option::Option<core::result::Result<T, E>> where F: core::ops::function::FnMut() -> Fut, Fut: core::future::future::Future<Output = core::result::Result<T, E>>
+pub async fn syslog_generator::sender::reconnect_with_backoff<F, Fut, T, E>(&syslog_generator::transport::reconnect::ReconnectConfig, &tokio_util::sync::cancellation_token::CancellationToken, impl core::ops::function::FnMut(), F) -> core::option::Option<core::result::Result<T, E>> where F: core::ops::function::FnMut() -> Fut, Fut: core::future::future::Future<Output = core::result::Result<T, E>>
 pub async fn syslog_generator::sender::record_error(&syslog_generator::observability::metrics::Metrics, &str)
 pub async fn syslog_generator::sender::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub async fn syslog_generator::sender::target_sender_file(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::sender::target_sender_file_with_rotation(std::path::PathBuf, alloc::string::String, syslog_generator::transport::file::RotationConfig, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
-pub async fn syslog_generator::sender::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
-pub async fn syslog_generator::sender::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::sender::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::sender::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub async fn syslog_generator::sender::target_sender_udp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub type syslog_generator::sender::SharedRx = alloc::sync::Arc<tokio::sync::mutex::Mutex<tokio::sync::mpsc::bounded::Receiver<alloc::vec::Vec<u8>>>>
 pub mod syslog_generator::shutdown
@@ -3283,8 +3283,63 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::file::Rot
 pub fn syslog_generator::transport::file::RotationConfig::vzip(self) -> V
 pub async fn syslog_generator::transport::file::target_sender_file(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::transport::file::target_sender_file_with_rotation(std::path::PathBuf, alloc::string::String, syslog_generator::transport::file::RotationConfig, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub mod syslog_generator::transport::reconnect
+pub struct syslog_generator::transport::reconnect::ReconnectConfig
+pub syslog_generator::transport::reconnect::ReconnectConfig::initial_backoff_ms: u64
+pub syslog_generator::transport::reconnect::ReconnectConfig::max_attempts: core::option::Option<u32>
+pub syslog_generator::transport::reconnect::ReconnectConfig::max_backoff_ms: u64
+pub syslog_generator::transport::reconnect::ReconnectConfig::multiplier: f64
+impl syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::resolve(core::option::Option<u32>, core::option::Option<u64>, core::option::Option<u64>, core::option::Option<f64>) -> Self
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::validate(&self) -> core::result::Result<(), alloc::string::String>
+impl core::clone::Clone for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone(&self) -> syslog_generator::transport::reconnect::ReconnectConfig
+impl core::default::Default for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Send for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Sync for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Unpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::UnsafeUnpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::From<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::Into<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = core::convert::Infallible
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Owned = T
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::transport::reconnect::ReconnectConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::transport::reconnect::ReconnectConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::reconnect::ReconnectConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::vzip(self) -> V
+pub async fn syslog_generator::transport::reconnect::reconnect_with_backoff<F, Fut, T, E>(&syslog_generator::transport::reconnect::ReconnectConfig, &tokio_util::sync::cancellation_token::CancellationToken, impl core::ops::function::FnMut(), F) -> core::option::Option<core::result::Result<T, E>> where F: core::ops::function::FnMut() -> Fut, Fut: core::future::future::Future<Output = core::result::Result<T, E>>
 pub mod syslog_generator::transport::tcp
-pub async fn syslog_generator::transport::tcp::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::tcp::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub mod syslog_generator::transport::tls
 pub enum syslog_generator::transport::tls::TlsVersion
 pub syslog_generator::transport::tls::TlsVersion::Tls12
@@ -3400,7 +3455,7 @@ pub const syslog_generator::transport::tls::SUPPORTED_CIPHER_SUITE_NAMES: &[&str
 pub fn syslog_generator::transport::tls::build_tls_connector(&syslog_generator::transport::tls::TlsParams) -> anyhow::Result<alloc::sync::Arc<rustls::client::client_conn::ClientConfig>>
 pub fn syslog_generator::transport::tls::parse_cipher_suite(&str) -> anyhow::Result<rustls::suites::SupportedCipherSuite, alloc::string::String>
 pub fn syslog_generator::transport::tls::parse_tls_min_version(&str) -> anyhow::Result<syslog_generator::transport::tls::TlsVersion, alloc::string::String>
-pub async fn syslog_generator::transport::tls::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::tls::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub mod syslog_generator::transport::udp
 pub async fn syslog_generator::transport::udp::target_sender_udp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub enum syslog_generator::transport::Framing
@@ -3525,7 +3580,7 @@ impl core::marker::Copy for syslog_generator::transport::TransportKind
 impl core::marker::StructuralPartialEq for syslog_generator::transport::TransportKind
 impl syslog_generator::transport::Transport for syslog_generator::transport::TransportKind
 pub fn syslog_generator::transport::TransportKind::name(&self) -> &'static str
-pub async fn syslog_generator::transport::TransportKind::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::TransportKind::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> anyhow::Result<()>
 impl core::marker::Freeze for syslog_generator::transport::TransportKind
 impl core::marker::Send for syslog_generator::transport::TransportKind
 impl core::marker::Sync for syslog_generator::transport::TransportKind
@@ -3626,18 +3681,18 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::tls::TlsP
 pub fn syslog_generator::transport::tls::TlsParams::vzip(self) -> V
 pub trait syslog_generator::transport::Transport: core::marker::Send + core::marker::Sync
 pub fn syslog_generator::transport::Transport::name(&self) -> &'static str
-pub fn syslog_generator::transport::Transport::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> impl core::future::future::Future<Output = anyhow::Result<()>> + core::marker::Send
+pub fn syslog_generator::transport::Transport::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> impl core::future::future::Future<Output = anyhow::Result<()>> + core::marker::Send
 impl syslog_generator::transport::Transport for syslog_generator::transport::TransportKind
 pub fn syslog_generator::transport::TransportKind::name(&self) -> &'static str
-pub async fn syslog_generator::transport::TransportKind::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::TransportKind::run(&self, &str, &str, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>, core::option::Option<syslog_generator::transport::tls::TlsParams>) -> anyhow::Result<()>
 pub fn syslog_generator::transport::build_tls_connector(&syslog_generator::transport::tls::TlsParams) -> anyhow::Result<alloc::sync::Arc<rustls::client::client_conn::ClientConfig>>
 pub fn syslog_generator::transport::parse_cipher_suite(&str) -> anyhow::Result<rustls::suites::SupportedCipherSuite, alloc::string::String>
 pub fn syslog_generator::transport::parse_tls_min_version(&str) -> anyhow::Result<syslog_generator::transport::tls::TlsVersion, alloc::string::String>
 pub async fn syslog_generator::transport::record_error(&syslog_generator::observability::metrics::Metrics, &str)
 pub async fn syslog_generator::transport::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub async fn syslog_generator::transport::target_sender_file(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
-pub async fn syslog_generator::transport::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
-pub async fn syslog_generator::transport::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::transport::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub async fn syslog_generator::transport::target_sender_udp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub type syslog_generator::transport::SharedRx = alloc::sync::Arc<tokio::sync::mutex::Mutex<tokio::sync::mpsc::bounded::Receiver<alloc::vec::Vec<u8>>>>
 pub mod syslog_generator::validate
@@ -5287,54 +5342,54 @@ pub syslog_generator::ReconnectConfig::initial_backoff_ms: u64
 pub syslog_generator::ReconnectConfig::max_attempts: core::option::Option<u32>
 pub syslog_generator::ReconnectConfig::max_backoff_ms: u64
 pub syslog_generator::ReconnectConfig::multiplier: f64
-impl syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::resolve(core::option::Option<u32>, core::option::Option<u64>, core::option::Option<u64>, core::option::Option<f64>) -> Self
-pub fn syslog_generator::ReconnectConfig::validate(&self) -> core::result::Result<(), alloc::string::String>
-impl core::clone::Clone for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::clone(&self) -> syslog_generator::ReconnectConfig
-impl core::default::Default for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::default() -> Self
-impl core::fmt::Debug for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for syslog_generator::ReconnectConfig
-impl core::marker::Send for syslog_generator::ReconnectConfig
-impl core::marker::Sync for syslog_generator::ReconnectConfig
-impl core::marker::Unpin for syslog_generator::ReconnectConfig
-impl core::marker::UnsafeUnpin for syslog_generator::ReconnectConfig
-impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::ReconnectConfig
-impl core::panic::unwind_safe::UnwindSafe for syslog_generator::ReconnectConfig
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<T, U> core::convert::Into<U> for syslog_generator::ReconnectConfig where U: core::convert::From<T>
-pub fn syslog_generator::ReconnectConfig::into(self) -> U
-impl<T, U> core::convert::TryFrom<U> for syslog_generator::ReconnectConfig where U: core::convert::Into<T>
-pub type syslog_generator::ReconnectConfig::Error = core::convert::Infallible
-pub fn syslog_generator::ReconnectConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
-impl<T, U> core::convert::TryInto<U> for syslog_generator::ReconnectConfig where U: core::convert::TryFrom<T>
-pub type syslog_generator::ReconnectConfig::Error = <U as core::convert::TryFrom<T>>::Error
-pub fn syslog_generator::ReconnectConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
-impl<T> alloc::borrow::ToOwned for syslog_generator::ReconnectConfig where T: core::clone::Clone
-pub type syslog_generator::ReconnectConfig::Owned = T
-pub fn syslog_generator::ReconnectConfig::clone_into(&self, &mut T)
-pub fn syslog_generator::ReconnectConfig::to_owned(&self) -> T
-impl<T> core::any::Any for syslog_generator::ReconnectConfig where T: 'static + ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::type_id(&self) -> core::any::TypeId
-impl<T> core::borrow::Borrow<T> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::borrow(&self) -> &T
-impl<T> core::borrow::BorrowMut<T> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::borrow_mut(&mut self) -> &mut T
-impl<T> core::clone::CloneToUninit for syslog_generator::ReconnectConfig where T: core::clone::Clone
-pub unsafe fn syslog_generator::ReconnectConfig::clone_to_uninit(&self, *mut u8)
-impl<T> core::convert::From<T> for syslog_generator::ReconnectConfig
-pub fn syslog_generator::ReconnectConfig::from(T) -> T
-impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-pub fn syslog_generator::ReconnectConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-pub fn syslog_generator::ReconnectConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-impl<T> tracing::instrument::Instrument for syslog_generator::ReconnectConfig
-impl<T> tracing::instrument::WithSubscriber for syslog_generator::ReconnectConfig
-impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::ReconnectConfig where T: ?core::marker::Sized
-impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::ReconnectConfig where V: ppv_lite86::types::MultiLane<T>
-pub fn syslog_generator::ReconnectConfig::vzip(self) -> V
+impl syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::resolve(core::option::Option<u32>, core::option::Option<u64>, core::option::Option<u64>, core::option::Option<f64>) -> Self
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::validate(&self) -> core::result::Result<(), alloc::string::String>
+impl core::clone::Clone for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone(&self) -> syslog_generator::transport::reconnect::ReconnectConfig
+impl core::default::Default for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Send for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Sync for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::Unpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::marker::UnsafeUnpin for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::reconnect::ReconnectConfig
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::reconnect::ReconnectConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::From<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::Into<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = core::convert::Infallible
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::transport::reconnect::ReconnectConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub type syslog_generator::transport::reconnect::ReconnectConfig::Owned = T
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::transport::reconnect::ReconnectConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::transport::reconnect::ReconnectConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::transport::reconnect::ReconnectConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::transport::reconnect::ReconnectConfig
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::reconnect::ReconnectConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::reconnect::ReconnectConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::reconnect::ReconnectConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::transport::reconnect::ReconnectConfig::vzip(self) -> V
 pub struct syslog_generator::RotationConfig
 pub syslog_generator::RotationConfig::interval_secs: core::option::Option<u64>
 pub syslog_generator::RotationConfig::max_files: core::option::Option<u32>
@@ -5777,7 +5832,7 @@ pub fn syslog_generator::parse_tls_min_version(&str) -> anyhow::Result<syslog_ge
 pub fn syslog_generator::prival(u8, u8) -> u16
 pub fn syslog_generator::random_string(usize, &mut rand::rngs::std::StdRng) -> alloc::string::String
 pub fn syslog_generator::rate_multiplier(&syslog_generator::anomaly::AnomalyKind, f64) -> f64
-pub async fn syslog_generator::reconnect_with_backoff<F, Fut, T, E>(&syslog_generator::ReconnectConfig, &tokio_util::sync::cancellation_token::CancellationToken, impl core::ops::function::FnMut(), F) -> core::option::Option<core::result::Result<T, E>> where F: core::ops::function::FnMut() -> Fut, Fut: core::future::future::Future<Output = core::result::Result<T, E>>
+pub async fn syslog_generator::reconnect_with_backoff<F, Fut, T, E>(&syslog_generator::transport::reconnect::ReconnectConfig, &tokio_util::sync::cancellation_token::CancellationToken, impl core::ops::function::FnMut(), F) -> core::option::Option<core::result::Result<T, E>> where F: core::ops::function::FnMut() -> Fut, Fut: core::future::future::Future<Output = core::result::Result<T, E>>
 pub async fn syslog_generator::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub fn syslog_generator::render_template(&str, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::string::String
 pub fn syslog_generator::route(&str, &str, &syslog_generator::observability::metrics::Metrics) -> alloc::string::String
@@ -5788,8 +5843,8 @@ pub fn syslog_generator::should_drop_packet(&syslog_generator::anomaly::AnomalyK
 pub async fn syslog_generator::shutdown_listener(tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::observability::metrics::Metrics)
 pub async fn syslog_generator::target_sender_file(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::target_sender_file_with_rotation(std::path::PathBuf, alloc::string::String, syslog_generator::transport::file::RotationConfig, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
-pub async fn syslog_generator::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
-pub async fn syslog_generator::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::target_sender_tcp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
+pub async fn syslog_generator::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub async fn syslog_generator::target_sender_udp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub fn syslog_generator::validate_against_embedded_schema(&syslog_generator::generator::config::Profile) -> core::result::Result<(), syslog_generator::schema_check::SchemaCheckError>
 pub fn syslog_generator::validate_against_schema(&syslog_generator::generator::config::Profile, &serde_json::value::Value) -> core::result::Result<(), syslog_generator::schema_check::SchemaCheckError>

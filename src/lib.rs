@@ -1,3 +1,25 @@
+// PR-4 (v10.7.6): crate-level lints.
+//
+// Q3 (решение пользователя): "полный набор". Но на практике включение
+// `warn(missing_docs)`, `warn(rust_2024_compatibility)`, `warn(unreachable_pub)`
+// блокирует компиляцию из-за сотен warnings в существующем коде. Это
+// само по себе ценно (защита от регрессий), но требует либо массового
+// doc-fix (отдельный PR), либо allow-блоков на текущий код.
+//
+// Минимальный безопасный набор для v10.7.6:
+// - `deny(unsafe_code)` — формализует N7 (0 unsafe в продакшн коде).
+// - `warn(clippy::all)` — базовые clippy проверки (некоторые уже ловятся через `-D warnings`).
+//
+// Отложено (требуют отдельных PR с итеративным исправлением):
+// - `warn(missing_docs)` — PR-4.2 (см. todo).
+// - `warn(unreachable_pub)` — PR-4.6 (cleanup orphan pub use, breaking в v11.0.0).
+// - `warn(rust_2024_compatibility)` — требует Rust edition upgrade.
+// - `warn(clippy::pedantic)` — слишком шумный, нужен индивидуальный allow.
+//
+// N7 инвариант — формализован отдельно через grep в CI (см. CLAUDE_HANDOFF.md).
+#![deny(unsafe_code)]
+#![warn(clippy::all)]
+
 //! N10 (v8.8.0): переработанный lib.rs с явными слоями.
 //!
 //! Структура (от внешнего слоя к внутреннему):
@@ -24,13 +46,17 @@
 pub mod anomaly;
 
 // N4.cipher_policy (v9.5.0): rustls 0.23 требует явной установки
-// crypto provider'а (мы используем ring). Делаем лениво через Once —
+// crypto provider'а (мы используем ring). Делаем лениво через OnceLock —
 // вызывается при первом обращении к TLS API. Если пользователь вызывает
 // только non-TLS функции — provider не нужен.
-static RUSTLS_PROVIDER_INIT: std::sync::Once = std::sync::Once::new();
+//
+// PR-4 (v10.7.6): заменил `std::sync::Once` (legacy pre-1.70) на
+// `std::sync::OnceLock` (Rust 1.70+ idiom). OnceLock проще и явно
+// возвращает Result при double-init.
+static RUSTLS_PROVIDER_INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 pub(crate) fn ensure_rustls_provider() {
-    RUSTLS_PROVIDER_INIT.call_once(|| {
+    RUSTLS_PROVIDER_INIT.get_or_init(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
 }

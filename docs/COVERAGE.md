@@ -1,8 +1,13 @@
 # COVERAGE
 
-> **v10.3.0 baseline:** **86.40% lines / 88.36% functions / 86.49% regions**
-> (по `cargo llvm-cov --features kafka --summary-only` на момент выпуска v10.3.0).
-> Цель вехи F — **≥ 97% lines** (gate станет blocking в v10.4.0).
+> **v10.7.4 current:** данные по coverage берутся из последнего запуска
+> coverage job в CI (`.github/workflows/ci.yml` job `coverage`).
+> Baseline milestones:
+> - **v10.3.0 (Coverage ч.1):** **86.40% lines / 88.36% functions / 86.49% regions**
+> - **v10.4.0 (Coverage ч.2):** **87.07% lines / 89.38% functions / 87.20% regions** (+0.67pp)
+>
+> Coverage gate (≥ 97% lines) **НЕ активирован** — backlog. PR-3 закрывает
+> доки, gate переедет в отдельный release (требует ~50-80 новых unit-тестов).
 
 ## Что такое coverage
 
@@ -30,11 +35,13 @@ cargo llvm-cov --features kafka --lcov --output-path lcov.info
 cargo llvm-cov --features kafka --lib --summary-only
 ```
 
-## Baseline (v10.3.0)
+## Baseline (v10.4.0)
 
 ```
-TOTAL: 86.40% lines / 88.36% functions / 86.49% regions
+TOTAL: 87.07% lines / 89.38% functions / 87.20% regions
 ```
+
+(Исторические данные: v10.3.0 = 86.40%/88.36%/86.49%.)
 
 Полная таблица по модулям (по убыванию покрытия):
 

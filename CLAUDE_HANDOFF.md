@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-14. Текущая версия: **v10.7.4** (patch-release: PR-2 safety & correctness — H5 SIGTERM handler (важно для Docker/K8d), N6 CancellationToken hoisting в run_profile (per-phase listener заменён на single shared), N12 TLS close_notify перед exit, M7 JoinHandle tracking для HTTP server, N5 reconnect_config + tls_params параметры через Transport trait, N19 Dockerfile MSRV fix (1.95-bookworm), N14 test-helpers feature для ensure_rustls_provider_for_tests gating). Веха F закрыта на v10.7.1.
+Дата: 2026-07-15. Текущая версия: **v10.7.5** (patch-release: PR-3 documentation overhaul — USER_GUIDE/DEVELOPER_GUIDE полностью переработаны с v8.8.1 → v10.7.4, новые PERFORMANCE.md + MIGRATION.md, COVERAGE.md bumped baseline, public-api snapshot gate в CI). Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

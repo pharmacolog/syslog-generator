@@ -2,7 +2,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v10.7.4-blue)]()
+[![Version](https://img.shields.io/badge/version-v10.7.5-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
 
 **Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)
@@ -556,7 +556,12 @@ curl -s http://127.0.0.1:9090/metrics   # Prometheus text exposition (v0.0.4)
 
 ## Документы
 
-- `docs/USER_GUIDE.md`
-- `docs/DEVELOPER_GUIDE.md`
-- `CHANGELOG.md`
-- `REVIEW.md`
+- `docs/USER_GUIDE.md` — полное руководство пользователя (v10.7.4)
+- `docs/DEVELOPER_GUIDE.md` — архитектура + как добавить свой формат/транспорт (v10.7.4)
+- `docs/MIGRATION.md` — breaking changes + миграция между версиями (v10.7.4)
+- `docs/PERFORMANCE.md` — оптимизации + методика замера (v10.7.4)
+- `docs/COVERAGE.md` — coverage отчёты (v10.3.0 → v10.4.0 baseline)
+- `docs/FUZZING.md` — инструкции по cargo-fuzz (v10.4.0)
+- `CHANGELOG.md` — история всех релизов
+- `AUDIT.md` — реестр задач (базис v10.7.2)
+- `CLAUDE_HANDOFF.md` — перенос контекста для Claude

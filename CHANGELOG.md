@@ -1,6 +1,51 @@
 
 # Changelog
 
+## v10.7.5 - 2026-07-15
+
+**Patch-release (PR-3): comprehensive documentation overhaul + public-API gate.**
+
+### Changed (documentation)
+
+- **docs/USER_GUIDE.md** — полная переработка с v8.8.1 → v10.7.4. Все 15 разделов
+  обновлены: новые фичи вех E (F15/F16/F17/N4.cipher_policy/N12) и F (v10.0-v10.7.4).
+  Включает детальные секции по форматам (RFC 5424/3164/raw/protobuf/CEF/LEEF/JSON-lines),
+  транспортам (file/TCP/UDP/TLS/Kafka), TLS/mTLS/cipher_policy, Prometheus метрикам,
+  CLI флагам, graceful shutdown, аномалиям (F17).
+- **docs/DEVELOPER_GUIDE.md** — полная переработка архитектурного дерева
+  (все слои N10: format/transport/generator/observability/). Детальные секции по
+  добавлению своего формата/транспорта/аномалии/LoadShape/метрики/fuzz target/bench.
+  Trait Format/Transport с примерами кода.
+- **docs/COVERAGE.md** — bump baseline v10.3.0 → v10.4.0 (87.07% lines).
+
+### Added (new docs)
+
+- **docs/PERFORMANCE.md** — стратегия оптимизаций + история (N6/v10.1.0/v10.2.0),
+  методика замера, PromQL примеры, reference workload benchmarks, tech debt backlog
+  для PR-5.
+- **docs/MIGRATION.md** — breaking changes + миграция между версиями
+  (v10.0.0 B1-B7, v9.5.0 rustls, v10.7.4 zero-break). Будущие breaking
+  (v11.0.0/v12.0.0) с описанием.
+
+### Added (CI)
+
+- **public-api snapshot gate** — новый blocking job в CI. Использует
+  `cargo-public-api` + nightly toolchain (для rustdoc-json).
+  Baseline в `api-snapshot.txt` (5761 строк).
+  При PR проверяет diff с baseline — падает при breaking changes.
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean
+- API snapshot: 5761 строк
+- Все CI jobs зелёные
+
+Refs: аудит v10.7.2 (c1c9722), PLAN-v10.0.0.md.
+
 ## v10.7.4 - 2026-07-14
 
 **Patch-release (PR-2): safety & correctness по результатам аудита v10.7.2.**

@@ -67,7 +67,7 @@ rustls-pki-types = { version = "1.15", features = ["std"] }
 webpki-roots = "1.0"
 governor = "0.10.4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
+rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "thread_rng"] }
 regex-syntax = "0.8"
 jsonschema = "0.47"
 bytes = "1"

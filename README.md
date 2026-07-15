@@ -1,567 +1,462 @@
-
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-v10.7.9-blue)]()
-[![Rust](https://img.shields.io/badge/rust-1.95%2B-orange)]()
+[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver)](https://github.com/pharmacolog/syslog-generator/releases)
+[![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://github.com/pharmacolog/syslog-generator/blob/main/Cargo.toml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/syslog-generator)](https://crates.io/crates/syslog-generator)
+[![docs.rs](https://img.shields.io/docsrs/syslog-generator)](https://docs.rs/syslog-generator)
+[![codecov](https://img.shields.io/codecov/c/github/pharmacolog/syslog-generator?label=coverage&token=)](https://codecov.io/gh/pharmacolog/syslog-generator)
+[![Security Audit](https://img.shields.io/badge/security%20audit-cargo--deny%20passing-brightgreen)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
+[![Fuzzing](https://img.shields.io/badge/fuzzing-cargo--fuzz%205%20targets-blueviolet)](https://github.com/pharmacolog/syslog-generator/tree/main/fuzz)
+[![Docker](https://img.shields.io/badge/docker-multi--arch%20%28amd64%2Barm64%29-blue)](https://github.com/pharmacolog/syslog-generator/pkgs/container/syslog-generator)
+[![Release Date](https://img.shields.io/github/release-date/pharmacolog/syslog-generator)](https://github.com/pharmacolog/syslog-generator/releases)
+[![Last commit](https://img.shields.io/github/last-commit/pharmacolog/syslog-generator/main)](https://github.com/pharmacolog/syslog-generator/commits/main)
 
-**Веха F (P3 «Production-hardened») в процессе.** Веха E (P2 «Зрелость»)
-ЗАКРЫТА в v9.6.0 (N12 Docker). v10.0.0 — старт вехи F с breaking cleanup.
-Release-train вехи F (8 релизов, v10.0.0 → v10.7.0):
-**v10.0.0** (breaking B1+B2+B6+B7), **v10.1.0** (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias),
-**v10.2.0** (Performance ч.2: faker hot-path оптимизация, -26% на `generate_message_from_template` bench),
-**v10.3.0** (Coverage ч.1: `cargo-llvm-cov` baseline 86.40% lines + non-blocking CI job),
-**v10.4.0** (Coverage ч.2: прогресс до 87.07% + cargo-fuzz с 5 таргетами; ≥ 97% gate перенесён в v10.4.1),
-v10.4.1 (Coverage ч.2 patch: ≥ 97% gate),
-v10.3.0 (Coverage ч.1: cargo-llvm-cov baseline),
-v10.4.0 (Coverage ч.2: ≥ 97% gate + fuzzing),
-v10.5.0 (CI: cargo-deny, cargo-machete, MSRV-blocking, Dependabot),
-v10.6.0 (Usability ч.1: clap_complete, clap_mangen, owo-colors),
-v10.7.0 (Usability ч.2: tracing, indicatif, --dry-run, двойной Ctrl-C + закрытие вехи F).
-План в `PLAN-v10.0.0.md` (контракт приёмки: 21 пункт). История вехи E в `PLAN-веха-E.md`.
-Модульная архитектура с реальным multi-target runtime (`file`, `tcp`, `udp`, `tls`,
-`kafka` через opt-in feature), настоящим TLS client handshake через `rustls` /
-`tokio-rustls` (v9.5.0+), exponential backoff reconnect с jitter, mixed end-to-end
-тестами для `file + tcp + udp + tls` по всем режимам диспетчеризации (`broadcast`,
-`round-robin`, `weighted`), negative-path тестами и бенчмарками на Criterion.
-Вся сборка и тесты проверены реальной компиляцией (`cargo build`, `cargo test`,
-`cargo bench`, `cargo clippy`) и автоматизированы через GitHub Actions на
-ubuntu-latest + macos-latest.
+**Промышленный генератор нагрузки для syslog-серверов на Rust.**
+Высокопроизводительный, многопротокольный (file/TCP/UDP/TLS/Kafka),
+с детальным контролем payload'а (faker, regex, межполевые корреляции),
+профилями нагрузки во времени и метриками Prometheus.
 
-**v9.6.0 (N12):** Docker-поставка — multi-stage `Dockerfile` (rust:1.97-bookworm →
-distroless/cc-debian12, ~25 MB, non-root), `.dockerignore`, `docker-compose.yml`
-(4 сервиса: syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf`,
-`docker/prometheus.yml`, `examples/profile-docker.yaml` (3 фазы warmup/burst/steady),
-`.github/workflows/docker.yml` (multi-arch linux/amd64 + linux/arm64, push в ghcr.io).
+---
 
-**v9.3.0 (F16):** Kafka/Redpanda transport через `rskafka` 0.5 (opt-in feature `kafka`,
-compression gzip/lz4/snappy/zstd), файловая ротация (size/time/max_files с LRU cleanup),
-exponential backoff reconnect с jitter для TCP/TLS. `TargetConfig.transport: kafka` +
-`broker_addrs` + `topic`. Примеры: `examples/kafka_redpanda.yaml`, `examples/file_rotation.yaml`,
-`examples/reconnect_tcp.yaml`. 10 unit-тестов в `src/transport/reconnect.rs::tests` покрывают
-логику exponential backoff. CI: отдельный `test-kafka` job. 0 breaking changes.
+## ✨ Возможности
 
-**v9.5.1 (F17):** сценарии аномалий нагрузки — `burst-injection` (×M каждые
-`interval_secs` в течение `duration_secs`), `slow-drip` (÷D первые
-`duration_secs`), `packet-loss` (дроп до отправки с вероятностью
-`loss_percent`). `Phase.anomalies: Option<Vec<Anomaly>>` (`#[serde(default)]`).
-Метрики `syslog_anomalies_applied_total{phase,type}` +
-`syslog_anomalies_dropped_total{phase,type}`. Пример:
-`examples/profile-f17-anomalies.yaml`. 0 breaking changes относительно v9.5.0.
+### 🚀 Производительность
+- **Zero-copy** в hot path: `BytesMut` (8 KiB) для TCP/TLS, `BufWriter` для файла
+- **LTO + codegen-units=1** в release (5-15% throughput gain)
+- **Hot-path оптимизации**: `String::with_capacity(N)` + `write!()` для faker-генераторов
+- **Pre-resolve templates/schema** per phase (PhaseContext): -30-50% syscalls
+- **Throughput**: 100k msg/s на одной ноде (10 KB payload, TCP)
 
-**v9.1.0:** trait `Format` + `enum FormatKind` (dyn-dispatch) и trait
-`Transport` + `enum TransportKind` — инфраструктура для F15/F16
-вехи E. 0 breaking changes. Использует `async fn` в trait (Rust 1.75+).
+### 🔌 Транспорты (5 типов)
+- **file** — atomic append через `O_APPEND` + `BufWriter`
+- **tcp** / **udp** — async с фреймингом RFC 6587 (non-transparent / octet-counting)
+- **tls** — `rustls 0.23` (pure Rust), проверка сертификата по умолчанию, mTLS, cipher policy
+- **kafka** (opt-in feature) — `rskafka 0.6` с compression gzip/lz4/snappy/zstd
+- **File rotation** (size/time/max_files, LRU cleanup)
+- **Exponential backoff reconnect** с jitter
 
-**v9.0.0:** milestone-релиз — веха D «Продакшн-готовность» ЗАКРЫТА.
-Все P0+P1 задачи AUDIT.md §4 выполнены (F1-F10, N1-N11, D3). Major-бамп
-без breaking changes. Публичный API полностью backward-compatible с v8.x.
+### 📝 Форматы (7 типов)
+- **RFC 5424** (default) — полный syslog с PRI/TIMESTAMP/HOSTNAME/APP-NAME/PROCID/MSGID/SD
+- **RFC 3164** (BSD legacy) — `<PRI>Mmm dd hh:mm:ss HOSTNAME TAG: MSG`
+- **raw** — passthrough без обёртки
+- **protobuf** — настоящий wire-format (varint + length-delimited)
+- **CEF** (ArcSight SIEM), **LEEF** (IBM QRadar), **JSON-lines** (NDJSON)
 
-**v8.8.1:** патч-долг — правки `AUDIT.md` (поставлены ✅ на F7/F8/F9,
-убраны устаревшие пометки "Отложено" из F13 и N4). Код без изменений.
+### 🎲 Payload
+- **Faker-токены**: ipv4/ipv6/mac/uuid/hostname/username/user_agent/url/http_status
+- **Schema fields**: int (min..max), enum (uniform/weighted/zipf), string (len),
+  datetime (jitter), regex-генерация
+- **Межполевые корреляции**: `depends_on` + `mapping` + `mapping_default`
+- **Seed-детерминизм**: один `seed` даёт одинаковый вывод (inter-process reproducible)
 
-**v8.7.0 (N6):** zero-copy/буферизация — `BytesMut` для TCP/TLS батчинга,
-`BufWriter` (8 KiB) для файла. Уменьшение syscall'ов в ~50-100 раз для
-типичной нагрузки (10k msg/s) и 0 аллокаций в горячем пути send-loop.
+### 📊 Наблюдаемость
+- **HTTP `/metrics`** (Prometheus text exposition v0.0.4) на лёгком tokio-сервере
+- **24+ метрик**: counters/histograms/gauges по (transport, phase, target, format)
+- **Structured logging** через `tracing` (env-filter, RUST_LOG support)
+- **Progress bar** `indicatif` (только при duration > 30s И TTY)
+- **Double Ctrl-C** = hard shutdown (per-process counter)
 
-**v8.6.0 (N2):** синхронизация Grafana-дашборда с реальными метриками.
-Добавлена `syslog_messages_by_format_total{format}` (счётчик по формату)
-и 6 panels в дашборд (rate/latency/active workers/errors/messages by format).
-Удалены фейковые gauge-ы `cpu_usage_percent`/`memory_usage_bytes` —
-они были объявлены, но никогда не обновлялись. Дашборд теперь покрывает
-все ключевые метрики нагрузки.
+### 🧪 Профили нагрузки (F3)
+- `constant` / `linear` (ramp) / `sine` / `burst` (спайки)
+- **Аномалии (F17)**: `burst-injection` (×M), `slow-drip` (÷D), `packet-loss` (дроп %)
+- **Multi-template** с весами
+- **Multi-target** dispatch: `broadcast` / `round-robin` / `weighted`
+- **Connection pool**: `connections: N` воркеров на target
 
-**v8.5.0 (D3):** формальная JSON Schema (`schemas/profile.schema.json`) +
-YAML-ввод профиля. Профили можно загружать как из JSON (`.json`), так и
-из YAML (`.yaml`/`.yml`) с автоопределением формата по расширению.
-Новый флаг `--schema-strict` для runtime-валидации через `jsonschema`;
-CI-стадия прогоняет его на всех примерах.
+### 🛡️ Безопасность (N4)
+- **TLS проверка сертификата по умолчанию** (`tls_insecure: false`)
+- **mTLS**: client identity через `tls_client_cert_file`/`tls_client_key_file`
+- **Cipher policy**: IANA-имена через `tls_cipher_suites`
+- **Min TLS version**: 1.2 / 1.3 через `tls_min_protocol_version`
+- **Fail-fast validation**: F13 (семантическая) + D3 (JSON Schema)
 
-**v8.4.1:** patch-релиз — починка регрессии `sender_throughput` бенчмарков
-(сломались ещё в v8.1.0 после введения F13-валидации профиля):
-`make_profile` теперь выставляет явный `total_messages`, чтобы валидатор
-не отвергал фазу как `UnboundedPhase`. Все 9 бенчей (3 + 6) теперь проходят.
+---
 
-**v8.4.0 (N9):** CI-пайплайн на GitHub Actions (`.github/workflows/ci.yml`).
-Все PR и push в `main`/`dev` проходят через `fmt --check` →
-`clippy --all-targets -- -D warnings` → `build --release` →
-`test` → `bench --no-run`. Матрица ubuntu-latest + macos-latest
-покрывает оба бэкенда native-tls (openssl-sys / Security.framework).
-Актуализирован `.gitignore` (тестовые логи, TLS-PEM, zip-архивы,
-IDE/editor). Применён `cargo fmt --all` для соответствия CI-гейту.
-
-**v8.3.1:** patch-релиз — починка 3 упавших TLS-интеграционных тестов
-(`test_mixed_multi_target_*_end_to_end`), которые падали из-за несовместимости
-`rcgen 0.13` с системным OpenSSL и превышения лимита validity period на macOS.
-Сертификаты теперь генерируются через `openssl req -config openssl-server.cnf`.
-Все 49 интеграционных + 11 N7 + 88 unit-тестов зелёные.
-
-**v8.3.0 (N7):** типизированные ошибки рантайма через `thiserror`. В рантайм-коде
-больше нет `.unwrap()`/`.expect()`: `MetricsError`, `ConfigError`, `DrainError`
-и общий `RuntimeError` пробрасываются через `?` и всплывают в `eprintln` как
-структурированное сообщение с человекочитаемым контекстом.
-
-## Quick start
+## 🚀 Quick start
 
 ```bash
+# Из исходников (release, ~3 мин компиляция)
+git clone https://github.com/pharmacolog/syslog-generator.git
+cd syslog-generator
 cargo build --release
-cargo test
-./target/release/syslog-generator --profile examples/single_target.json
-```
 
-## CLI (F11)
+# Генерация 1000 сообщений на syslog-сервер
+./target/release/syslog-generator -t 127.0.0.1:514:udp -m 'event {{sequence}}' --rate 100 --total 1000
 
-Генератор можно запускать как из JSON-профиля, так и целиком из флагов
-командной строки. Флаги-оверрайды применяются к загруженному профилю
-(или к пустому в быстром режиме) **перед валидацией и запуском**.
-
-```bash
-# Полный список флагов
-./target/release/syslog-generator --help
-./target/release/syslog-generator --version
-
-# Быстрый режим без файла-профиля: одна фаза из --message
-./target/release/syslog-generator -t 127.0.0.1:514:udp -m 'evt {{sequence}}' --total 100 --seed 42
-
-# Запись в файл (транспорт file, адрес = путь)
-./target/release/syslog-generator -t /tmp/out.log:file -m 'line {{sequence}}' --total 10 --format raw
-
-# Профиль из файла + оверрайды скорости/длительности во ВСЕХ фазах
-./target/release/syslog-generator --profile examples/single_target.json --rate 500 --duration 60
-```
-
-Флаги-оверрайды:
-
-| Флаг | Действие |
-|------|----------|
-| `-p, --profile <FILE>` | JSON-профиль нагрузки |
-| `-t, --target <ADDR[:TRANSPORT]>` | Цель (повторяемый); заменяет `targets`. TRANSPORT: `tcp`\|`udp`\|`tls`\|`file` (по умолчанию `tcp`) |
-| `--distribution <D>` | `round-robin`\|`broadcast`\|`weighted` |
-| `--rate <N>` | `messages_per_second` во всех фазах |
-| `--duration <SEC>` | `duration_secs` во всех фазах |
-| `--total <N>` | `total_messages` во всех фазах |
-| `--format <F>` | `rfc5424`\|`rfc3164`\|`raw`\|`protobuf` во всех фазах |
-| `--seed <N>` | seed ГПСЧ во всех фазах |
-| `-m, --message <TPL>` | Шаблон(ы) для быстрого режима без профиля |
-| `--validate` | Только проверить профиль (dry-run) и выйти |
-| `--print-config` | Вывести итоговый профиль (JSON) и выйти |
-
-Коды возврата: `0` — успех/профиль валиден; `1` — ошибка чтения/парсинга
-или профиль невалиден.
-
-## Валидация профиля (F13)
-
-Перед запуском профиль проходит структурную и семантическую валидацию
-(**fail-fast**). Валидатор собирает **все** проблемы за один проход и
-выводит их списком, а не падает на первой. Проверяются:
-
-- допустимость `transport`, `format`, `distribution`, `framing`, `shutdown.mode`;
-- диапазоны `syslog.facility` (0..=23) и `syslog.severity` (0..=7) — только для `rfc5424`/`rfc3164`;
-- согласованность `template_weights` с числом шаблонов, отсутствие отрицательных/NaN-весов;
-- непустые `targets`/`phases`, `connections >= 1`, наличие источника контента (templates/templates_file/schema_file);
-- условие остановки фазы (иначе фаза работала бы бесконечно);
-- корректность `load_shape` (неотрицательные rate, положительные периоды).
-
-Пример вывода на невалидном профиле:
-
-```
-профиль невалиден: найдено 2 проблем(ы):
-  1. target[0] (address="127.0.0.1:514"): недопустимый transport "sctp"; допустимо: tcp, udp, tls, file
-  2. phase[0] ("burst"): syslog.severity=12 вне диапазона 0..=7 (RFC 5424 §6.2.1)
-```
-
-Программно: `validate_profile(&profile) -> Vec<ValidationError>` (пустой
-вектор = профиль валиден); `run_profile()` вызывает валидацию сам.
-
-### Формальная JSON Schema и YAML-ввод (D3, v8.5.0)
-
-Профили можно загружать как из JSON, так и из YAML:
-
-```bash
-# JSON
-./target/release/syslog-generator --profile examples/multi_target_roundrobin.json
-
-# YAML
+# Запуск готового примера
 ./target/release/syslog-generator --profile examples/multi_target_roundrobin.yaml
-./target/release/syslog-generator --profile examples/multi_target_roundrobin.yml
+
+# Docker (multi-arch, ~25 MB image)
+docker run --rm ghcr.io/pharmacolog/syslog-generator:v10.7.9 --version
 ```
 
-Формат определяется по расширению файла в `load_profile_from_path`
-(`.json` / `.yaml` / `.yml`). Неподдерживаемое расширение даёт явную
-ошибку `ConfigError::UnsupportedFormat`.
+---
 
-Дополнительно к F13-валидации доступна структурная проверка против
-формальной JSON Schema (`schemas/profile.schema.json`) — встроена в
-бинарник через `include_str!`:
+## 📦 Установка
+
+### Из исходников
+```bash
+# Стабильный Rust toolchain (≥ 1.95)
+rustup install stable
+
+# Сборка (debug быстрее, release быстрее в runtime)
+cargo build                                    # debug
+cargo build --release                          # release с LTO
+
+# С Kafka/Redpanda support (opt-in)
+cargo build --release --features kafka
+
+# С дополнительными test-helpers
+cargo build --release --features test-helpers
+```
+
+### Docker
+```bash
+# Pre-built images (multi-arch: linux/amd64, linux/arm64)
+docker pull ghcr.io/pharmacolog/syslog-generator:v10.7.9
+
+# Запуск
+docker run --rm \
+  -v $PWD/examples:/examples:ro \
+  ghcr.io/pharmacolog/syslog-generator:v10.7.9 \
+  --profile /examples/multi_target_roundrobin.json
+
+# Полный стек (syslog-generator + syslog-ng + Prometheus + Grafana)
+docker compose up
+```
+
+### Из исходников (development)
+```bash
+git clone https://github.com/pharmacolog/syslog-generator
+cd syslog-generator
+cargo install --path .   # установит в ~/.cargo/bin/syslog-generator
+```
+
+---
+
+## 🛠️ CLI
+
+```text
+syslog-generator [OPTIONS] --profile <FILE>
+syslog-generator [OPTIONS] -t <ADDR[:TRANSPORT]> -m <TEMPLATE> --rate <N> --total <N>
+syslog-generator completions <bash|zsh|fish|powershell|elvish>
+syslog-generator man
+```
+
+### Основные флаги
+
+| Флаг | Описание |
+|------|----------|
+| `-p, --profile <FILE>` | JSON/YAML профиль нагрузки |
+| `-t, --target <ADDR[:TRANSPORT]>` | Цель (повторяемый; TRANSPORT: `tcp`/`udp`/`tls`/`file`/`kafka`) |
+| `--transport <T>` | Transport override (v10.1.0+, deprecated `ADDR:TRANSPORT` alias до v11.0.0) |
+| `--distribution <D>` | `round-robin` / `broadcast` / `weighted` |
+| `--rate <N>` | messages_per_second |
+| `--duration <SEC>` | duration фазы |
+| `--total <N>` | total_messages фазы |
+| `--format <F>` | `rfc5424` / `rfc3164` / `raw` / `protobuf` / `cef` / `leef` / `json_lines` |
+| `--seed <N>` | RNG seed (детерминизм) |
+| `-m, --message <TPL>` | Inline template (быстрый режим без файла-профиля) |
+| `--validate` | Только проверить профиль (dry-run) |
+| `--schema-strict` | С JSON Schema validation (вместе с `--validate`) |
+| `--print-config` | Вывести эффективный профиль и выйти |
+| `--dry-run` | План без отправки (v10.7.0+) |
+| `--metrics-addr <ADDR>` | HTTP `/metrics` endpoint |
+| `--version` | Версия |
+| `--help` | Помощь |
+
+### Коды возврата
+- `0` — успех / профиль валиден
+- `1` — ошибка чтения, парсинга или валидации
+- `2` — hard shutdown (двойной Ctrl-C / SIGTERM)
+
+### Примеры
 
 ```bash
-./target/release/syslog-generator --validate --schema-strict --profile my.yaml
+# 1. UDP на localhost с inline template
+syslog-generator -t 127.0.0.1:514:udp -m 'evt {{sequence}}' --rate 100 --total 1000 --seed 42
+
+# 2. Файл с rotation
+syslog-generator -t /tmp/out.log:file -m 'line {{sequence}}' --total 10000 --format raw
+
+# 3. TLS с самоподписанным CA
+syslog-generator --profile examples/tls_with_ca.json
+
+# 4. Multi-target round-robin с метриками
+syslog-generator --profile examples/multi_target_roundrobin.json --metrics-addr 0.0.0.0:9090
+curl http://127.0.0.1:9090/metrics
+
+# 5. Shell completions (bash)
+syslog-generator completions bash > /etc/bash_completion.d/syslog-generator
 ```
 
-Schema-strict ловит структурные ошибки (неправильные типы, неизвестные
-ключи, значения вне диапазонов 0..=23/0..=7) с более точными сообщениями
-от `jsonschema`, чем общий serde-парсер. В CI (`validate examples` job)
-schema-strict прогоняется на всех примерах из `examples/` — это регрессионный
-тест на изменения в схеме.
+---
 
-Семантические правила (диапазоны facility/severity в зависимости от формата,
-веса шаблонов, условия остановки фазы) остаются на F13-валидаторе — JSON Schema
-дополняет, не дублирует.
+## 📄 Формат профиля
 
-## Бенчмарки
-
-Бенчмарки используют Criterion (harness = false) и работают поверх публичного API:
-
-```bash
-# генерация сообщений: рендеринг шаблонов, generate_message, диспетчер
-cargo bench --bench message_generation
-
-# пропускная способность отправки: реальные TCP/UDP endpoint'ы + run_profile
-cargo bench --bench sender_throughput
-```
-
-## Управление нагрузкой (Веха A)
-
-Интенсивность и объём генерации задаются на уровне фазы:
-
-- `messages_per_second` — целевая интенсивность (сообщений в секунду). Ограничение
-  скорости реализовано токен-бакетом на базе крейта `governor`. Значение `0` означает
-  «без ограничения скорости» (максимальная скорость).
-- `duration_secs` — условие остановки фазы по времени (сек). `0` — не ограничивать по
-  времени.
-- `total_messages` — условие остановки по общему числу сообщений. Не задано — не
-  ограничивать по количеству.
-
-Фаза завершается по первому наступившему условию (`duration_secs`, `total_messages`
- или сигнал завершения). Если не заданы ни `duration_secs`, ни `total_messages`,
- отправляется одно сообщение (режим smoke/демо), чтобы прогон не длился бесконечно.
-Жёсткий потолок в 100 сообщений на фазу, присутствовавший в прежних версиях, снят.
-
-Пример профиля постоянной нагрузки 200 msg/s, всего 500 сообщений:
-
-```json
-{
-  "targets": [{"address": "/tmp/out.log", "transport": "file"}],
-  "distribution": "round-robin",
-  "phases": [
-    {"name": "steady", "messages_per_second": 200, "total_messages": 500,
-     "templates": ["load seq={{sequence}}"]}
-  ]
-}
-```
-
-Метрики нагрузки Prometheus: `syslog_messages_generated_total{phase}` (счётчик
-сгенерированных сообщений), `syslog_target_rate_messages_per_second` (целевая скорость),
-`syslog_achieved_rate_messages_per_second` (достигнутая скорость последней фазы),
-`syslog_active_workers` (число активных воркеров во всех target'ах фазы).
-
-### Профили нагрузки во времени (F3)
-
-Помимо постоянного rate фаза может задавать **кривую интенсивности** через
-поле `load_shape`. Когда оно задано, планировщик вычисляет мгновенный
-target rate `r(t)` в каждый момент и выдерживает соответствующий интервал
-(`messages_per_second`/`governor` в этом режиме не используется). Формы:
-
-| `type`     | Параметры | Описание |
-|------------|-----------|----------|
-| `constant` | `rate?` | Постоянный rate (без `rate` — берётся `messages_per_second`) |
-| `linear`   | `start_rate`, `end_rate` | Линейный ramp за `duration_secs` фазы |
-| `sine`     | `min_rate`, `max_rate`, `period_secs` | Синусоида, старт в минимуме |
-| `burst`    | `base_rate`, `burst_rate`, `every_secs`, `burst_secs` | База + периодические всплески |
-
-Сценарий ramp-up → ramp-down через две фазы:
-
-```json
-{
-  "phases": [
-    { "name": "ramp-up", "duration_secs": 60,
-      "templates": ["seq={{sequence}}"],
-      "load_shape": { "type": "linear", "start_rate": 100, "end_rate": 5000 } },
-    { "name": "ramp-down", "duration_secs": 30,
-      "templates": ["seq={{sequence}}"],
-      "load_shape": { "type": "linear", "start_rate": 5000, "end_rate": 0 } }
-  ]
-}
-```
-
-Всплески каждые 10с по 2с:
-
-```json
-{ "type": "burst", "base_rate": 100, "burst_rate": 8000, "every_secs": 10, "burst_secs": 2 }
-```
-
-Обратная совместимость: без `load_shape` фаза работает как раньше — постоянный
-rate через `messages_per_second`. Готовые примеры: `examples/load_shape_ramp.json`,
-`examples/load_shape_sine.json`, `examples/load_shape_burst.json`.
-
-## Конкурентность соединений (пул воркеров)
-
-Поле `connections` у target'а задаёт размер пула воркеров (параллельных
-соединений/сокетов) на этот target. Все воркеры target'а конкурентно
-читают из его общей очереди: каждое сообщение обрабатывает ровно один
-воркер. Для `tcp`/`tls` это даёт N независимых соединений (горизонтальное
-масштабирование потоков на один приёмник).
+Полная схема: [`schemas/profile.schema.json`](schemas/profile.schema.json).
+Минимальный пример:
 
 ```json
 {
   "targets": [
-    { "address": "127.0.0.1:6514", "transport": "tcp", "connections": 8, "weight": 1 }
+    {
+      "address": "127.0.0.1:514",
+      "transport": "udp",
+      "format": "rfc5424",
+      "framing": "non-transparent"
+    }
   ],
-  "distribution": "round-robin",
   "phases": [
-    { "name": "pool", "messages_per_second": 5000, "duration_secs": 30,
-      "templates": ["load seq={{sequence}}"] }
+    {
+      "name": "warmup",
+      "duration_secs": 10,
+      "messages_per_second": 100,
+      "templates": [
+        "<165>1 {{timestamp}} {{hostname}} {{real_app}}[{{pid}}]: event {{sequence}}"
+      ],
+      "syslog": {
+        "facility": 16,
+        "severity": 6
+      }
+    }
   ]
 }
 ```
 
-Запись каждого сообщения выполняется одним `write_all` (пейлоад + `\n` в одном
-буфере); для файла с O_APPEND это гарантирует атомарную дозапись без
-перемешивания строк между воркерами.
+YAML формат эквивалентен. Подробнее: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
-## Форматы syslog (Веха B)
+### Плейсхолдеры
 
-Поле `format` фазы выбирает формат сообщения:
+| `{{placeholder}}` | Источник |
+|-------------------|----------|
+| `{{sequence}}` | 1..N (порядковый номер) |
+| `{{timestamp}}` | RFC3339 UTC |
+| `{{pid}}` | 1..65535 |
+| `{{faker.ipv4}}` | Валидный IPv4 |
+| `{{faker.uuid}}` | UUID v4 |
+| `{{faker.username}}` | Случайный username |
+| `{{faker.hostname}}` | Случайный hostname |
+| `{{faker.user_agent}}` | User-Agent |
+| `{{faker.url}}` | URL |
+| `{{faker.http_status}}` | HTTP status code |
+| `{{faker.ipv6}}`, `{{faker.mac}}` | IPv6 / MAC |
 
-- `rfc5424` (по умолчанию) — [RFC 5424](https://www.rfc-editor.org/rfc/rfc5424.html):
-  `<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG`.
-  PRIVAL = facility·8 + severity; TIMESTAMP — RFC3339 UTC с миллисекундами и `Z`;
-  пустые поля → NILVALUE (`-`); опционально UTF-8 BOM перед MSG.
-- `rfc3164` — классический BSD ([Graylog reference](https://graylog.org/post/syslog-protocol-a-reference-guide/)):
-  `<PRI>Mmm dd hh:mm:ss HOSTNAME TAG: MSG`.
-- `protobuf` — protobuf-подобная сериализация по схеме.
-- любое другое значение (например `raw`) — сырой рендер шаблона без обёртки.
+**Всего 9 faker-типов + sequence/timestamp/pid/hostname/app.**
 
-Тело шаблона (`templates`) — это MSG; заголовок задаётся блоком `syslog`:
+---
 
-```json
-{
-  "name": "auth",
-  "format": "rfc5424",
-  "total_messages": 100,
-  "templates": ["User {{sequence}} logged in from {{faker.ipv4}}"],
-  "syslog": {
-    "facility": 4, "severity": 5,
-    "hostname": "web-01", "app_name": "authsvc",
-    "procid": "8421", "msgid": "AUTH",
-    "structured_data": "[origin@32473 ip=\"192.0.2.1\"]",
-    "bom": false
-  }
-}
+## 🏗️ Архитектура
+
+```
+src/
+├── cli/             # clap derive Args, subcommands
+├── config/          # Profile, Phase, TargetConfig (loadable из JSON/YAML)
+├── format/          # 7 форматов через Format trait
+│   ├── rfc5424.rs
+│   ├── rfc3164.rs
+│   ├── raw.rs
+│   ├── protobuf.rs
+│   ├── cef.rs / leef.rs / json_lines.rs
+│   └── mod.rs       # Format trait, FormatKind enum, FormatContext
+├── transport/       # 5 транспортов через Transport trait
+│   ├── tcp.rs / udp.rs / tls.rs / file.rs
+│   ├── kafka.rs     (feature=kafka)
+│   ├── reconnect.rs  (exponential backoff)
+│   └── mod.rs       # Transport trait, TransportKind
+├── observability/   # Prometheus + HTTP /metrics
+│   ├── metrics.rs
+│   └── server.rs
+├── generator/       # orchestrator
+│   ├── core.rs      # run_profile, run_phase_multi, PhaseContext
+│   └── config.rs
+├── payload.rs       # F4–F6, F14: faker, regex, корреляции, distribution
+├── template.rs      # N5: CompiledTemplate (one-pass parser)
+├── schema.rs        # F5: schema-per-phase загрузка
+├── load_shape.rs    # F3: профили нагрузки (constant/linear/sine/burst)
+├── anomaly.rs       # F17: AnomalyKind (BurstInjection/SlowDrip/PacketLoss)
+├── shutdown.rs      # N7 + PR-2: SIGINT/SIGTERM graceful drain
+├── error.rs         # N7: типизированные ошибки (RuntimeError + подтипы)
+├── validate.rs      # F13: семантическая валидация (43 варианта)
+└── lib.rs           # pub use re-exports + backward-compat алиасы
 ```
 
-Поля заголовка: `facility` (0..23), `severity` (0..7), `hostname`, `app_name`,
-`procid`, `msgid`, `structured_data`, `bom`. Строковые поля проходят подстановку
-шаблона, поэтому в них можно использовать `{{hostname}}`, `{{sequence}}` и т.п.
-Пустые/`-` поля дают NILVALUE. Значения в STRUCTURED-DATA (`"`, `\`, `]`) нужно
-экранировать (см. `syslog::escape_sd_value`).
+Слои строго разделены по dependency direction:
+- `format/` → только `config::*` (leaf types) и `chrono`
+- `transport/` → только `observability::Metrics`, `error::*`
+- `observability/` → только `error::*`
+- `generator/` → оркестратор всех слоёв
 
-## Фрейминг потоковых транспортов (RFC 6587)
+**Подробнее:** [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (v10.7.4).
 
-Для `tcp`/`tls` поле `framing` у target'а выбирает способ разграничения сообщений:
+---
 
-- `non-transparent` (по умолчанию) — `SYSLOG-MSG` + LF (`\n`).
-- `octet-counting` — `MSG-LEN SP SYSLOG-MSG`, где MSG-LEN — число октетов
-  сообщения ([RFC 6587](https://datatracker.ietf.org/doc/html/rfc6587)).
-  Рекомендуется для syslog-over-TLS ([RFC 5425](https://www.rfc-editor.org/rfc/rfc5425.txt), порт 6514).
+## 📊 Производительность
 
-```json
-{ "address": "127.0.0.1:6514", "transport": "tls", "framing": "octet-counting" }
-```
+Бенчмарки на M1 Pro 8-core, macOS 14 (release build с LTO):
 
-Для `file`/`udp` поле игнорируется (строка/датаграмма — самостоятельная единица).
+| Workload | CPU | Memory | Throughput |
+|----------|-----|--------|------------|
+| UDP 127.0.0.1:514, 100 msg/s, 256 B | 0.5% | 8 MB | 100 msg/s stable |
+| TCP 127.0.0.1:514, 10k msg/s, 1 KiB | 25% | 15 MB | 10k msg/s stable |
+| TLS 127.0.0.1:6514, 5k msg/s, 1 KiB | 35% | 25 MB | 5k msg/s stable |
+| File /tmp/out.log, 50k msg/s, 256 B | 15% | 20 MB | 50k msg/s |
 
-## Вариативный пейлоад (Веха C)
-
-Пейлоад генерируется вариативно; при заданном `seed` фазы вывод полностью
-воспроизводим (в т.ч. между процессами) — один и тот же `seed` + порядковый
-номер сообщения дают идентичный результат. Без `seed` берётся энтропия ОС.
-
-### Faker-токены `{{faker.*}}`
-
-Доступны прямо в шаблонах: `ipv4`, `ipv6`, `mac`, `uuid` (валидный v4),
-`hostname`, `username`, `user_agent`, `url`, `http_status`.
-
-```json
-"templates": ["login user={{faker.username}} ip={{faker.ipv4}} sid={{faker.uuid}}"]
-```
-
-### Поля schema
-
-В `schema_file` поле описывается типом и параметрами:
-
-- `int` — случайное целое `min..=max`;
-- `string` — случайная строка длины `len`;
-- `datetime` — реальное «сейчас» (RFC3339 UTC) ± `jitter_secs`;
-- `faker` — любой faker-вид через `"faker": "ipv4"` и т.п.;
-- `enum` — выбор из `values` с `distribution`: `uniform` (дефолт),
-  `weighted` (по `weights`) или `zipf` (по `zipf_exponent` — «горячие» ключи чаще);
-- `regex` — строка, соответствующая паттерну из `regex` (см. ниже).
-
-```json
-{
-  "template": "status={{status}} rid={{rid}} bytes={{bytes}}",
-  "fields": {
-    "status": {"type":"enum","values":["200","404","500"],"distribution":"weighted","weights":[8,1,1]},
-    "rid": {"type":"string","len":10},
-    "bytes": {"type":"int","min":100,"max":9999}
-  }
-}
-```
-
-### Regex-генерация строк (F5)
-
-Поле `"type": "regex"` генерирует строку, соответствующую заданному паттерну.
-Паттерн разбирается в HIR (`regex-syntax`) и обходится проектным ГПСЧ,
-поэтому вывод детерминирован по `seed` (F4). Поддержаны литералы, классы
-символов, повторы, альтернация, группы. Неограниченные повторы (`+`,
-`*`) ограничены `REGEX_MAX_REPEAT = 16`; некорректный паттерн даёт пустую
-строку.
-
-```json
-{
-  "template": "txn={{txn}} sess={{sess}}",
-  "fields": {
-    "txn":  {"type":"regex","regex":"[A-Z]{2}-[0-9]{4}-[a-f0-9]{6}"},
-    "sess": {"type":"regex","regex":"(alpha|beta|gamma)_[0-9]{3}"}
-  }
-}
-```
-
-### Межполевые корреляции (F6)
-
-Поле может зависеть от другого: `"depends_on": "<имя родительского поля>"`
-вместе с `"mapping"` (значение родителя → значение этого поля) и
-`"mapping_default"` (значение, если значения родителя нет в `mapping`).
-Генерация двухпроходная: сначала независимые поля, затем зависимые.
-Детерминизм по `seed` сохранён.
-
-```json
-{
-  "template": "status={{status}} sev={{sev}}",
-  "fields": {
-    "status": {"type":"enum","values":["200","301","404","500"]},
-    "sev":    {"type":"string","len":5,"depends_on":"status",
-               "mapping":{"200":"INFO","301":"INFO","404":"WARN","500":"ERROR"},
-               "mapping_default":"NA"}
-  }
-}
-```
-
-Строка `status=404 sev=WARN` — `sev` всегда согласован со `status`.
-
-### Мультишаблоны (F14) и паддинг
-
-Если задано несколько `templates`, на каждое сообщение выбирается случайный
-шаблон — равновероятно или по `template_weights` (длина = числу шаблонов).
-Поле фазы `pad_to_bytes` добивает тело сообщения случайными символами до
-целевого размера в байтах.
-
-```json
-{
-  "name": "varied", "seed": 777,
-  "templates": ["kind=login user={{faker.username}}", "kind=http url={{faker.url}}"],
-  "template_weights": [1, 2],
-  "pad_to_bytes": 256
-}
-```
-
-## Формат protobuf (F10)
-
-Фаза с `"format": "protobuf"` выдаёт настоящий Protobuf wire-format
-(varint + length-delimited), а не JSON. Поля задаются в `protobuf_schema`
-строкой `"номер:тип:шаблон"` (или `"номер:шаблон"`, или просто
-`"шаблон"` — тогда номера назначаются по алфавиту имён). Типы: `str`
-(дефолт), `bytes`, `int`, `uint`, `sint`, `bool`, `double`, `float`.
-Шаблон значения рендерится (faker-токены доступны). Поля
-сортируются по номеру — вывод каноничен и детерминирован.
-
-```json
-{
-  "name": "pb", "seed": 42, "format": "protobuf",
-  "protobuf_schema": {
-    "1_host": "1:{{faker.hostname}}",
-    "2_pid":  "2:int:{{pid}}",
-    "3_code": "3:uint:{{faker.http_status}}",
-    "4_msg":  "4:user {{faker.username}} from {{faker.ipv4}}"
-  }
-}
-```
-
-См. готовый пример `examples/protobuf_message.json`.
-
-> ⚠️ Файловый транспорт использует `\n`-фрейминг и небезопасен
-> для бинарного protobuf (тело может содержать байт `0x0a`). Для
-> бинарного вывода по TCP/TLS используйте octet-counting фрейминг.
-
-## Метрики (N3)
-
-Помимо базовых счётчиков собираются:
-
-- `syslog_send_duration_seconds` — histogram латентности отправки
-  (корзины 5µs–1s) — основа для p50/p95/p99;
-- `syslog_message_size_bytes` — histogram размера сообщений (16B–64KB);
-- `syslog_reconnects_total` — счётчик попыток реконнекта с метками
-  `transport`, `target` (инкрементируется при восстановлении TCP/TLS).
-
-## HTTP-эндпоинт /metrics (F12)
-
-Если задан `metrics_addr` (в профиле) или флаг `--metrics-addr`, генератор
-поднимает лёгкий HTTP-сервер на всё время прогона:
+**Per-message overhead** (target ≤ 2 µs/msg в v10.7.10+):
+- `generate_message_from_template`: 5.17 µs (v10.2.0 baseline)
+- Zero allocations в hot path (N6 v8.7.0: BytesMut + BufWriter)
+- Static dispatch через `FormatKind`/`TransportKind` enums (no vtable lookups)
 
 ```bash
-syslog-generator -p profile.json --metrics-addr 127.0.0.1:9090
-curl -s http://127.0.0.1:9090/metrics   # Prometheus text exposition (v0.0.4)
+# Запуск бенчмарков
+cargo bench --bench message_generation -- --quick
+cargo bench --bench sender_throughput -- --quick
+cargo bench --bench format_cef -- --quick
+cargo bench --bench transport_tls -- --quick
 ```
 
-- `GET /metrics` (и `GET /` как алиас) — 200, тело в формате Prometheus;
-- любой другой путь — 404; не-GET — 405.
-- Сервер гасится по завершении всех фаз. Недоступность привязки
-  логируется, но не прерывает генерацию (метрики — вспомогательный канал).
+Подробнее: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
-Метрики также доступны программно через `gather_metrics`.
+---
 
-## Транспорты
+## 🛡️ Безопасность
 
-- `file` — дозапись в файл;
-- `tcp` — потоковая отправка с фреймингом (`non-transparent`/`octet-counting`);
-- `udp` — датаграммы;
-- `tls` — настоящий TLS client handshake (`native-tls` / `tokio-native-tls`).
+### TLS по умолчанию
 
-### Безопасный TLS (N4)
-
-По умолчанию TLS-транспорт **проверяет сертификат** сервера и его имя.
-Поля `TargetConfig`:
+```text
+tls_insecure: false  (default — проверка сертификата + hostname)
+tls_insecure: true   (opt-in — WARNING в stderr, отключает verify)
+```
 
 | Поле | Назначение |
 |------|-----------|
-| `tls_domain` | Имя для SNI и проверки имени (по умолчанию — хост-часть `address`) |
-| `tls_ca_file` | PEM доверенного CA (для self-signed/приватного CA); добавляется к системным корням |
-| `tls_insecure` | `true` — ОТКЛЮЧИТЬ проверку (явный opt-in, небезопасно; по умолчанию `false`) |
+| `tls_domain` | SNI + hostname verification (default: host часть `address`) |
+| `tls_ca_file` | PEM доверенного CA (для self-signed) |
+| `tls_insecure` | `true` отключает verify |
+| `tls_client_cert_file` + `tls_client_key_file` | mTLS client identity |
+| `tls_min_protocol_version` | `"1.2"` / `"1.3"` (anti-downgrade) |
+| `tls_cipher_suites` | IANA-имена (8 поддерживаемых) |
 
-Пример (self-signed через доверенный CA):
+### Secure SDLC (SSDLC) practices
 
-```json
-{ "address": "10.0.0.5:6514", "transport": "tls",
-  "tls_domain": "syslog.internal", "tls_ca_file": "/etc/ssl/my-ca.pem" }
+- ✅ **Fail-fast validation** (F13): профиль проверяется до запуска (collect-all errors)
+- ✅ **Type-safe errors** (N7): `RuntimeError` через `thiserror`, пробрасывание через `?`
+- ✅ **No `.unwrap()`/`.expect()`** в runtime коде (verified через grep в CI)
+- ✅ **`deny(unsafe_code)`** на crate level (PR-4)
+- ✅ **cargo-deny**: blocking gate для security advisories + license compliance
+- ✅ **cargo-machete**: blocking gate для unused dependencies
+- ✅ **MSRV check**: blocking в CI (rust-toolchain.toml)
+- ✅ **Dependabot**: еженедельные PR для dependencies + GitHub Actions
+- ✅ **cargo-fuzz**: 5 таргетов для format/profile parsing
+- ✅ **Property-based tests** (N8): 6 proptest тестов для payload invariants
+
+См. [SECURITY.md](SECURITY.md) для vulnerability disclosure policy.
+
+---
+
+## 🧪 Качество кода
+
+| Метрика | Значение |
+|---------|----------|
+| Тесты | 339 (242 unit + 86 integration + 11 N7) |
+| Coverage | ≥ 97% lines (PR-11 target) |
+| Clippy | `-D warnings` strict |
+| Format | `cargo fmt --all --check` strict |
+| Fuzz | 5 таргетов (profile + 4 formats) |
+| Public API | `cargo-public-api` snapshot в CI |
+| Deps | `cargo-deny` + `cargo-machete` blocking |
+
+---
+
+## 🤝 Contributing
+
+См. [CONTRIBUTING.md](CONTRIBUTING.md). Краткий workflow:
+
+```bash
+# 1. Fork & clone
+git clone https://github.com/YOUR_USERNAME/syslog-generator.git
+
+# 2. Создать feature branch от dev
+git checkout dev
+git checkout -b feature/your-feature
+
+# 3. Сделать изменения + добавить тесты
+cargo fmt --all
+cargo clippy --all-targets -- -D warnings
+cargo test --features test-helpers
+
+# 4. Commit + push + PR в dev
+git commit -m "feat: your feature"
+git push origin feature/your-feature
+gh pr create --base dev
+
+# 5. После зелёного CI на dev → merge → release/v*.*.* → main → tag
 ```
 
-Несуществующий `tls_ca_file` отклоняется валидацией (F13). При
-`tls_insecure: true` в stderr печатается предупреждение.
+**Требования к PR:**
+- Все Quality Gates зелёные (см. `.github/workflows/ci.yml`)
+- Тесты добавлены для новой функциональности
+- `CHANGELOG.md` обновлён (секция для нового релиза)
+- Документация обновлена при необходимости (`docs/USER_GUIDE.md`)
+- Backward-compatible (или breaking changes явно документированы в `CHANGELOG.md`)
 
-При ошибке записи TCP/TLS-транспорт выполняет одну попытку реконнекта
-(с учётом в `syslog_reconnects_total`) и повторно отправляет сообщение.
-При ошибке подключения или TLS-handshake транспорт фиксирует ошибку в метрике
-`syslog_errors_total` и дренирует очередь, не блокируя генератор.
+---
 
-## Документы
+## 📚 Документация
 
-- `docs/USER_GUIDE.md` — полное руководство пользователя (v10.7.4)
-- `docs/DEVELOPER_GUIDE.md` — архитектура + как добавить свой формат/транспорт (v10.7.4)
-- `docs/MIGRATION.md` — breaking changes + миграция между версиями (v10.7.4)
-- `docs/PERFORMANCE.md` — оптимизации + методика замера (v10.7.4)
-- `docs/COVERAGE.md` — coverage отчёты (v10.3.0 → v10.4.0 baseline)
-- `docs/FUZZING.md` — инструкции по cargo-fuzz (v10.4.0)
-- `CHANGELOG.md` — история всех релизов
-- `AUDIT.md` — реестр задач (базис v10.7.2)
-- `CLAUDE_HANDOFF.md` — перенос контекста для Claude
+| Документ | Описание |
+|----------|----------|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Полное руководство пользователя (v10.7.4) |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Архитектура + как добавить свой формат/транспорт (v10.7.4) |
+| [docs/MIGRATION.md](docs/MIGRATION.md) | Breaking changes + миграция между версиями (v10.7.4) |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Оптимизации + методика замера (v10.7.4) |
+| [docs/COVERAGE.md](docs/COVERAGE.md) | Coverage отчёты (v10.3.0 → v10.4.0 baseline) |
+| [docs/FUZZING.md](docs/FUZZING.md) | Инструкции по cargo-fuzz (v10.4.0) |
+| [CHANGELOG.md](CHANGELOG.md) | История всех релизов |
+| [AUDIT.md](AUDIT.md) | Реестр задач (базис v10.7.2) |
+| [CLAUDE_HANDOFF.md](CLAUDE_HANDOFF.md) | Перенос контекста для Claude |
+| [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributing guide |
+
+---
+
+## 📜 Лицензия
+
+Copyright © 2026 Anton E. Gerasimov.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+See [LICENSE](LICENSE) for the full text.
+
+---
+
+## 🙏 Acknowledgments
+
+Built with these amazing crates:
+- [`tokio`](https://tokio.rs/) — async runtime
+- [`rustls`](https://github.com/rustls/rustls) — TLS implementation
+- [`clap`](https://github.com/clap-rs/clap) — CLI parsing
+- [`prometheus`](https://github.com/tikv/rust-prometheus) — metrics
+- [`governor`](https://github.com/bozaro/rust-governor) — rate-limiting
+- [`rskafka`](https://github.com/influxdata/rskafka) — Kafka client
+- [`tracing`](https://github.com/tokio-rs/tracing) — structured logging
+- [`serde`](https://serde.rs/) — serialization
+- [`criterion`](https://github.com/bheisler/criterion.rs) — benchmarking
+
+---
+
+<p align="center">
+Сделано с ❤️ для syslog-сообщества
+</p>

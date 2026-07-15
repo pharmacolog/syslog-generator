@@ -1,6 +1,48 @@
 
 # Changelog
 
+## v10.7.6 - 2026-07-15
+
+**Patch-release (PR-4): minimal architecture cleanup.**
+
+### Changed (refactor)
+
+- **OnceLock вместо Once в rustls provider init** (PR-4.7) — `std::sync::Once`
+  заменён на `std::sync::OnceLock<()> get_or_init()` (Rust 1.70+ idiom).
+  Проще, явно возвращает Result при double-init.
+- **drop default-features на serde/prometheus** (PR-4.8) — убирает
+  лишний `protobuf` encoder (transitive dep `prometheus` — мы используем
+  только text format). Явное указание `features = ["derive", "std"]` для
+  serde. Уменьшает compile time + binary size.
+
+### Added (lints)
+
+- **crate-level lints** (PR-4.1) — минимальный безопасный набор:
+  - `#![deny(unsafe_code)]` — формализует N7 (0 unsafe в продакшн коде).
+  - `#![warn(clippy::all)]` — базовые clippy проверки.
+
+### Deferred (большие рефакторинги)
+
+- `warn(missing_docs)` — 100+ warnings, требует итеративного doc-fix.
+- `warn(unreachable_pub)` — orphan pub use cleanup, breaking в v11.0.0.
+- `warn(rust_2024_compatibility)` — требует edition upgrade.
+- `warn(clippy::pedantic)` — слишком шумный, нужен индивидуальный allow.
+- PR-4.3 (Metrics substructs) — большой рефакторинг.
+- PR-4.4 (Phase builder) — улучшает DX, не критично.
+- PR-4.5 (Transport trait реально использовать) — переключение `run_phase_multi`
+  на `TransportKind::run`. Требует review.
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean
+- `cargo test --locked --features test-helpers`: 339 passed
+
+Refs: аудит v10.7.2 (c1c9722), PLAN-v10.0.0.md.
+
 ## v10.7.5 - 2026-07-15
 
 **Patch-release (PR-3): comprehensive documentation overhaul + public-API gate.**

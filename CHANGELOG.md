@@ -1820,3 +1820,18 @@ v8.8.0 (N10 слои), v8.8.1 (AUDIT.md), v9.0.0 (milestone).
 
 
 <!-- v10.7.1: trigger Dependabot re-scan after v10.7.1 release. -->
+
+## v10.7.10 - DEFERRED (rustls 0.24+ не stable)
+
+**Статус:** PR-8 ОТЛОЖЕН — rustls 0.24+ не имеет stable релиза (проверено 2026-07-15 через GitHub releases).
+- Последняя stable ветка: rustls 0.23.42 (уже используется).
+- Версия 0.24 — в `dev` (0.24.0-dev.0), без stable даты.
+
+**Что нужно для PR-8:**
+1. Дождаться rustls 0.24 stable (отслеживать https://github.com/rustls/rustls/releases).
+2. Обновить `Cargo.toml`: `rustls = "0.24"`, `tokio-rustls = "0.27"`, `webpki-roots = "0.27"`.
+3. Мигрировать API breaking changes (`ClientConfig::builder`, `with_protocol_versions`, `with_cipher_suites`, certificate verifier trait).
+4. Обновить integration tests (`tests/integration_tests.rs` использует `rustls::ServerConfig` напрямую в 1-2 тестах).
+5. Обновить benches (`benches/transport/tls.rs`).
+
+**Refs:** PLAN-v10.0.0.md, аудит v10.7.2.

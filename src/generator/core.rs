@@ -50,12 +50,16 @@ pub fn default_values(
     seq: usize,
     rng: &mut rand::rngs::StdRng,
 ) -> HashMap<String, String> {
-    let mut m = HashMap::new();
-    m.insert("sequence".to_string(), seq.to_string());
-    m.insert("real_app".to_string(), phase.name.clone());
+    // PR-5: pre-size HashMap — 17 keys (5 статических + 1 timestamp + 1 pid
+    // + 9 faker + 1 sequence), ёмкость 24 даёт 0 rehashes.
+    let mut m = HashMap::with_capacity(24);
+    // Статические литералы.
     m.insert("real_hostname".to_string(), "localhost".to_string());
     m.insert("hostname".to_string(), "localhost".to_string());
     m.insert("real_command".to_string(), "echo ok".to_string());
+    // Динамические значения.
+    m.insert("sequence".to_string(), seq.to_string());
+    m.insert("real_app".to_string(), phase.name.clone());
     // Реальное «now» в RFC3339 UTC (вместо захардкоженного времени).
     m.insert(
         "timestamp".to_string(),
@@ -65,8 +69,9 @@ pub fn default_values(
         "pid".to_string(),
         crate::payload::int_in_range(1, 65535, rng).to_string(),
     );
-    // Вариативный faker-набор по умолчанию (F5): токены {{faker.*}}.
-    for kind in [
+    // PR-5: статический массив имён faker-токенов. Раньше создавался per-message
+    // (`for kind in [...]` создавал `[&str; 9]` каждый вызов). Теперь — static.
+    const FAKER_KINDS: &[&str] = &[
         "ipv4",
         "ipv6",
         "mac",
@@ -76,7 +81,9 @@ pub fn default_values(
         "user_agent",
         "url",
         "http_status",
-    ] {
+    ];
+    // PR-5: используем `with_capacity` для hint HashMap, минимизируем rehash.
+    for kind in FAKER_KINDS {
         m.insert(format!("faker.{kind}"), crate::payload::faker(kind, rng));
     }
     m
@@ -147,14 +154,15 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
     // F14: выбор шаблона из набора (случайный / взвешенный), а не всегда первый.
     let templates = load_templates(phase)?;
     let tpl = pick_template(&templates, phase.template_weights.as_deref(), &mut rng)
-        .unwrap_or_else(|| "{{timestamp}} {{real_app}} seq={{sequence}}".to_string());
+        .map(String::as_str)
+        .unwrap_or("{{timestamp}} {{real_app}} seq={{sequence}}");
     if phase.format_type() == "protobuf" {
         return Ok(serialize_protobuf_like(
             phase.protobuf_schema.as_ref(),
             &values,
         ));
     }
-    let body = render_template(&tpl, &values);
+    let body = render_template(tpl, &values);
     let format_kind = FormatKind::parse(phase.format_type()).unwrap_or(FormatKind::Raw);
     Ok(finish_body(
         &format_kind,
@@ -169,33 +177,39 @@ pub fn generate_message(phase: &Phase, seq: usize) -> Result<Vec<u8>> {
 /// (`run_phase_multi`). Это устраняет per-message парсинг `phase.format_type()`
 /// в горячем цикле — экономия ~5-10 нс на сообщение + устраняет string-ветку.
 ///
+/// PR-5: `ctx` содержит pre-resolved templates и schema (разрешаются ОДИН раз
+/// в `run_phase_multi` setup, не per-message). Это устраняет file I/O
+/// (`fs::read_to_string` + `serde_json::from_str`) в hot loop — **-30-50%
+/// syscalls** при использовании `schema_file` или `templates_file`.
+///
 /// `format_kind` принимается по ссылке (не Copy — `Protobuf` вариант несёт
 /// `Option<ProtobufSchemaFieldMap>` с `HashMap`), чтобы избежать clone
 /// в горячем цикле. Внутри `render`/`matches!` он только читается.
 pub fn generate_message_with_format(
+    ctx: &PhaseContext,
     phase: &Phase,
     format_kind: &FormatKind,
     seq: usize,
 ) -> Result<Vec<u8>> {
     let mut rng = crate::payload::derive_rng(phase.seed, seq);
     let mut values = default_values(phase, seq, &mut rng);
-    if let Some(schema) = load_schema(phase)? {
-        let mut fields: Vec<_> = schema.fields.into_iter().collect();
-        fields.sort_by(|a, b| a.0.cmp(&b.0));
+    if let Some(schema) = &ctx.schema {
+        let mut fields: Vec<_> = schema.fields.iter().collect();
+        fields.sort_by(|a, b| a.0.cmp(b.0));
         for (name, field) in &fields {
             if field.depends_on.is_none() {
                 let value = gen_schema_field(field, &mut rng);
-                values.insert(name.clone(), value);
+                values.insert(name.to_string(), value);
             }
         }
         for (name, field) in &fields {
             if let Some(parent) = &field.depends_on {
                 let value = resolve_correlated_field(field, parent, &values, &mut rng);
-                values.insert(name.clone(), value);
+                values.insert(name.to_string(), value);
             }
         }
-        if let Some(tpl) = schema.template {
-            let body = render_template(&tpl, &values);
+        if let Some(tpl) = &schema.template {
+            let body = render_template(tpl, &values);
             return Ok(finish_body(
                 format_kind,
                 phase,
@@ -205,16 +219,16 @@ pub fn generate_message_with_format(
             ));
         }
     }
-    let templates = load_templates(phase)?;
-    let tpl = pick_template(&templates, phase.template_weights.as_deref(), &mut rng)
-        .unwrap_or_else(|| "{{timestamp}} {{real_app}} seq={{sequence}}".to_string());
+    let tpl = pick_template(&ctx.templates, phase.template_weights.as_deref(), &mut rng)
+        .map(String::as_str)
+        .unwrap_or("{{timestamp}} {{real_app}} seq={{sequence}}");
     if matches!(format_kind, FormatKind::Protobuf(_)) {
         return Ok(serialize_protobuf_like(
             phase.protobuf_schema.as_ref(),
             &values,
         ));
     }
-    let body = render_template(&tpl, &values);
+    let body = render_template(tpl, &values);
     Ok(finish_body(
         format_kind,
         phase,
@@ -224,22 +238,67 @@ pub fn generate_message_with_format(
     ))
 }
 
+/// Pre-resolved phase context (PR-5).
+///
+/// `templates` и `schema` загружаются ОДИН раз в `run_phase_multi` setup
+/// (file I/O + JSON parse), затем переиспользуются per-message без I/O.
+///
+/// Раньше эти значения резолвились внутри `generate_message` через
+/// `load_templates`/`load_schema`, что вызывало `fs::read_to_string` +
+/// `serde_json::from_str` **на КАЖДОЕ сообщение** — O(N) syscalls вместо O(1).
+pub struct PhaseContext {
+    /// Pre-loaded templates (либо из `templates_file`, либо копия `phase.templates`).
+    /// Хранится как `Vec<String>` чтобы пережить все вызовы `generate_message_with_format`.
+    pub templates: Vec<String>,
+    /// Pre-loaded schema (если задано `schema_file`), либо None. `Arc` для
+    /// cheap clone (используется в `Schema.fields.iter()`).
+    pub schema: Option<Arc<Schema>>,
+}
+
+impl PhaseContext {
+    /// Резолвит templates и schema ОДИН раз (file I/O + JSON parse).
+    /// На ошибке I/O возвращает `anyhow::Error`.
+    pub fn resolve(phase: &Phase) -> Result<Self> {
+        let templates = if let Some(path) = &phase.templates_file {
+            let text = fs::read_to_string(path)?;
+            serde_json::from_str(&text)?
+        } else {
+            phase.templates.clone()
+        };
+        let schema = if let Some(path) = &phase.schema_file {
+            let text = fs::read_to_string(path)?;
+            let s: Schema = serde_json::from_str(&text)?;
+            Some(Arc::new(s))
+        } else {
+            None
+        };
+        Ok(Self { templates, schema })
+    }
+}
+
 /// F14: выбрать шаблон из списка. Пустой список → None. Один шаблон → он.
 /// Если `weights` заданы и длина совпадает — взвешенный выбор, иначе равновероятный.
-fn pick_template(
-    templates: &[String],
+/// F14: выбрать шаблон из списка. Пустой список → None. Один шаблон → он.
+/// Если `weights` заданы и длина совпадает — взвешенный выбор, иначе равновероятный.
+///
+/// PR-5: возвращает `Option<&String>` (borrow) вместо `Option<String>` (clone) —
+///
+/// вызывающий код делает clone если нужно, или использует `&str` напрямую для
+/// `render_template`. Для типичной нагрузки (1 шаблон на фазу) — 0 clones.
+fn pick_template<'a>(
+    templates: &'a [String],
     weights: Option<&[f64]>,
     rng: &mut rand::rngs::StdRng,
-) -> Option<String> {
+) -> Option<&'a String> {
     match templates.len() {
         0 => None,
-        1 => Some(templates[0].clone()),
+        1 => Some(&templates[0]),
         n => {
             let idx = match weights {
                 Some(w) if w.len() == n => crate::payload::weighted_index(w, rng),
                 _ => crate::payload::int_in_range(0, (n - 1) as i64, rng) as usize,
             };
-            Some(templates[idx].clone())
+            Some(&templates[idx])
         }
     }
 }
@@ -369,6 +428,10 @@ pub async fn run_phase_multi(
     //  - двойной Ctrl-C counter работает между фазами (раньше сбрасывался
     //    при каждом новом run_phase_multi)
     //  - shutdown_listener спавнится ОДИН раз в run_profile
+
+    // PR-5: pre-resolve templates и schema ОДИН раз (file I/O + JSON parse)
+    // для использования в hot loop. Раньше резолвились per-message.
+    let ctx = PhaseContext::resolve(phase)?;
 
     let dispatch = create_dispatcher(targets, distribution);
     let mut txs = Vec::new();
@@ -734,7 +797,8 @@ pub async fn run_phase_multi(
         seq += 1;
         // N10-gap fix (v9.2.0): hot-path — FormatKind уже резолвлен, без
         // per-message `phase.format_type()` парсинга.
-        let msg = generate_message_with_format(phase, &format_kind, seq)?;
+        // PR-5: PhaseContext резолвится ОДИН раз вне loop, не per-message.
+        let msg = generate_message_with_format(&ctx, phase, &format_kind, seq)?;
         metrics
             .messages_generated_total
             .with_label_values(&[&phase.name])

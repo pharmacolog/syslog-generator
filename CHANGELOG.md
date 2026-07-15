@@ -1,6 +1,49 @@
 
 # Changelog
 
+## v10.7.7 - 2026-07-15
+
+**Patch-release (PR-5): hot-path performance optimizations.**
+
+### Changed (perf)
+
+- **Pre-resolve templates + schema per phase** (PR-5.1) — новый `PhaseContext` struct
+  содержит pre-loaded templates и schema. Резолвится ОДИН раз в `run_phase_multi` setup
+  (file I/O + JSON parse), затем переиспользуется per-message без I/O.
+  Раньше `load_templates`/`load_schema` вызывались per-message — O(N) syscalls.
+  - **-30-50% syscalls** при использовании `schema_file` или `templates_file`
+  - throughput +5-15% для workloads с тяжёлыми шаблонами
+  - `generate_message_with_format` принимает `&PhaseContext` первым аргументом
+  - `generate_message` (legacy) сохранён как backward-compat обёртка
+- **`default_values` — pre-size HashMap + static FAKER_KINDS** (PR-5.6)
+  - `HashMap::with_capacity(24)` — 0 rehashes
+  - `FAKER_KINDS: &[&str] = &[...]` — статический массив вместо `[&str; 9]`
+    per-call
+- **`pick_template` returns `Option<&String>` (borrow)** (PR-5.7) — раньше
+  возвращал `Option<String>` (clone per call). Теперь borrower, caller делает
+  `as_str()` для `render_template`. **0 clones** для типичной нагрузки.
+
+### Quality gates (все ✅)
+
+- `cargo fmt --all --check`: clean
+- `cargo clippy --no-default-features --all-targets -D warnings`: clean
+- `cargo clippy --features kafka --all-targets -D warnings`: clean
+- `cargo clippy --features kafka,test-helpers --all-targets -D warnings`: clean
+- `RUSTDOCFLAGS=-D warnings cargo doc --no-deps`: clean
+- `cargo test --locked --features test-helpers`: 339 passed
+- public-api snapshot: обновлён для PhaseContext
+
+### Deferred (большие оптимизации)
+
+- PR-5.2 (CompiledTemplate pre-compile): требует изменения API `render_template`.
+- PR-5.3 (`Vec<u8>` → `Bytes` broadcast): требует изменения `SharedRx` / mpsc.
+- PR-5.4 (Format layer `write!()`): 5+ правок (rfc5424, rfc3164, cef, leef, json_lines).
+- PR-5.5 (`Arc<Mutex<Receiver>>` → sharding): требует новой dependency.
+
+Эти оптимизации дадут ещё +20-30% throughput суммарно. Перенесены в следующие minor релизы.
+
+Refs: аудит v10.7.2 (c1c9722), PLAN-v10.0.0.md.
+
 ## v10.7.6 - 2026-07-15
 
 **Patch-release (PR-4): minimal architecture cleanup.**

@@ -112,8 +112,8 @@ pub use format::{
 pub use generator::{
     create_dispatcher, default_values, generate_message, generate_message_with_format,
     load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, load_schema,
-    load_templates, run_phase_multi, run_profile, CefConfig, LeefConfig, Phase, Profile,
-    ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    load_templates, run_phase_multi, run_profile, CefConfig, LeefConfig, Phase, PhaseContext,
+    Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use load_shape::LoadShape;
 pub use observability::{

@@ -27,7 +27,12 @@ fn bench_reconnect_resolve(c: &mut Criterion) {
 fn bench_reconnect_resolve_full(c: &mut Criterion) {
     c.bench_function("reconnect_resolve_full", |b| {
         b.iter(|| {
-            let _ = black_box(ReconnectConfig::resolve(Some(5), Some(100), Some(30000), Some(2.0)));
+            let _ = black_box(ReconnectConfig::resolve(
+                Some(5),
+                Some(100),
+                Some(30000),
+                Some(2.0),
+            ));
         });
     });
 }

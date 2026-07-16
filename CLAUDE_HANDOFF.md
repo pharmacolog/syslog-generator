@@ -1,8 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-16. Текущая версия: **v10.7.13** (patch-release: PR-12 Security hardening — F13 gate для tls_insecure=true, Zeroizing для TLS private keys, drop RSA_PKCS1_SHA1, tracing::warn! для SIEM, yanked=deny, SBOM (cargo-cyclonedx), Docker SLSA Build L1). Полная история релизов v10.7.1..v10.7.13 ниже. Веха F закрыта на v10.7.1.
-
-**Текущие Quality Gates (расширены в PR-13):** G1 fmt+clippy, G2 rustdoc, G3 tests, G4 build+benches, G5 security (cargo-deny/machete/public-api), G6 N7 invariant, G7 coverage ≥ 87% blocking, G8 perf regression (PR-10 target ≤ 2 µs/msg), G9 changelog check (для releases). Запуск: `./scripts/quality-gates.sh`.
+Дата: 2026-07-16. Текущая версия: **v10.7.14** (patch-release: PR-13 N7 invariant cleanup + Quality Gates extension — `.expect()`/`.unwrap()`/`.unreachable!()` в runtime коде заменены на graceful fallbacks; `scripts/quality-gates.sh` расширен 9 gates G1..G9: fmt+clippy, rustdoc, tests, build+benches, security (cargo-deny/machete/public-api), N7 invariant, coverage ≥ 87% blocking, perf regression hint, changelog check). Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

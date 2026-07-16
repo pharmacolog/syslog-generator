@@ -30,11 +30,10 @@ on:
 permissions:
   contents: read
 
-# PR-15 (T6): concurrency control — новые runs отменяют предыдущие
-# для той же ветки (экономит CI runner time при force-push).
+# PR-15 (T6): concurrency group (НЕ cancel-in-progress — отменённые jobs
+# приводят к "failure" report, что misleads).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 # PR-7 fix: macos-latest runners в GH Actions периодически зависают
 # (видимо infrastructure issue) на 30+ минут без логов. Добавляем

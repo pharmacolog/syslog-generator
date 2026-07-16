@@ -39,10 +39,10 @@ on:
     - '**.md'
     - '.archived-releases/**'
 
-# PR-15 (T6): concurrency — новые runs отменяют предыдущие для той же ветки.
+# PR-15 (T6): concurrency group (НЕ cancel-in-progress — отменённые jobs
+# приводят к "failure" report, что misleads).
 concurrency:
   group: docker-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
       tag:
         description: "Docker image tag (default: dev-{short_sha})"
         required: false

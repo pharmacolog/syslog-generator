@@ -46,13 +46,15 @@ jobs:
         run: cargo install cargo-cyclonedx --locked
 
       - name: Generate SBOM (CycloneDX JSON)
-        # --override-filename="sbom-${GITHUB_SHA::8}" → результат:
-        #   sbom-<sha8>.cdx.json (auto .cdx.json suffix)
+        # PR-15 fix: --override-filename="sbom-${GITHUB_SHA::8}.cdx" → результат:
+        #   sbom-<sha8>.cdx.json (явное расширение .cdx).
+        # Раньше было "sbom-${GITHUB_SHA::8}" → sbom-<sha8>.json (без .cdx) — upload path
+        # "sbom-*.cdx.json" ничего не находил → job failure.
         # --spec-version=1.5 → современный формат (NIST/EO 14028 совместимый)
         run: |
           cargo cyclonedx \
             --format json \
-            --override-filename "sbom-${GITHUB_SHA::8}" \
+            --override-filename "sbom-${GITHUB_SHA::8}.cdx" \
             --spec-version 1.5
 
       - name: Validate SBOM JSON

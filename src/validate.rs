@@ -1331,7 +1331,6 @@ mod tests {
 
     /// PR-11: тесты на ValidationError variants которые не покрыты основными тестами.
     /// Каждый variant должен иметь хотя бы один happy-path test.
-
     #[cfg(feature = "kafka")]
     #[test]
     fn kafka_topic_required_when_kafka_transport() {

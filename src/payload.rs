@@ -72,7 +72,7 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
         "ipv4" => {
             // "255.255.255.255" = max 15 байт. Pre-alloc устраняет 2 re-alloc.
             let mut s = String::with_capacity(15);
-            write!(
+            let _ = write!(
                 s,
                 "{}.{}.{}.{}",
                 rng.random_range(1..=223),
@@ -80,7 +80,7 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 rng.random_range(0..=255),
                 rng.random_range(1..=254)
             )
-            .expect("String::write не падает");
+             /* String::write infallible */;
             s
         }
         "ipv6" => {
@@ -91,8 +91,8 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 if i > 0 {
                     s.push(':');
                 }
-                write!(s, "{:x}", rng.random_range(0u16..=0xffff))
-                    .expect("String::write не падает");
+                let _ = write!(s, "{:x}", rng.random_range(0u16..=0xffff));
+                /* String::write infallible */
             }
             s
         }
@@ -103,7 +103,7 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 if i > 0 {
                     s.push(':');
                 }
-                write!(s, "{:02x}", rng.random_range(0u8..=255)).expect("String::write не падает");
+                let _ = write!(s, "{:02x}", rng.random_range(0u8..=255)); /* String::write infallible */
             }
             s
         }
@@ -111,13 +111,12 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
         "hostname" => {
             // "edge-99" = max ~9 байт.
             let mut s = String::with_capacity(9);
-            write!(
+            let _ = write!(
                 s,
                 "{}-{:02}",
                 HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
                 rng.random_range(1..=99)
-            )
-            .expect("String::write не падает");
+            );
             s
         }
         "username" => USER_NAMES[rng.random_range(0..USER_NAMES.len())].to_string(),
@@ -133,14 +132,13 @@ pub fn faker(kind: &str, rng: &mut StdRng) -> String {
                 "/search?q=x",
             ];
             let mut s = String::with_capacity(48);
-            write!(
+            let _ = write!(
                 s,
                 "https://{}-{:02}.example.com{}",
                 HOST_ADJ[rng.random_range(0..HOST_ADJ.len())],
                 rng.random_range(1..=99),
                 paths[rng.random_range(0..paths.len())]
-            )
-            .expect("String::write не падает");
+            );
             s
         }
         "http_status" => HTTP_STATUSES[rng.random_range(0..HTTP_STATUSES.len())].to_string(),

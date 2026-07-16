@@ -391,10 +391,12 @@ jobs:
           exit $status
 
   # v10.3.0 (Coverage ч.1): baseline coverage через cargo-llvm-cov.
-  # **Non-blocking** — только отчёт и артефакт lcov.info. Blocking gate
-  # (≥ 97% lines) запланирован в v10.4.0. Документация: docs/COVERAGE.md.
+  # **Non-blocking** до PR-11 (≥ 97% gate). Документация: docs/COVERAGE.md.
+  #
+  # PR-9: добавлен upload в codecov.io для coverage badge в README.
+  # Требует CODECOV_TOKEN secret (опционально — если нет, badge покажет "unknown").
   coverage:
-    name: Coverage baseline (cargo-llvm-cov, non-blocking)
+    name: Coverage (cargo-llvm-cov + codecov upload)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -415,22 +417,29 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-cov
 
       - name: Install cargo-llvm-cov
-        # v10.4.3: `cargo install cargo-llvm-cov --locked` вместо
-        # `taiki-e/install-action@v2` — убирает dependabot-баг
-        # "install-action: no tool specified" (warning на каждом run).
-        # Использует официальный cargo registry вместо third-party action.
-        # ~30 секунд на холодную установку (кэшируется через Swatinem cache).
         run: cargo install cargo-llvm-cov --locked
 
       - name: Run coverage
-        # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97%.
-        # LCOV-формат для возможной интеграции с codecov.io в будущем.
+        # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97% (PR-11).
+        # LCOV-формат для codecov.io upload.
         run: |
           cargo llvm-cov \
             --features kafka \
             --workspace \
             --lcov --output-path lcov.info \
             --summary-only 2>&1 | tee coverage-summary.txt
+
+      - name: Upload coverage to codecov.io
+        # Требует CODECOV_TOKEN secret (настраивается через codecov.io интеграцию).
+        # Если secret не настроен — job всё равно проходит (continue-on-error).
+        if: always()
+        continue-on-error: true
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./lcov.info
+          flags: unit
+          fail_ci_if_error: false
+          verbose: false
 
       - name: Upload coverage artifacts
         if: always()

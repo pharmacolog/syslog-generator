@@ -22,5 +22,5 @@ pub use config::{
 };
 pub use core::{
     create_dispatcher, default_values, generate_message, generate_message_with_format, load_schema,
-    load_templates, run_phase_multi, run_profile,
+    load_templates, run_phase_multi, run_profile, PhaseContext,
 };

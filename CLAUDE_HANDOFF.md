@@ -1,6 +1,8 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-15. Текущая версия: **v10.7.9** (patch-release: PR-7 rand 0.10 миграция — `from_os_rng()` → `from_rng()` через `rand::rng()` thread-local, `random_range` через `RngExt` trait; + CI infra fix: macos job извлечён в отдельный `test-macos` non-blocking из-за GH Actions infrastructure issue с зависанием macos runners). Веха F закрыта на v10.7.1.
+Дата: 2026-07-15. Текущая версия: **v10.7.10** (patch-release: PR-9 README overhaul + SSDLC baseline — полностью переписан README по best practices с 11 бейджами, SECURITY.md/CONTRIBUTING.md/CODE_OF_CONDUCT.md, scripts/quality-gates.sh, codecov.yml для coverage badge, benches/hot_path.rs для per-msg perf baseline). Веха F закрыта на v10.7.1.
+
+**Активные направления (PR-10..PR-12):** Performance audit (PR-10), Test coverage ≥97% + gate (PR-11), Security hardening (PR-12). Все PR следуют процессу release-train: feature → dev → release → main → tag.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

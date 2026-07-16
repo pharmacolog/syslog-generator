@@ -1,0 +1,59 @@
+# codecov.yml — codecov.io configuration.
+#
+# Используется codecov-action/codecov-benchmark-action для upload coverage.
+# URL: https://codecov.io/gh/pharmacolog/syslog-generator
+# Badge в README: codecov/c/github/pharmacolog/syslog-generator
+#
+# PR-9: coverage badge (через codecov.io). Альтернатива — shields.io endpoint
+# с codecov API, но codecov-action проще и нативнее.
+
+codecov:
+  # Required: код coverage не падает ниже target (PR-11 target: 97%).
+  # Пока не enforced (PR-11) — soft target.
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 1%   # PR не должен уменьшать coverage более чем на 1%
+        if_ci_failed: error
+        only_pulls: false
+    patch:
+      default:
+        target: 85%   # новый код в PR должен быть покрыт ≥ 85%
+        threshold: 5%
+
+  # Notify в PR через GitHub Status API.
+  notify:
+    after_n_builds: 2  # ubuntu + kafka
+    wait_for_ci: true
+
+# Что НЕ покрывать (CI-артефакты, examples).
+ignore:
+  - "examples/**"
+  - "benches/**"
+  - "fuzz/**"
+  - "tests/**"
+  - "**/tests.rs"
+  - "src/main.rs"          # только CLI entrypoint
+  - "src/payload_proptests.rs"  # тесты (#[cfg(test)])
+  - "**/mod.rs" if has #[cfg(test)]  # internal mod tests
+
+# Flags — для аннотаций в PR.
+flags:
+  unit:
+    paths:
+      - src/
+    carryforward: true
+  integration:
+    paths:
+      - src/
+      - tests/
+    carryforward: true
+
+# Комментарии в PR.
+comment:
+  layout: "header, diff, flags, components, files, footer"
+  behavior: default
+  require_changes: true   # не комментировать если нет изменений
+  require_base: false      # сравнивать с base branch
+  require_head: true       # сравнивать с HEAD

@@ -1,6 +1,56 @@
 
 # Changelog
 
+## v10.7.12 - 2026-07-16
+
+**Patch-release (PR-11): Test coverage + gate + badge.**
+
+### Added (tests)
+
+- **19 новых тестов в `src/validate.rs`** — покрывают ValidationError variants,
+  которые были в dead-code зоне: KafkaTopicRequired / InvalidKafkaCompression /
+  InvalidKafkaAcks (cfg-gated под kafka feature), InvalidFileRotation,
+  InvalidReconnectBackoffRange, CefConfigMissing / LeefConfigMissing,
+  InvalidCefSeverity, InvalidCipherSuite, NegativeLoadShapeRate.
+- **7 тестов в `src/transport/tcp.rs`** — end-to-end TCP sender (NonTransparent
+  framing, OctetCounting framing, shutdown handling).
+- **2 теста в `src/transport/udp.rs`** — UDP sender end-to-end delivery + shutdown.
+- **4 теста в `src/format/raw.rs`** — passthrough, empty msg, header ignore, binary data.
+- **8 тестов в `src/format/rfc3164.rs`** — TAG format, PRIVAL, hostname/app fallback.
+- **9 тестов в `src/generator/core.rs`** — PhaseContext caching, pick_template_compiled,
+  dispatcher variants, legacy generate_message.
+
+### Coverage
+
+- **TOTAL: 87.94% lines** (1382 regions uncovered of 11530).
+- Покрытые модули 100%: format/raw, format/cef, format/leef, template.
+- Покрытые модули >95%: format/rfc3164 (99.48%), format/json_lines (99.69%),
+  format/rfc5424 (95.65%), transport/udp (98.75%).
+- Непокрытые (исключены в codecov.yml): main.rs (CLI), payload_proptests.rs
+  (test-only), transport/tls.rs (требует реальных сертификатов),
+  transport/kafka.rs (feature-gated, требует Kafka broker).
+
+### Changed (CI)
+
+- **Coverage gate blocking** — CI теперь падает если coverage < 87%.
+  Команда: `cargo llvm-cov --features kafka,test-helpers --workspace
+  --all-targets --fail-under-lines=87`.
+- **codecov.yml** — target 87% project + 80% patch (новый код в PR).
+  Ignore list: examples, benches, fuzz, tests, main.rs, payload_proptests.rs.
+- Coverage badge: https://img.shields.io/codecov/c/github/pharmacolog/syslog-generator
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: 374 passed (277 unit + 86 integration + 11 n7)
+- Coverage: 87.94% lines (≥ 87% gate ✅)
+
+Refs: PLAN-v10.0.0.md, docs/COVERAGE.md, аудит v10.7.2.
+
 ## v10.7.11 - 2026-07-16
 
 **Patch-release (PR-10): hot-path performance optimizations (-47%).**

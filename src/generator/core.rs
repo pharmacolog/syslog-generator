@@ -3,8 +3,8 @@ use crate::format::{protobuf::serialize_protobuf_like, Format, FormatContext, Fo
 use crate::generator::config::{Phase, Profile, TargetConfig};
 use crate::observability::metrics::Metrics;
 use crate::schema::Schema;
-use crate::template;
 use crate::shutdown::{graceful_drain_wait, shutdown_listener};
+use crate::template;
 use crate::template::render_template;
 use crate::transport::file::{target_sender_file_with_rotation, RotationConfig};
 #[cfg(feature = "kafka")]
@@ -55,11 +55,7 @@ pub fn default_values(
     // PR-10: уменьшен HashMap capacity. Если referenced_fakers == None —
     // все 9 fakers (capacity 17). Если Some(set) — только referenced
     // (capacity = 9 + 9 - len(set) = лучше).
-    let faker_count = ctx
-        .referenced_fakers
-        .as_ref()
-        .map(|s| s.len())
-        .unwrap_or(9);
+    let faker_count = ctx.referenced_fakers.as_ref().map(|s| s.len()).unwrap_or(9);
     let mut m = HashMap::with_capacity(8 + faker_count);
     // Статические литералы (3 entries).
     m.insert("real_hostname".to_string(), "localhost".to_string());
@@ -79,7 +75,15 @@ pub fn default_values(
     // PR-10: faker keys pre-built в PhaseContext (избегаем 9× format!).
     // PR-10: skip unreferenced fakers (~120-160 ns/msg savings).
     const FAKER_KIND_NAMES: &[&str] = &[
-        "ipv4", "ipv6", "mac", "uuid", "hostname", "username", "user_agent", "url", "http_status",
+        "ipv4",
+        "ipv6",
+        "mac",
+        "uuid",
+        "hostname",
+        "username",
+        "user_agent",
+        "url",
+        "http_status",
     ];
     match &ctx.referenced_fakers {
         Some(referenced) => {
@@ -183,9 +187,13 @@ fn generate_message_with_format_inner(
     let tpl: &template::CompiledTemplate = if ctx.compiled_templates.is_empty() {
         &ctx.compiled_fallback
     } else {
-        pick_template_compiled(&ctx.compiled_templates, phase.template_weights.as_deref(), &mut rng)
-            .map(|arc| arc.as_ref())
-            .unwrap_or(ctx.compiled_fallback.as_ref())
+        pick_template_compiled(
+            &ctx.compiled_templates,
+            phase.template_weights.as_deref(),
+            &mut rng,
+        )
+        .map(|arc| arc.as_ref())
+        .unwrap_or(ctx.compiled_fallback.as_ref())
     };
     if phase.format_type() == "protobuf" {
         return Ok(serialize_protobuf_like(
@@ -258,9 +266,13 @@ pub fn generate_message_with_format(
     let tpl: &template::CompiledTemplate = if ctx.compiled_templates.is_empty() {
         &ctx.compiled_fallback
     } else {
-        pick_template_compiled(&ctx.compiled_templates, phase.template_weights.as_deref(), &mut rng)
-            .map(|arc| arc.as_ref())
-            .unwrap_or(ctx.compiled_fallback.as_ref())
+        pick_template_compiled(
+            &ctx.compiled_templates,
+            phase.template_weights.as_deref(),
+            &mut rng,
+        )
+        .map(|arc| arc.as_ref())
+        .unwrap_or(ctx.compiled_fallback.as_ref())
     };
     if matches!(format_kind, FormatKind::Protobuf(_)) {
         return Ok(serialize_protobuf_like(
@@ -352,7 +364,8 @@ impl PhaseContext {
 
         // PR-10: pre-compile ВСЕ templates. `Vec<Arc<CompiledTemplate>>` — Arc
         // cheap clone если понадобится шарить (не критично пока, но безопасно).
-        let mut compiled_templates: Vec<Arc<template::CompiledTemplate>> = Vec::with_capacity(templates.len());
+        let mut compiled_templates: Vec<Arc<template::CompiledTemplate>> =
+            Vec::with_capacity(templates.len());
         for t in &templates {
             compiled_templates.push(Arc::new(template::CompiledTemplate::compile(t)));
         }
@@ -364,9 +377,18 @@ impl PhaseContext {
         // PR-10: pre-build faker keys. Используем массив `String` чтобы
         // избежать 9× `format!("faker.{kind}")` per message.
         const FAKER_KIND_NAMES: &[&str] = &[
-            "ipv4", "ipv6", "mac", "uuid", "hostname", "username", "user_agent", "url", "http_status",
+            "ipv4",
+            "ipv6",
+            "mac",
+            "uuid",
+            "hostname",
+            "username",
+            "user_agent",
+            "url",
+            "http_status",
         ];
-        let faker_keys: [String; 9] = std::array::from_fn(|i| format!("faker.{}", FAKER_KIND_NAMES[i]));
+        let faker_keys: [String; 9] =
+            std::array::from_fn(|i| format!("faker.{}", FAKER_KIND_NAMES[i]));
 
         // PR-10: detect referenced fakers. Scan всех templates (body + syslog fields)
         // для `{{faker.*}}` placeholders. Только referenced генерируются.
@@ -565,33 +587,34 @@ fn wrap_syslog(
     // PR-10: hot path. Если cached header есть (все syslog поля static
     // кроме возможно procid) — используем pre-rendered strings, re-render
     // только procid если он содержит {{pid}}.
-    let (hostname, app_name, procid, msgid, structured_data) = match ctx.cached_syslog_header.as_ref() {
-        Some(cached) => {
-            let procid = if cached.procid_is_static {
-                cached.procid.clone()
-            } else {
-                // Только procid содержит {{pid}} — re-render.
-                render_template(&s.procid, values)
-            };
-            (
-                cached.hostname.clone(),
-                cached.app_name.clone(),
-                procid,
-                cached.msgid.clone(),
-                cached.structured_data.clone(),
-            )
-        }
-        None => {
-            // Cache miss — re-render все 5 полей (старый путь).
-            (
-                render_template(&s.hostname, values),
-                render_template(&s.app_name, values),
-                render_template(&s.procid, values),
-                render_template(&s.msgid, values),
-                render_template(&s.structured_data, values),
-            )
-        }
-    };
+    let (hostname, app_name, procid, msgid, structured_data) =
+        match ctx.cached_syslog_header.as_ref() {
+            Some(cached) => {
+                let procid = if cached.procid_is_static {
+                    cached.procid.clone()
+                } else {
+                    // Только procid содержит {{pid}} — re-render.
+                    render_template(&s.procid, values)
+                };
+                (
+                    cached.hostname.clone(),
+                    cached.app_name.clone(),
+                    procid,
+                    cached.msgid.clone(),
+                    cached.structured_data.clone(),
+                )
+            }
+            None => {
+                // Cache miss — re-render все 5 полей (старый путь).
+                (
+                    render_template(&s.hostname, values),
+                    render_template(&s.app_name, values),
+                    render_template(&s.procid, values),
+                    render_template(&s.msgid, values),
+                    render_template(&s.structured_data, values),
+                )
+            }
+        };
     let header = Header {
         facility: s.facility,
         severity: s.severity,

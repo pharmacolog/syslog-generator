@@ -35,7 +35,7 @@ fn severity_to_level(severity: u8) -> &'static str {
         5 => "Notice",
         6 => "Informational",
         7 => "Debug",
-        _ => unreachable!(),
+        _ => "Unknown", // severity вне 0..=7; default к Unknown.
     }
 }
 
@@ -76,7 +76,8 @@ pub fn build(
 
     // serde_json::to_string на BTreeMap даёт стабильный порядок ключей
     // (BTreeMap iter — отсортирован). Плюс корректное JSON-экранирование.
-    let mut out = serde_json::to_string(&obj).expect("BTreeMap<String,String> всегда сериализуем");
+    // BTreeMap<String,String> всегда сериализуем; если ошибка — fallback "{}".
+    let mut out = serde_json::to_string(&obj).unwrap_or_else(|_| "{}".to_string());
     out.push('\n');
     out.into_bytes()
 }

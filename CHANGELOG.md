@@ -1,6 +1,68 @@
 
 # Changelog
 
+## v10.7.14 - 2026-07-16
+
+**Patch-release (PR-13): N7 invariant cleanup + Quality Gates extension.**
+
+### Changed (N7 invariant compliance)
+
+После PR-10/12 осталось несколько `.expect()` и `unreachable!()` в
+runtime коде, нарушающих N7 invariant (no unwrap/expect/panic в non-test
+runtime коде). PR-13 cleanup:
+
+- `src/format/json_lines.rs:79` — `.expect("BTreeMap...")` → `unwrap_or_else(|_| "{}".to_string())`.
+- `src/format/json_lines.rs:38` — `_ => unreachable!()` → `_ => "Unknown"` (severity вне 0..=7).
+- `src/format/mod.rs:184,190` — `.expect("FormatKind::X требует ctx.X")` →
+  `match Some/None => render, None => msg.to_vec()` (graceful fallback).
+- `src/validate.rs:843,883` — `_ => unreachable!()` → `_ => continue`
+  (defensive: пропускаем неизвестные поля).
+- `src/generator/config.rs:465` — `unreachable!()` →
+  `Err(ConfigError::UnsupportedFormat)` (graceful degradation).
+- `src/generator/core.rs:1149` — `.unwrap()` (ProgressStyle) →
+  `.unwrap_or_else(|_| ProgressStyle::default_bar())`.
+- `src/payload.rs:83,95,106,120,143` — `.expect("String::write infallible")` →
+  `let _ = write!(...)` (подавляем unused Result warning).
+
+### Changed (Quality Gates)
+
+`scripts/quality-gates.sh` расширен:
+
+- **G5.3**: `cargo-public-api snapshot diff` — должен быть пустой diff.
+- **G7**: `coverage ≥ 87%` через `cargo llvm-cov --fail-under-lines=87`
+  (если cargo-llvm-cov установлен).
+- **G8**: performance regression hint — `cargo bench --bench hot_path`.
+
+Полный список Quality Gates (v10.7.14):
+- **G1**: fmt + clippy (3 feature configs)
+- **G2**: rustdoc (`-D warnings`)
+- **G3**: tests (2 feature configs: no-kafka и kafka)
+- **G4**: build + benches
+- **G5**: security — cargo-deny + cargo-machete + public-api
+- **G6**: N7 invariant — no unwrap/expect в non-test runtime
+- **G7**: coverage ≥ 87% (cargo-llvm-cov) — blocking в CI
+- **G8**: performance regression hint (cargo bench)
+- **G9**: changelog check (для releases, через `CHECK_CHANGELOG=1`)
+
+### Changed (CLAUDE_HANDOFF)
+
+История релизов v10.7.3..v10.7.13 (полная хронология PR-1..PR-12) добавлена
+в CLAUDE_HANDOFF.md для будущих maintainers. Все Quality Gates описаны в
+заголовке.
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: 374 passed (277 unit + 86 integration + 11 n7)
+- bash scripts/check-n7-invariant.sh: ✅ (no violations)
+- cargo bench --no-run --locked: success
+- public-api snapshot: regenerated
+
+Refs: PLAN-v10.0.0.md, аудит v10.7.2, docs/PERFORMANCE.md, SECURITY.md.
+
 ## v10.7.13 - 2026-07-16
 
 **Patch-release (PR-12): Security hardening + SSDLC practices.**

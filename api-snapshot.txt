@@ -876,7 +876,7 @@ pub fn syslog_generator::config::load_profile_from_path(&std::path::Path) -> cor
 pub fn syslog_generator::config::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub mod syslog_generator::core
 pub fn syslog_generator::core::create_dispatcher(&[syslog_generator::generator::config::TargetConfig], &str) -> alloc::vec::Vec<usize>
-pub fn syslog_generator::core::default_values(&syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+pub fn syslog_generator::core::default_values(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn syslog_generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
@@ -1820,6 +1820,11 @@ pub fn syslog_generator::generator::config::load_profile_from_path(&std::path::P
 pub fn syslog_generator::generator::config::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub mod syslog_generator::generator::core
 pub struct syslog_generator::generator::core::PhaseContext
+pub syslog_generator::generator::core::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
+pub syslog_generator::generator::core::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::generator::core::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
+pub syslog_generator::generator::core::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::generator::core::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::core::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::core::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
@@ -1857,8 +1862,50 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::cor
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
+pub struct syslog_generator::generator::core::SyslogHeaderParts
+pub syslog_generator::generator::core::SyslogHeaderParts::app_name: alloc::string::String
+pub syslog_generator::generator::core::SyslogHeaderParts::hostname: alloc::string::String
+pub syslog_generator::generator::core::SyslogHeaderParts::msgid: alloc::string::String
+pub syslog_generator::generator::core::SyslogHeaderParts::procid: alloc::string::String
+pub syslog_generator::generator::core::SyslogHeaderParts::procid_is_static: bool
+pub syslog_generator::generator::core::SyslogHeaderParts::structured_data: alloc::string::String
+impl core::fmt::Debug for syslog_generator::generator::core::SyslogHeaderParts
+pub fn syslog_generator::generator::core::SyslogHeaderParts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::generator::core::SyslogHeaderParts
+impl core::marker::Send for syslog_generator::generator::core::SyslogHeaderParts
+impl core::marker::Sync for syslog_generator::generator::core::SyslogHeaderParts
+impl core::marker::Unpin for syslog_generator::generator::core::SyslogHeaderParts
+impl core::marker::UnsafeUnpin for syslog_generator::generator::core::SyslogHeaderParts
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::core::SyslogHeaderParts
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::core::SyslogHeaderParts
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::core::SyslogHeaderParts where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::core::SyslogHeaderParts where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::core::SyslogHeaderParts where U: core::convert::From<T>
+pub fn syslog_generator::generator::core::SyslogHeaderParts::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::core::SyslogHeaderParts where U: core::convert::Into<T>
+pub type syslog_generator::generator::core::SyslogHeaderParts::Error = core::convert::Infallible
+pub fn syslog_generator::generator::core::SyslogHeaderParts::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::core::SyslogHeaderParts where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::core::SyslogHeaderParts::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::core::SyslogHeaderParts::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for syslog_generator::generator::core::SyslogHeaderParts where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::core::SyslogHeaderParts::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::core::SyslogHeaderParts where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::SyslogHeaderParts::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::core::SyslogHeaderParts where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::SyslogHeaderParts::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for syslog_generator::generator::core::SyslogHeaderParts
+pub fn syslog_generator::generator::core::SyslogHeaderParts::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::core::SyslogHeaderParts where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::SyslogHeaderParts::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::core::SyslogHeaderParts::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::core::SyslogHeaderParts
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::core::SyslogHeaderParts
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::SyslogHeaderParts where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::SyslogHeaderParts where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::core::SyslogHeaderParts::vzip(self) -> V
 pub fn syslog_generator::generator::core::create_dispatcher(&[syslog_generator::generator::config::TargetConfig], &str) -> alloc::vec::Vec<usize>
-pub fn syslog_generator::generator::core::default_values(&syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+pub fn syslog_generator::generator::core::default_values(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn syslog_generator::generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::generate_message_with_format(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
@@ -2052,6 +2099,11 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::generator::PhaseContext
+pub syslog_generator::generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
+pub syslog_generator::generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
+pub syslog_generator::generator::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
@@ -2380,7 +2432,7 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::TargetConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::TargetConfig::vzip(self) -> V
 pub fn syslog_generator::generator::create_dispatcher(&[syslog_generator::generator::config::TargetConfig], &str) -> alloc::vec::Vec<usize>
-pub fn syslog_generator::generator::default_values(&syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+pub fn syslog_generator::generator::default_values(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn syslog_generator::generator::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::generate_message_with_format(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::load_profile_from_json_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
@@ -5268,6 +5320,11 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::PhaseContext
+pub syslog_generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
+pub syslog_generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
+pub syslog_generator::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
@@ -5883,7 +5940,7 @@ pub fn syslog_generator::build_rfc5424(&syslog_generator::format::Header, &[u8])
 pub fn syslog_generator::build_tls_connector(&syslog_generator::transport::tls::TlsParams) -> anyhow::Result<alloc::sync::Arc<rustls::client::client_conn::ClientConfig>>
 pub fn syslog_generator::create_dispatcher(&[syslog_generator::generator::config::TargetConfig], &str) -> alloc::vec::Vec<usize>
 pub fn syslog_generator::create_metrics() -> core::result::Result<syslog_generator::observability::metrics::Metrics, syslog_generator::error::MetricsError>
-pub fn syslog_generator::default_values(&syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+pub fn syslog_generator::default_values(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn syslog_generator::derive_rng(core::option::Option<u64>, usize) -> rand::rngs::std::StdRng
 pub fn syslog_generator::ensure_rustls_provider_for_tests()
 pub fn syslog_generator::escape_sd_value(&str) -> alloc::string::String

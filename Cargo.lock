@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "syslog-generator"
-version = "10.7.11"
+version = "10.7.12"
 dependencies = [
  "anyhow",
  "bytes",

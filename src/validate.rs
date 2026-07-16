@@ -1487,4 +1487,171 @@ mod tests {
             .iter()
             .any(|e| matches!(e, ValidationError::NegativeLoadShapeRate { .. })));
     }
+
+    /// PR-16 (coverage): leef_field_validation_catches_empty_fields.
+    /// `validate_leef` field-loop body was uncovered (14 lines). Тест
+    /// покрывает оба случая (vendor="" и product="" одновременно).
+    #[test]
+    fn leef_field_validation_catches_empty_fields() {
+        let mut p = valid_profile();
+        p.phases[0].format = Some("leef".into());
+        p.phases[0].leef = Some(crate::generator::config::LeefConfig {
+            vendor: "".into(),
+            product: "".into(),
+            version: "1".into(),
+            event_id: "evt1".into(),
+            attributes: None,
+        });
+        let errs = validate_profile(&p);
+        let empty_fields: Vec<_> = errs
+            .iter()
+            .filter_map(|e| match e {
+                ValidationError::LeefFieldEmpty { field, .. } => Some(field.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            empty_fields.contains(&"vendor".to_string()),
+            "expected empty vendor error, got {:?}",
+            empty_fields
+        );
+        assert!(
+            empty_fields.contains(&"product".to_string()),
+            "expected empty product error, got {:?}",
+            empty_fields
+        );
+    }
+
+    /// PR-16 (coverage): load_shape_sine_validates_period_and_rates.
+    /// `validate_load_shape` body for `Sine` variant was uncovered (13 lines).
+    #[test]
+    fn load_shape_sine_validates_period_and_rates() {
+        let mut p = valid_profile();
+        p.phases[0].load_shape = Some(crate::load_shape::LoadShape::Sine {
+            min_rate: -1.0,
+            max_rate: 100.0,
+            period_secs: 0.0,
+        });
+        let errs = validate_profile(&p);
+        assert!(
+            errs.iter().any(|e| matches!(e, ValidationError::NegativeLoadShapeRate { field, .. } if field == "min_rate")),
+            "expected negative min_rate error"
+        );
+        assert!(
+            errs.iter().any(|e| matches!(e, ValidationError::NonPositiveLoadShapePeriod { field, .. } if field == "period_secs")),
+            "expected non-positive period_secs error"
+        );
+    }
+
+    /// PR-16 (coverage): load_shape_constant_rejects_negative_rate.
+    /// `LoadShape::Constant { rate: None }` body was covered, but `rate: Some(-N)`
+    /// branch (line 933-936) was not.
+    #[test]
+    fn load_shape_constant_rejects_negative_rate() {
+        let mut p = valid_profile();
+        p.phases[0].load_shape = Some(crate::load_shape::LoadShape::Constant { rate: Some(-5.0) });
+        let errs = validate_profile(&p);
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::NegativeLoadShapeRate { field, .. } if field == "rate"
+        )));
+    }
+
+    /// PR-16 (coverage): load_shape_burst_rejects_non_positive_every_secs.
+    /// `validate_load_shape` Burst body for `every_secs` check was uncovered.
+    #[test]
+    fn load_shape_burst_rejects_non_positive_every_secs() {
+        let mut p = valid_profile();
+        p.phases[0].load_shape = Some(crate::load_shape::LoadShape::Burst {
+            base_rate: 10.0,
+            burst_rate: 100.0,
+            every_secs: 0.0,
+            burst_secs: 1.0,
+        });
+        let errs = validate_profile(&p);
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::NonPositiveLoadShapePeriod { field, .. } if field == "every_secs"
+        )));
+    }
+
+    /// PR-16 (coverage): tls_client_key_file_not_found_emits_error.
+    /// `validate_target` TLS branch for missing client key file was uncovered.
+    #[test]
+    fn tls_client_key_file_not_found_emits_error() {
+        let mut p = valid_profile();
+        p.targets[0].transport = "tls".into();
+        p.targets[0].tls_client_key_file = Some("/no/such/key.pem".into());
+        let errs = validate_profile(&p);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::TlsClientKeyFileNotFound { .. })));
+    }
+
+    /// PR-16 (coverage): rejects_negative_template_weight.
+    /// `validate_phase` body for negative `template_weights[i]` was uncovered.
+    #[test]
+    fn rejects_negative_template_weight() {
+        let mut p = valid_profile();
+        p.phases[0].templates = vec!["a".into(), "b".into()];
+        p.phases[0].template_weights = Some(vec![-1.0, 2.0]);
+        let errs = validate_profile(&p);
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidTemplateWeight { value, .. }
+                if (*value - (-1.0_f64)).abs() < f64::EPSILON
+        )));
+    }
+
+    /// PR-16 (coverage): rejects_zero_padding.
+    /// `validate_phase` body for `pad_to_bytes = Some(0)` was uncovered.
+    #[test]
+    fn rejects_zero_padding() {
+        let mut p = valid_profile();
+        p.phases[0].pad_to_bytes = Some(0);
+        let errs = validate_profile(&p);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::ZeroPadding { .. })));
+    }
+
+    /// PR-16 (coverage): rejects_bad_shutdown_mode.
+    /// `validate_target` body for invalid `shutdown.mode` was uncovered.
+    #[test]
+    fn rejects_bad_shutdown_mode() {
+        let mut p = valid_profile();
+        p.shutdown.mode = "kill".into();
+        let errs = validate_profile(&p);
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidShutdownMode { value, .. } if value == "kill"
+        )));
+    }
+
+    /// PR-16 (coverage): rejects_empty_phase_name (whitespace-only).
+    /// `validate_phase` body for `name.trim().is_empty()` was uncovered.
+    #[test]
+    fn rejects_empty_phase_name() {
+        let mut p = valid_profile();
+        p.phases[0].name = "   ".into();
+        let errs = validate_profile(&p);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::EmptyPhaseName { .. })));
+    }
+
+    /// PR-16 (coverage): reconnect_multiplier_zero_rejected.
+    /// `validate_target` body for invalid `reconnect_multiplier` was uncovered
+    /// at the unit-test level (integration test covers it).
+    #[test]
+    fn reconnect_multiplier_zero_rejected() {
+        let mut p = valid_profile();
+        p.targets[0].reconnect_multiplier = Some(0.5);
+        let errs = validate_profile(&p);
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidReconnectMultiplier { value, .. }
+                if (*value - 0.5_f64).abs() < f64::EPSILON
+        )));
+    }
 }

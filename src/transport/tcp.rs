@@ -284,4 +284,47 @@ mod tests {
             "sender не должен возвращать error после drain"
         );
     }
+
+    /// PR-16 (coverage): record_reconnect_increments_with_target_label.
+    /// `record_reconnect` нужно покрыть в unit-test (раньше только integration).
+    #[test]
+    fn record_reconnect_increments_metric_with_target_label() {
+        use crate::observability::metrics::create_metrics;
+        let metrics = create_metrics().unwrap();
+        record_reconnect(&metrics, "tcp", "127.0.0.1:514");
+        record_reconnect(&metrics, "tcp", "127.0.0.1:514");
+        record_reconnect(&metrics, "udp", "127.0.0.1:514");
+        // reconnects_total{transport="tcp", target="127.0.0.1:514"} = 2.
+        let m = metrics
+            .reconnects_total
+            .get_metric_with_label_values(&["tcp", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 2.0);
+        let m = metrics
+            .reconnects_total
+            .get_metric_with_label_values(&["udp", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 1.0);
+    }
+
+    /// PR-16 (coverage): record_error_increments_errors_total.
+    /// `record_error` нужно покрыть unit-тестом.
+    #[tokio::test]
+    async fn record_error_increments_errors_total_per_target() {
+        use crate::observability::metrics::create_metrics;
+        let metrics = create_metrics().unwrap();
+        record_error(&metrics, "127.0.0.1:514").await;
+        record_error(&metrics, "127.0.0.1:514").await;
+        record_error(&metrics, "127.0.0.1:515").await;
+        let m = metrics
+            .errors_total
+            .get_metric_with_label_values(&["127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 2.0);
+        let m = metrics
+            .errors_total
+            .get_metric_with_label_values(&["127.0.0.1:515"])
+            .unwrap();
+        assert_eq!(m.get(), 1.0);
+    }
 }

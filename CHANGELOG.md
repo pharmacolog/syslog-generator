@@ -1,6 +1,55 @@
 
 # Changelog
 
+## v10.7.11 - 2026-07-16
+
+**Patch-release (PR-10): hot-path performance optimizations (-47%).**
+
+### Performance
+
+- **`generate_message_with_format`: 3.79 µs/msg → 2.01 µs/msg** (-47%, target ≤ 2 µs ✅).
+- **Throughput: 264 Kelem/s → 498 Kelem/s** (+89%).
+
+### Changed (PR-10)
+
+- **PhaseContext расширен** (PR-10.1):
+  - `compiled_templates: Vec<Arc<CompiledTemplate>>` — pre-compile user templates
+    ОДИН раз в setup. `CompiledTemplate::compile()` стоит ~80-200 ns/call
+    (Vec alloc + String allocs), 6 вызовов per message → ~480-1380 ns/msg savings.
+  - `compiled_fallback: Arc<CompiledTemplate>` — pre-compiled default template.
+  - `cached_syslog_header: Option<Arc<SyslogHeaderParts>>` — pre-rendered syslog fields
+    (hostname/app_name/msgid/structured_data) если они НЕ содержат per-message
+    placeholders. Устраняет 4× re-render per message → ~500-1000 ns/msg.
+  - `faker_keys: [String; 9]` — pre-built keys (avoid 9× `format!` per message).
+  - `referenced_fakers: Option<HashSet<&'static str>>` — scan всех templates в setup,
+    генерируются только referenced fakers. Для bench профиля с 1-2 faker tokens
+    → ~120-160 ns/msg savings.
+- **`generate_message_with_format` оптимизирован** (PR-10.3):
+  - Pre-compiled body template: `tpl.render(&values)` (no compile per msg).
+  - Pre-rendered syslog header (если cache есть): only procid re-render.
+  - `pick_template_compiled` вместо legacy `pick_template`.
+- **`default_values` обновлён** (PR-10.2): использует pre-built faker keys + skip
+  unreferenced fakers. Принимает `&PhaseContext` вместо `&Phase`.
+
+### Backward-compat
+
+- `generate_message(phase, seq)` сохранён как legacy API. Создаёт локальный
+  `PhaseContext::resolve(phase)?` и вызывает `generate_message_with_format_inner`.
+  Этот путь не hot path — overhead one-shot, нормально для legacy external API users.
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: 339 passed
+- cargo bench --bench hot_path -- --quick: rfc5424_with_faker = **2.0090 µs/msg** (target ≤ 2 µs ✅)
+- public-api snapshot: regenerated
+
+Refs: PLAN-v10.0.0.md, docs/PERFORMANCE.md, аудит v10.7.2 (PR-10 subagent analysis).
+
 ## v10.7.10 - 2026-07-15
 
 **Patch-release (PR-9): README overhaul + SSDLC baseline.**

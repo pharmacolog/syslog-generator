@@ -1328,4 +1328,142 @@ mod tests {
             .iter()
             .any(|e| matches!(e, ValidationError::InvalidAnomalyPacketLossPercent { .. })));
     }
+
+    /// PR-11: тесты на ValidationError variants которые не покрыты основными тестами.
+    /// Каждый variant должен иметь хотя бы один happy-path test.
+
+    #[cfg(feature = "kafka")]
+    #[test]
+    fn kafka_topic_required_when_kafka_transport() {
+        let mut profile = valid_profile();
+        profile.targets[0].transport = "kafka".to_string();
+        profile.targets[0].kafka_topic = None; // required
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::KafkaTopicRequired { .. })));
+    }
+
+    #[cfg(feature = "kafka")]
+    #[test]
+    fn invalid_kafka_compression_value() {
+        let mut profile = valid_profile();
+        profile.targets[0].transport = "kafka".to_string();
+        profile.targets[0].kafka_topic = Some("test".to_string());
+        profile.targets[0].kafka_compression = Some("brotli".to_string()); // invalid
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidKafkaCompression { .. })));
+    }
+
+    #[cfg(feature = "kafka")]
+    #[test]
+    fn invalid_kafka_acks_value() {
+        let mut profile = valid_profile();
+        profile.targets[0].transport = "kafka".to_string();
+        profile.targets[0].kafka_topic = Some("test".to_string());
+        profile.targets[0].kafka_acks = Some("2".to_string()); // invalid (допустимо 0, 1, all)
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidKafkaAcks { .. })));
+    }
+
+    #[test]
+    fn invalid_file_rotation_size_zero() {
+        let mut profile = valid_profile();
+        profile.targets[0].file_rotation_size_mb = Some(0); // invalid
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidFileRotation { .. })));
+    }
+
+    #[test]
+    fn invalid_file_rotation_interval_zero() {
+        let mut profile = valid_profile();
+        profile.targets[0].file_rotation_interval_secs = Some(0);
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidFileRotation { .. })));
+    }
+
+    #[test]
+    fn invalid_reconnect_backoff_range() {
+        let mut profile = valid_profile();
+        profile.targets[0].reconnect_max_backoff_ms = Some(50);
+        profile.targets[0].reconnect_initial_backoff_ms = Some(100); // max < initial — invalid
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidReconnectBackoffRange { .. })));
+    }
+
+    #[test]
+    fn invalid_cef_config_missing_required_fields() {
+        let mut profile = valid_profile();
+        profile.phases[0].format = Some("cef".to_string());
+        // Без cef config.
+        profile.phases[0].cef = None;
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::CefConfigMissing { .. })));
+    }
+
+    #[test]
+    fn invalid_leef_config_missing_required_fields() {
+        let mut profile = valid_profile();
+        profile.phases[0].format = Some("leef".to_string());
+        profile.phases[0].leef = None;
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::LeefConfigMissing { .. })));
+    }
+
+    #[test]
+    fn invalid_tls_cipher_suite_name() {
+        let mut profile = valid_profile();
+        profile.targets[0].transport = "tls".to_string();
+        profile.targets[0].tls_cipher_suites = Some(vec!["BOGUS_CIPHER".to_string()]);
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidCipherSuite { .. })));
+    }
+
+    #[test]
+    fn invalid_cef_severity_too_high() {
+        let mut profile = valid_profile();
+        profile.phases[0].format = Some("cef".to_string());
+        profile.phases[0].cef = Some(crate::generator::config::CefConfig {
+            device_vendor: "V".to_string(),
+            device_product: "P".to_string(),
+            device_version: "1".to_string(),
+            signature_id: "1".to_string(),
+            name: "n".to_string(),
+            severity: Some(99), // > 10, invalid
+            extensions: Some(std::collections::BTreeMap::new()),
+        });
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::InvalidCefSeverity { .. })));
+    }
+
+    #[test]
+    fn negative_load_shape_rate() {
+        let mut profile = valid_profile();
+        profile.phases[0].load_shape = Some(crate::load_shape::LoadShape::Linear {
+            start_rate: -10.0,
+            end_rate: 100.0,
+        });
+        let errs = validate_profile(&profile);
+        assert!(errs
+            .iter()
+            .any(|e| matches!(e, ValidationError::NegativeLoadShapeRate { .. })));
+    }
 }

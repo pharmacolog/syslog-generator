@@ -422,11 +422,14 @@ jobs:
       - name: Run coverage
         # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97% (PR-11).
         # LCOV-формат для codecov.io upload.
+        # PR-11 (v10.7.12): blocking coverage gate с `--fail-under-lines=87`.
+        # Текущее baseline (v10.7.11): 87.94% lines. При падении ниже 87% — job fails.
         run: |
           cargo llvm-cov \
-            --features kafka \
-            --workspace \
+            --features kafka,test-helpers \
+            --workspace --all-targets \
             --lcov --output-path lcov.info \
+            --fail-under-lines=87 \
             --summary-only 2>&1 | tee coverage-summary.txt
 
       - name: Upload coverage to codecov.io

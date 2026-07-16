@@ -713,7 +713,9 @@ pub async fn run_phase_multi(
                     // Читаем CA-файл заранее (валидация F13 уже проверила его наличие).
                     let ca_pem = match &target.tls_ca_file {
                         Some(path) => match std::fs::read(path) {
-                            Ok(bytes) => Some(bytes),
+                            // PR-12: оборачиваем в Zeroizing<Vec<u8>> чтобы
+                            // private data не утекала в core dumps / swap.
+                            Ok(bytes) => Some(zeroize::Zeroizing::new(bytes)),
                             Err(e) => {
                                 eprintln!("TLS ({addr}): не удалось прочитать CA-файл {path}: {e}");
                                 None
@@ -733,7 +735,11 @@ pub async fn run_phase_multi(
                                          handshake может не пройти"
                                     );
                                         }
-                                        (Some(cert), Some(key))
+                                        // PR-12: Zeroizing wrap.
+                                        (
+                                            Some(zeroize::Zeroizing::new(cert)),
+                                            Some(zeroize::Zeroizing::new(key)),
+                                        )
                                     }
                                     _ => (None, None),
                                 }
@@ -769,6 +775,15 @@ pub async fn run_phase_multi(
                         None => None,
                     };
                     if target.tls_insecure {
+                        // PR-12 (security hardening): structured warning через tracing
+                        // (SIEM-indexed) + eprintln (для CLI-only deployments без log shipper).
+                        tracing::warn!(
+                            target: "security",
+                            addr = %addr,
+                            phase = %phase.name,
+                            "tls_insecure=true: TLS certificate verification DISABLED — \
+                             трафик уязвим к MITM. Используйте tls_ca_file для self-signed CAs."
+                        );
                         eprintln!("⚠ TLS ({addr}): tls_insecure=true — проверка сертификата ОТКЛЮЧЕНА (небезопасно)");
                     }
                     let tls_params = crate::sender::TlsParams {

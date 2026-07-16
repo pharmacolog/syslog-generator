@@ -3141,10 +3141,10 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::file::RotationConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::file::RotationConfig::vzip(self) -> V
 pub struct syslog_generator::sender::TlsParams
-pub syslog_generator::sender::TlsParams::ca_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::sender::TlsParams::ca_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::sender::TlsParams::cipher_suites: core::option::Option<alloc::vec::Vec<rustls::suites::SupportedCipherSuite>>
-pub syslog_generator::sender::TlsParams::client_cert_pem: core::option::Option<alloc::vec::Vec<u8>>
-pub syslog_generator::sender::TlsParams::client_key_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::sender::TlsParams::client_cert_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
+pub syslog_generator::sender::TlsParams::client_key_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::sender::TlsParams::domain: alloc::string::String
 pub syslog_generator::sender::TlsParams::insecure: bool
 pub syslog_generator::sender::TlsParams::min_protocol: core::option::Option<syslog_generator::transport::tls::TlsVersion>
@@ -3489,10 +3489,10 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::tls::TlsVersion where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::tls::TlsVersion::vzip(self) -> V
 pub struct syslog_generator::transport::tls::TlsParams
-pub syslog_generator::transport::tls::TlsParams::ca_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::transport::tls::TlsParams::ca_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::transport::tls::TlsParams::cipher_suites: core::option::Option<alloc::vec::Vec<rustls::suites::SupportedCipherSuite>>
-pub syslog_generator::transport::tls::TlsParams::client_cert_pem: core::option::Option<alloc::vec::Vec<u8>>
-pub syslog_generator::transport::tls::TlsParams::client_key_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::transport::tls::TlsParams::client_cert_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
+pub syslog_generator::transport::tls::TlsParams::client_key_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::transport::tls::TlsParams::domain: alloc::string::String
 pub syslog_generator::transport::tls::TlsParams::insecure: bool
 pub syslog_generator::transport::tls::TlsParams::min_protocol: core::option::Option<syslog_generator::transport::tls::TlsVersion>
@@ -3717,10 +3717,10 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::TransportKind where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::TransportKind::vzip(self) -> V
 pub struct syslog_generator::transport::TlsParams
-pub syslog_generator::transport::TlsParams::ca_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::transport::TlsParams::ca_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::transport::TlsParams::cipher_suites: core::option::Option<alloc::vec::Vec<rustls::suites::SupportedCipherSuite>>
-pub syslog_generator::transport::TlsParams::client_cert_pem: core::option::Option<alloc::vec::Vec<u8>>
-pub syslog_generator::transport::TlsParams::client_key_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::transport::TlsParams::client_cert_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
+pub syslog_generator::transport::TlsParams::client_key_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::transport::TlsParams::domain: alloc::string::String
 pub syslog_generator::transport::TlsParams::insecure: bool
 pub syslog_generator::transport::TlsParams::min_protocol: core::option::Option<syslog_generator::transport::tls::TlsVersion>
@@ -3941,6 +3941,9 @@ pub syslog_generator::validate::ValidationError::TlsClientKeyFileNotFound
 pub syslog_generator::validate::ValidationError::TlsClientKeyFileNotFound::address: alloc::string::String
 pub syslog_generator::validate::ValidationError::TlsClientKeyFileNotFound::index: usize
 pub syslog_generator::validate::ValidationError::TlsClientKeyFileNotFound::path: alloc::string::String
+pub syslog_generator::validate::ValidationError::TlsInsecureEnabled
+pub syslog_generator::validate::ValidationError::TlsInsecureEnabled::address: alloc::string::String
+pub syslog_generator::validate::ValidationError::TlsInsecureEnabled::index: usize
 pub syslog_generator::validate::ValidationError::UnboundedPhase
 pub syslog_generator::validate::ValidationError::UnboundedPhase::index: usize
 pub syslog_generator::validate::ValidationError::UnboundedPhase::name: alloc::string::String
@@ -4731,6 +4734,9 @@ pub syslog_generator::ValidationError::TlsClientKeyFileNotFound
 pub syslog_generator::ValidationError::TlsClientKeyFileNotFound::address: alloc::string::String
 pub syslog_generator::ValidationError::TlsClientKeyFileNotFound::index: usize
 pub syslog_generator::ValidationError::TlsClientKeyFileNotFound::path: alloc::string::String
+pub syslog_generator::ValidationError::TlsInsecureEnabled
+pub syslog_generator::ValidationError::TlsInsecureEnabled::address: alloc::string::String
+pub syslog_generator::ValidationError::TlsInsecureEnabled::index: usize
 pub syslog_generator::ValidationError::UnboundedPhase
 pub syslog_generator::ValidationError::UnboundedPhase::index: usize
 pub syslog_generator::ValidationError::UnboundedPhase::name: alloc::string::String
@@ -5880,10 +5886,10 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::TargetConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::TargetConfig::vzip(self) -> V
 pub struct syslog_generator::TlsParams
-pub syslog_generator::TlsParams::ca_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::TlsParams::ca_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::TlsParams::cipher_suites: core::option::Option<alloc::vec::Vec<rustls::suites::SupportedCipherSuite>>
-pub syslog_generator::TlsParams::client_cert_pem: core::option::Option<alloc::vec::Vec<u8>>
-pub syslog_generator::TlsParams::client_key_pem: core::option::Option<alloc::vec::Vec<u8>>
+pub syslog_generator::TlsParams::client_cert_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
+pub syslog_generator::TlsParams::client_key_pem: core::option::Option<zeroize::Zeroizing<alloc::vec::Vec<u8>>>
 pub syslog_generator::TlsParams::domain: alloc::string::String
 pub syslog_generator::TlsParams::insecure: bool
 pub syslog_generator::TlsParams::min_protocol: core::option::Option<syslog_generator::transport::tls::TlsVersion>

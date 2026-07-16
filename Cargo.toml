@@ -71,6 +71,9 @@ rand = { version = "0.10", default-features = false, features = ["std", "std_rng
 regex-syntax = "0.8"
 jsonschema = "0.47"
 bytes = "1"
+# PR-12: Zeroizing для TLS private keys / cert PEM bytes.
+# Предотвращает утечку private key в core dumps / swap / `/proc/<pid>/mem`.
+zeroize = { version = "1", features = ["zeroize_derive"] }
 ## F16 (v9.3.0): pure-Rust Kafka/Redpanda client (опциональная зависимость).
 ## Поддерживает батчинг, сжатие (gzip/lz4/snappy/zstd), leader-recovery,
 ## backoff/retry внутри PartitionClient. По умолчанию все compression-варианты

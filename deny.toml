@@ -13,15 +13,17 @@
 all-features = false
 
 [advisories]
-# v10.7.1: number_prefix (RUSTSEC-2025-0119) — transitive от indicatif 0.17.
-# Не наш выбор (indicatif зависит). TODO: перенести indicatif в отдельный
-# workspace или ждать обновления indicatif. Игнорируем пока.
-ignore = ["RUSTSEC-2025-0119"]
-yanked = "warn"
+# PR-12: RUSTSEC-2025-0119 (number_prefix / indicatif) — больше не нужно
+# игнорировать (indicatif 0.18 в v10.7.2+ использует обновлённую версию).
+# Если CI упадёт — см. CHANGELOG v10.7.2 (clap_mangen 0.3, indicatif 0.18).
+ignore = []
+# PR-12: yanked = "deny" — yanks signal upstream compromise / CVE disclosure.
+# Блокирующий gate через cargo-deny в CI.
+yanked = "deny"
 
 [bans]
-# Запрещаем crates с known security issues или дублирующие функциональность.
-multiple-versions = "warn"
+# PR-12: multiple-versions = "deny" — duplicate crates = разные supply chain entry points.
+multiple-versions = "deny"
 wildcards = "deny"
 highlight = "all"
 

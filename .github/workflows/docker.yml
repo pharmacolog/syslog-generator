@@ -125,6 +125,11 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # PR-12 (security hardening): SLSA Build L1 provenance + SBOM.
+          # `provenance: true` создаёт криптографическую attestation привязанную
+          # к source commit. `sbom: true` генерирует SBOM внутри образа.
+          provenance: true
+          sbom: true
 
       - name: Smoke test
         # v10.5.2: skip на PR build. На PR push в registry выключен
@@ -227,3 +232,6 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # PR-12: SLSA Build L1 provenance + SBOM.
+          provenance: true
+          sbom: true

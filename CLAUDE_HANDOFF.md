@@ -1,8 +1,8 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-15. Текущая версия: **v10.7.10** (patch-release: PR-9 README overhaul + SSDLC baseline — полностью переписан README по best practices с 11 бейджами, SECURITY.md/CONTRIBUTING.md/CODE_OF_CONDUCT.md, scripts/quality-gates.sh, codecov.yml для coverage badge, benches/hot_path.rs для per-msg perf baseline). Веха F закрыта на v10.7.1.
+Дата: 2026-07-16. Текущая версия: **v10.7.11** (patch-release: PR-10 hot-path performance — `generate_message_with_format` 3.79 µs/msg → 2.01 µs/msg (-47%, target ≤ 2 µs ✅), throughput 264 → 498 Kelem/s (+89%). Optimizations: PhaseContext pre-compile templates, cached syslog header, faker scan, skip unreferenced fakers). Веха F закрыта на v10.7.1.
 
-**Активные направления (PR-10..PR-12):** Performance audit (PR-10), Test coverage ≥97% + gate (PR-11), Security hardening (PR-12). Все PR следуют процессу release-train: feature → dev → release → main → tag.
+**Активные направления (PR-11..PR-12):** Test coverage ≥97% + gate (PR-11), Security hardening (PR-12). Все PR следуют процессу release-train: feature → dev → release → main → tag.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

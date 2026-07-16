@@ -1,7 +1,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver)](https://github.com/pharmacolog/syslog-generator/releases)
+[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver&v=v10.7.11)](https://github.com/pharmacolog/syslog-generator/releases)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://github.com/pharmacolog/syslog-generator/blob/main/Cargo.toml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/syslog-generator)](https://crates.io/crates/syslog-generator)

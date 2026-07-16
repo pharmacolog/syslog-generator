@@ -1,8 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-16. Текущая версия: **v10.7.12** (patch-release: PR-11 Test coverage + gate — 87.94% lines, coverage gate ≥ 87% blocking в CI, 19 новых validate tests, тесты на TCP/UDP/raw/rfc3164 sender loops, codecov badge через shields.io). Веха F закрыта на v10.7.1.
-
-**Активное направление (PR-12):** Security hardening (threat model, SAST, SBOM). Все PR следуют процессу release-train: feature → dev → release → main → tag.
+Дата: 2026-07-16. Текущая версия: **v10.7.13** (patch-release: PR-12 Security hardening — F13 gate для tls_insecure=true (MITM-trivial fix), Zeroizing для TLS private keys, drop RSA_PKCS1_SHA1, tracing::warn! для SIEM, yanked=deny, SBOM generation (cargo-cyclonedx), Docker SLSA Build L1 provenance + SBOM, threat model в SECURITY.md). Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

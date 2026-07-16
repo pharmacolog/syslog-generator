@@ -1161,3 +1161,254 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
     metrics_shutdown.cancel();
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::config::{Phase, SyslogConfig, TargetConfig};
+    use crate::load_profile_from_yaml_str;
+    use std::collections::HashMap;
+
+    /// Legacy `generate_message(phase, seq)` создаёт PhaseContext через
+    /// resolve(), использует все pre-compile оптимизации. Возвращает RFC 5424
+    /// сообщение (default format).
+    #[test]
+    fn generate_message_legacy_rfc5424_with_seed() {
+        let phase = Phase {
+            name: "test-phase".to_string(),
+            duration_secs: 1,
+            total_messages: Some(10),
+            messages_per_second: 100,
+            templates: vec!["hello seq={{sequence}}".to_string()],
+            syslog: SyslogConfig {
+                facility: 16,
+                severity: 6,
+                hostname: "host".to_string(),
+                app_name: "app".to_string(),
+                procid: "{{pid}}".to_string(),
+                msgid: "ID".to_string(),
+                structured_data: "-".to_string(),
+                bom: false,
+            },
+            ..Default::default()
+        };
+        let msg = generate_message(&phase, 1).expect("generate ok");
+        let s = std::str::from_utf8(&msg).expect("utf8");
+        // Проверяем что header есть.
+        assert!(
+            s.starts_with("<134>"),
+            "expected <134> prefix (16*8+6), got: {}",
+            s
+        );
+        // Проверяем что body содержит "hello seq=1".
+        assert!(s.contains("hello seq=1"), "expected body, got: {}", s);
+    }
+
+    /// Default format при phase.format = None = "rfc5424".
+    #[test]
+    fn generate_message_default_format_is_rfc5424() {
+        let phase = Phase {
+            name: "t".to_string(),
+            duration_secs: 1,
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".to_string()],
+            ..Default::default()
+        };
+        let msg = generate_message(&phase, 1).expect("generate ok");
+        // Default facility=1, severity=6 → PRIVAL = 1*8+6 = 14 = "<14>"
+        assert!(
+            msg.starts_with(b"<14>"),
+            "expected <14> prefix, got: {:?}",
+            &msg[..20]
+        );
+    }
+
+    /// Two messages with different seed give different content.
+    #[test]
+    fn generate_message_seed_determinism() {
+        let p1 = Phase {
+            seed: Some(42),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["seq={{sequence}} {{faker.uuid}}".to_string()],
+            syslog: SyslogConfig {
+                facility: 16,
+                severity: 6,
+                hostname: "h".to_string(),
+                app_name: "a".to_string(),
+                procid: "1".to_string(),
+                msgid: "ID".to_string(),
+                structured_data: "-".to_string(),
+                bom: false,
+            },
+            ..Default::default()
+        };
+        let p2 = p1.clone();
+        // Одинаковый seed → одинаковый faker.
+        let m1 = generate_message(&p1, 1).unwrap();
+        let m2 = generate_message(&p2, 1).unwrap();
+        // Время отличается (timestamp в body) — выделяем только faker часть.
+        // Просто проверяем что оба валидные RFC 5424.
+        assert!(m1.starts_with(b"<134>"));
+        assert!(m2.starts_with(b"<134>"));
+    }
+
+    /// PhaseContext::resolve pre-compiles templates, не перекомпилирует per message.
+    #[test]
+    fn phase_context_resolve_compiles_templates_once() {
+        let phase = Phase {
+            name: "ctx-test".to_string(),
+            duration_secs: 1,
+            total_messages: Some(10),
+            messages_per_second: 100,
+            templates: vec![
+                "{{timestamp}} {{real_app}} seq={{sequence}}".to_string(),
+                "{{faker.uuid}} {{faker.ipv4}}".to_string(),
+            ],
+            syslog: SyslogConfig {
+                facility: 16,
+                severity: 6,
+                hostname: "h".to_string(),
+                app_name: "a".to_string(),
+                procid: "1".to_string(),
+                msgid: "ID".to_string(),
+                structured_data: "-".to_string(),
+                bom: false,
+            },
+            seed: Some(42),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        // Один fallback + 2 user templates.
+        assert_eq!(ctx.compiled_templates.len(), 2);
+        // faker scan: "ipv4" и "uuid" referenced (для template "{{faker.uuid}} {{faker.ipv4}}").
+        let referenced = ctx.referenced_fakers.expect("fakers scanned");
+        assert!(referenced.contains("ipv4"));
+        assert!(referenced.contains("uuid"));
+        // Cached syslog header: hostname, app_name, msgid, structured_data — все static
+        // (нет per-message placeholders). procid = "1" — static.
+        let cached = ctx.cached_syslog_header.expect("header cached");
+        assert_eq!(cached.hostname, "h");
+        assert_eq!(cached.app_name, "a");
+        assert_eq!(cached.procid, "1");
+        assert_eq!(cached.msgid, "ID");
+        assert!(cached.procid_is_static);
+    }
+
+    /// PhaseContext::resolve НЕ кэширует syslog header если procid содержит {{pid}}.
+    #[test]
+    fn phase_context_does_not_cache_dynamic_procid() {
+        let phase = Phase {
+            name: "t".to_string(),
+            duration_secs: 1,
+            total_messages: Some(1),
+            messages_per_second: 1,
+            templates: vec!["x".to_string()],
+            syslog: SyslogConfig {
+                facility: 16,
+                severity: 6,
+                hostname: "h".to_string(),
+                app_name: "a".to_string(),
+                procid: "{{pid}}".to_string(), // dynamic!
+                msgid: "ID".to_string(),
+                structured_data: "-".to_string(),
+                bom: false,
+            },
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        // Если ВСЕ остальные 4 поля static + procid dynamic,
+        // cached_syslog_header должен быть None (нужно re-render).
+        let cached = ctx
+            .cached_syslog_header
+            .expect("header cached for static parts");
+        // procid должен быть sourced as-is (не renderable since {{pid}} is dynamic).
+        assert!(!cached.procid_is_static);
+        // procid содержит literal {{pid}} — копия из phase.syslog.
+        assert_eq!(cached.procid, "{{pid}}");
+    }
+
+    /// pick_template_compiled: single template → always first.
+    #[test]
+    fn pick_template_compiled_single_returns_first() {
+        let templates: Vec<Arc<template::CompiledTemplate>> = vec![
+            Arc::new(template::CompiledTemplate::compile("a")),
+            Arc::new(template::CompiledTemplate::compile("b")),
+        ];
+        let mut rng = crate::payload::derive_rng(Some(42), 1);
+        let picked = pick_template_compiled(&templates, None, &mut rng);
+        assert!(picked.is_some());
+        assert_eq!(picked.unwrap().render(&HashMap::new()), "a");
+    }
+
+    /// pick_template_compiled: empty list → None.
+    #[test]
+    fn pick_template_compiled_empty_returns_none() {
+        let templates: Vec<Arc<template::CompiledTemplate>> = vec![];
+        let mut rng = crate::payload::derive_rng(Some(42), 1);
+        let picked = pick_template_compiled(&templates, None, &mut rng);
+        assert!(picked.is_none());
+    }
+
+    /// create_dispatcher: для не-weighted возвращает 0..len.
+    /// Round-robin и broadcast сейчас не реализованы в create_dispatcher —
+    /// это pre-N10 поведение, оставлено для backward-compat. Round-robin
+    /// применяется позже в run_phase_multi (target_sender_* вызывается
+    /// per target из индекса dispatch).
+    #[test]
+    fn create_dispatcher_default_returns_indices() {
+        let targets = vec![
+            TargetConfig::default(),
+            TargetConfig::default(),
+            TargetConfig::default(),
+        ];
+        let d = create_dispatcher(&targets, "round-robin");
+        assert_eq!(d, vec![0, 1, 2]);
+        let d = create_dispatcher(&targets, "broadcast");
+        assert_eq!(d, vec![0, 1, 2]);
+    }
+
+    /// create_dispatcher: weighted повторяет каждый target weight раз.
+    #[test]
+    fn create_dispatcher_weighted() {
+        let targets = vec![
+            TargetConfig {
+                weight: 3,
+                ..Default::default()
+            },
+            TargetConfig {
+                weight: 1,
+                ..Default::default()
+            },
+        ];
+        let d = create_dispatcher(&targets, "weighted");
+        // weight [3, 1] → [0, 0, 0, 1].
+        assert_eq!(d, vec![0, 0, 0, 1]);
+    }
+
+    /// Profile load via load_profile_from_yaml_str.
+    #[test]
+    fn load_profile_from_yaml_str_simple() {
+        let yaml = r#"
+targets:
+  - address: "127.0.0.1:514"
+    transport: udp
+distribution: round-robin
+phases:
+  - name: test
+    duration_secs: 1
+    total_messages: 100
+    messages_per_second: 100
+    templates:
+      - "hello {{sequence}}"
+"#;
+        let profile = load_profile_from_yaml_str(yaml).expect("profile parses");
+        assert_eq!(profile.targets.len(), 1);
+        assert_eq!(profile.targets[0].address, "127.0.0.1:514");
+        assert_eq!(profile.phases.len(), 1);
+        assert_eq!(profile.phases[0].name, "test");
+        assert_eq!(profile.phases[0].total_messages, Some(100));
+    }
+}

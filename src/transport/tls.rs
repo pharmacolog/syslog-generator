@@ -24,6 +24,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio_rustls::{client::TlsStream, TlsConnector};
 use tokio_util::sync::CancellationToken;
+use zeroize::Zeroizing;
 
 use super::reconnect::{reconnect_with_backoff, ReconnectConfig};
 use super::{
@@ -138,10 +139,15 @@ pub const SUPPORTED_CIPHER_SUITE_NAMES: &[&str] = &[
 #[derive(Clone, Debug, Default)]
 pub struct TlsParams {
     pub domain: String,
-    pub ca_pem: Option<Vec<u8>>,
+    /// PR-12 (security hardening): TLS CA bundle в `Zeroizing<Vec<u8>>` —
+    /// предотвращает утечку PEM в core dumps / swap / `/proc/<pid>/mem`.
+    pub ca_pem: Option<Zeroizing<Vec<u8>>>,
     pub insecure: bool,
-    pub client_cert_pem: Option<Vec<u8>>,
-    pub client_key_pem: Option<Vec<u8>>,
+    /// PR-12: client certificate в `Zeroizing<Vec<u8>>`.
+    pub client_cert_pem: Option<Zeroizing<Vec<u8>>>,
+    /// PR-12: client **PRIVATE** key в `Zeroizing<Vec<u8>>` — критично для
+    /// предотвращения утечки PKCS#8 ключа через memory dumps.
+    pub client_key_pem: Option<Zeroizing<Vec<u8>>>,
     pub min_protocol: Option<TlsVersion>,
     pub cipher_suites: Option<Vec<rustls::SupportedCipherSuite>>,
 }
@@ -279,8 +285,10 @@ impl ServerCertVerifier for NoCertVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
         use rustls::SignatureScheme::*;
+        // PR-12 (security hardening): удалён RSA_PKCS1_SHA1 — SHA-1 с PKCS#1 v1.5
+        // deprecated (NIST SP 800-131A Rev.1, 2023). Оставлены SHA-2+ и PSS
+        // варианты, ED25519, ECDSA NIST curves — все современные PFS-friendly schemes.
         vec![
-            RSA_PKCS1_SHA1,
             RSA_PKCS1_SHA256,
             RSA_PKCS1_SHA384,
             RSA_PKCS1_SHA512,
@@ -563,7 +571,7 @@ mod tests {
     fn build_connector_with_empty_ca_pem_fails() {
         let p = TlsParams {
             domain: "example.com".into(),
-            ca_pem: Some(b"NOT A PEM".to_vec()),
+            ca_pem: Some(zeroize::Zeroizing::new(b"NOT A PEM".to_vec())),
             ..Default::default()
         };
         assert!(build_tls_connector(&p).is_err());
@@ -595,8 +603,8 @@ mod tests {
     fn build_connector_with_mtls_bad_cert_fails() {
         let p = TlsParams {
             domain: "example.com".into(),
-            client_cert_pem: Some(b"NOT A CERT".to_vec()),
-            client_key_pem: Some(b"NOT A KEY".to_vec()),
+            client_cert_pem: Some(zeroize::Zeroizing::new(b"NOT A CERT".to_vec())),
+            client_key_pem: Some(zeroize::Zeroizing::new(b"NOT A KEY".to_vec())),
             ..Default::default()
         };
         assert!(build_tls_connector(&p).is_err());
@@ -687,14 +695,17 @@ mod tests {
     fn v10_4_0_tls_params_clone_preserves_fields() {
         let p = TlsParams {
             domain: "example.com".into(),
-            ca_pem: Some(b"CA_PEM".to_vec()),
+            ca_pem: Some(zeroize::Zeroizing::new(b"CA_PEM".to_vec())),
             insecure: true,
             min_protocol: Some(TlsVersion::Tls13),
             ..Default::default()
         };
         let p2 = p.clone();
         assert_eq!(p2.domain, "example.com");
-        assert_eq!(p2.ca_pem, Some(b"CA_PEM".to_vec()));
+        assert_eq!(
+            p2.ca_pem.as_deref().map(|z| z.as_slice()),
+            Some(&b"CA_PEM"[..])
+        );
         assert!(p2.insecure);
         assert_eq!(p2.min_protocol, Some(TlsVersion::Tls13));
     }

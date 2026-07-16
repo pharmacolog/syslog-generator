@@ -115,6 +115,15 @@ pub enum ValidationError {
         value: String,
     },
 
+    /// PR-12 (security hardening): tls_insecure=true отключает проверку
+    /// сертификата (MITM trivial для misconfigured peers / attacker-controlled
+    /// profile). Должно быть явной ошибкой валидации, не silent warning.
+    /// Override через `--allow-insecure-tls` CLI flag (отдельный PR).
+    #[error(
+        "target[{index}] (address={address:?}): tls_insecure=true отключает TLS certificate verification — опасно (MITM). Используйте tls_ca_file для self-signed CAs"
+    )]
+    TlsInsecureEnabled { index: usize, address: String },
+
     #[error("недопустимый distribution {value:?}; допустимо: {allowed}")]
     InvalidDistribution { value: String, allowed: String },
 
@@ -511,6 +520,16 @@ fn validate_target(index: usize, t: &TargetConfig, errors: &mut Vec<ValidationEr
                 });
             }
         }
+    }
+
+    // PR-12 (security hardening): tls_insecure=true — опасная опция (MITM).
+    // В production должно быть hard error в F13 валидации. Override через
+    // env var `ALLOW_INSECURE_TLS=1` (для тестов/специальных случаев).
+    if t.tls_insecure && !std::env::var("ALLOW_INSECURE_TLS").is_ok_and(|v| v == "1") {
+        errors.push(ValidationError::TlsInsecureEnabled {
+            index,
+            address: t.address.clone(),
+        });
     }
 
     // F16: файловая ротация — параметры должны быть валидны.

@@ -112,7 +112,10 @@ The following are **explicitly out of scope** for syslog-generator:
 - **Minimum supported Rust version (MSRV):** 1.95 (enforced via `rust-toolchain.toml`)
 - **Security policy:** `cargo-deny` with strict advisories level
 - **Update policy:** Dependabot weekly, manual review for major version bumps
-- **License policy:** Apache-2.0 only for direct deps (see `deny.toml`)
+- **License policy:** Permissive family — Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0,
+  MPL-2.0, CDLA-Permissive-2.0, Zlib, CC0-1.0 (см. `deny.toml` для точного списка).
+  GPL/AGPL явно исключены. Прямые deps могут иметь любую из этих лицензий; транзитивные
+  — через `deny.toml: unknown-registry = "deny"` (только crates.io).
 
 ## Security Audits
 

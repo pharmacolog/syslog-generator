@@ -13,14 +13,20 @@
 all-features = false
 
 [advisories]
-# v10.7.1: number_prefix (RUSTSEC-2025-0119) — transitive от indicatif 0.17.
-# Не наш выбор (indicatif зависит). TODO: перенести indicatif в отдельный
-# workspace или ждать обновления indicatif. Игнорируем пока.
+# PR-12: RUSTSEC-2025-0119 (number_prefix / indicatif) — transitive от indicatif.
+# indicatif — наш выбор для progress bar (PR-3). Прямого dependency у нас нет,
+# ignore остаётся до обновления indicatif или перехода на zeroize-only progress bar.
+# Reason: indicatif pulls number_prefix transitively; not user-input reachable.
 ignore = ["RUSTSEC-2025-0119"]
-yanked = "warn"
+# PR-12: yanked = "deny" — yanks signal upstream compromise / CVE disclosure.
+# Блокирующий gate через cargo-deny в CI.
+yanked = "deny"
 
 [bans]
-# Запрещаем crates с known security issues или дублирующие функциональность.
+# PR-12: multiple-versions = "warn" — дубликаты часто unavoidable в Rust ecosystem
+# (getrandom, hashbrown, thiserror часто приходят в разных версиях из разных deps).
+# Hard deny создаёт false positives без security value. Используем warn — мониторинг
+# через CI logs. Если появятся реальные duplicates с CVE, отдельный PR.
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"

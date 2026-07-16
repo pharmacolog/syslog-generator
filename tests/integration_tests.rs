@@ -2132,10 +2132,10 @@ fn test_n4_mtls_build_connector_with_client_identity() {
     let (cert_pem, key_pem) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
-        ca_pem: Some(cert_pem.clone()), // самоподписанный — клиент доверяет себе
+        ca_pem: Some(zeroize::Zeroizing::new(cert_pem.clone())),
         insecure: false,
-        client_cert_pem: Some(cert_pem),
-        client_key_pem: Some(key_pem),
+        client_cert_pem: Some(zeroize::Zeroizing::new(cert_pem)),
+        client_key_pem: Some(zeroize::Zeroizing::new(key_pem)),
         min_protocol: Some(TlsVersion::Tls12),
         cipher_suites: None,
     };
@@ -2155,10 +2155,10 @@ fn test_n4_mtls_build_connector_with_min_protocol_tls13() {
     let (cert_pem, key_pem) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
-        ca_pem: Some(cert_pem.clone()),
+        ca_pem: Some(zeroize::Zeroizing::new(cert_pem.clone())),
         insecure: false,
-        client_cert_pem: Some(cert_pem),
-        client_key_pem: Some(key_pem),
+        client_cert_pem: Some(zeroize::Zeroizing::new(cert_pem)),
+        client_key_pem: Some(zeroize::Zeroizing::new(key_pem)),
         min_protocol: Some(TlsVersion::Tls13),
         cipher_suites: None,
     };
@@ -2173,10 +2173,10 @@ fn test_n4_mtls_rejects_bad_client_identity() {
     let (cert_pem, _) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
-        ca_pem: Some(cert_pem.clone()),
+        ca_pem: Some(zeroize::Zeroizing::new(cert_pem.clone())),
         insecure: false,
-        client_cert_pem: Some(cert_pem),
-        client_key_pem: Some(b"not a real key".to_vec()),
+        client_cert_pem: Some(zeroize::Zeroizing::new(cert_pem)),
+        client_key_pem: Some(zeroize::Zeroizing::new(b"not a real key".to_vec())),
         min_protocol: None,
         cipher_suites: None,
     };
@@ -2560,7 +2560,7 @@ fn test_n4_cipher_policy_e2e_tls_handshake() {
     let (cert_pem, _) = make_test_cert();
     let params = TlsParams {
         domain: "localhost".into(),
-        ca_pem: Some(cert_pem),
+        ca_pem: Some(zeroize::Zeroizing::new(cert_pem)),
         insecure: false,
         cipher_suites: Some(vec![
             syslog_generator::parse_cipher_suite("TLS_AES_256_GCM_SHA384").unwrap(),

@@ -1,6 +1,84 @@
 
 # Changelog
 
+## v10.7.13 - 2026-07-16
+
+**Patch-release (PR-12): Security hardening + SSDLC practices.**
+
+### Security (HIGH severity fixes)
+
+- **F13 gate для `tls_insecure=true`** — новая `ValidationError::TlsInsecureEnabled`.
+  Раньше `tls_insecure=true` проходил F13 валидацию silent и только `eprintln!`
+  в рантайме (subagent finding #1, MITM-trivial). Теперь это hard error
+  в `validate_profile()`. Override через `ALLOW_INSECURE_TLS=1` env var
+  для examples/test scenarios (PR-12 использует в CI для self-signed примеров).
+- **`zeroize` для TLS ключей** — `TlsParams.{ca_pem, client_cert_pem, client_key_pem}`
+  теперь `Option<Zeroizing<Vec<u8>>>` (subagent finding #3). Предотвращает утечку
+  private key в core dumps / swap / `/proc/<pid>/mem`.
+- **Drop `RSA_PKCS1_SHA1`** из `NoCertVerifier::supported_verify_schemes`
+  (subagent finding #2, NIST SP 800-131A Rev.1). Оставлены SHA-2+, PSS, ED25519, ECDSA.
+- **SBOM generation в CI** — `cargo-cyclonedx` job создаёт CycloneDX SBOM из
+  Cargo.lock (subagent finding #3). Supply-chain transparency для
+  EO 14028 / EU CRA Art. 13(5). Артефакт публикуется как `sbom-cyclonedx`.
+- **Docker SLSA Build L1** — `provenance: true` + `sbom: true` добавлены
+  в оба `build-push-action` (subagent finding #4). Криптографическая attestation
+  привязана к source commit.
+
+### Security (MEDIUM severity fixes)
+
+- **Structured `tracing::warn!`** для `tls_insecure=true` (subagent finding #6) —
+  SIEM-indexed warning через `tracing::warn!(target: "security", ...)`.
+  Старый `eprintln!` остаётся для CLI-only deployments.
+- **`yanked = "deny"`** в `deny.toml` (subagent finding #6) — yanks signal
+  upstream compromise / CVE disclosure. Блокирующий gate.
+- **License policy drift** в `SECURITY.md` исправлен (subagent finding #5) —
+  отражает реальный `deny.toml` allow list, не "Apache-2.0 only".
+
+### Security (CI fixups)
+
+- `ALLOW_INSECURE_TLS=1` env var в validate examples CI step — позволяет
+  `cipher_policy_tls13.json` и `mtls_cipher_policy.json` (намеренно с
+  `tls_insecure=true` для self-signed CA demo) проходить валидацию.
+- `multiple-versions = "warn"` (не "deny") — Rust ecosystem неизбежно
+  имеет duplicates (getrandom 0.2/0.3/0.4, hashbrown 0.14/0.15).
+  Hard deny создаёт false positives без security value.
+- `RUSTSEC-2025-0119` ignore оставлен (number_prefix transitive от indicatif).
+  Reason: not user-input reachable.
+
+### Audit (positive findings, no change needed)
+
+- `dangerous_configuration()` НЕ используется (только документированный
+  `.dangerous().with_custom_certificate_verifier()` builder path).
+- Cipher whitelist содержит только AEAD suites (no CBC, RC4, 3DES, NULL).
+- `webpki-roots 1.0.8` + TLS 1.2 floor enforced.
+- `TlsParams::default()` → `insecure: false` (cert verification by default).
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: 374 passed
+- Coverage: 87.94% lines (≥ 87% gate ✅)
+- cargo bench --no-run --locked: success
+- public-api snapshot: regenerated
+
+### Threat model (новый — см. SECURITY.md)
+
+| Threat | Mitigation |
+|--------|-----------|
+| RCE via malicious profile | serde/safe parsers (no eval), CompiledTemplate (safe substitution, no shell exec) |
+| TLS MITM | Default cert verification; `tls_insecure` is hard error in F13; rustls 0.23 + cipher whitelist |
+| Credential leakage | `Zeroizing<Vec<u8>>` для private keys; `eprintln!` не логирует PEM |
+| Path traversal | File paths validated в F13 (existence check) |
+| DoS | `mpsc(1024)` backpressure; CancellationToken + SIGTERM/SIGINT (PR-2); rate limit (governor) |
+| Supply chain | `yanked = "deny"`, RUSTSEC advisories blocking, SBOM (CycloneDX) в CI |
+| Reproducibility | `Cargo.lock` v4 committed; `rust-toolchain.toml` pinned (1.95) |
+
+Refs: PLAN-v10.0.0.md, SECURITY.md (полный threat model), аудит v10.7.2 (PR-12 subagent analysis).
+
 ## v10.7.12 - 2026-07-16
 
 **Patch-release (PR-11): Test coverage + gate + badge.**

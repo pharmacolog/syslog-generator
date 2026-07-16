@@ -142,6 +142,12 @@ jobs:
         run: |
           set -e
           status=0
+          # PR-12: примеры с tls_insecure=true (cipher_policy_tls13.json,
+          # mtls_cipher_policy.json) используют insecure TLS для тестов с
+          # самоподписанными сертификатами. Разрешаем через env var
+          # ALLOW_INSECURE_TLS=1 для validate step (в production нужно
+          # генерировать TLS CA bundle и не использовать tls_insecure).
+          export ALLOW_INSECURE_TLS=1
           for f in examples/*.json examples/*.yaml examples/*.yml; do
             [ -f "$f" ] || continue
             # Пропускаем schema-файлы (они НЕ являются валидными Profile —
@@ -374,6 +380,9 @@ jobs:
         # Оба запускают cargo run --bin syslog-generator, поэтому дешёвые.
         run: |
           set -e
+          # PR-12: примеры с tls_insecure=true (cipher_policy_tls13, mtls_cipher_policy)
+          # требуют ALLOW_INSECURE_TLS=1 для валидации.
+          export ALLOW_INSECURE_TLS=1
           status=0
           for f in examples/*.json examples/*.yaml examples/*.yml; do
             [ -f "$f" ] || continue
@@ -452,6 +461,28 @@ jobs:
           path: |
             lcov.info
             coverage-summary.txt
+          if-no-files-found: warn
+
+      # PR-12 (security hardening): SBOM generation в CI.
+      # `cargo-cyclonedx` создаёт CycloneDX SBOM из Cargo.lock для
+      # supply-chain transparency (EO 14028, EU CRA Art. 13(5)).
+      # Артефакт публикуется как `sbom-cyclonedx` для каждого run.
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: Generate SBOM (CycloneDX JSON)
+        run: |
+          cargo cyclonedx --format json \
+            --override-filename "sbom-${GITHUB_SHA::8}" \
+            --spec-version 1.5 \
+            --output-pattern "{{ package_path }}.cdx.json"
+
+      - name: Upload SBOM artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cyclonedx
+          path: "*.cdx.json"
           if-no-files-found: warn
 
   # v10.7.4 (PR-3): public-api snapshot — фиксирует публичный API крейта.

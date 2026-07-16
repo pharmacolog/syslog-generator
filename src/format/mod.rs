@@ -181,16 +181,19 @@ impl Format for FormatKind {
                 protobuf::serialize_protobuf(map.as_ref(), &values)
             }
             Self::Cef => {
-                let cef = ctx.cef.expect(
-                    "FormatKind::Cef требует ctx.cef (F13 валидация должна была это обеспечить)",
-                );
-                cef::build(cef, msg)
+                // ctx.cef должен быть Some для FormatKind::Cef (валидируется в F13).
+                // Если None — это баг валидатора, fallback на raw.
+                match ctx.cef {
+                    Some(cef) => cef::build(cef, msg),
+                    None => msg.to_vec(),
+                }
             }
             Self::Leef => {
-                let leef = ctx.leef.expect(
-                    "FormatKind::Leef требует ctx.leef (F13 валидация должна была это обеспечить)",
-                );
-                leef::build(leef, msg)
+                // Аналогично Cef.
+                match ctx.leef {
+                    Some(leef) => leef::build(leef, msg),
+                    None => msg.to_vec(),
+                }
             }
             Self::JsonLines => json_lines::build(ctx.header, ctx.json_lines_fields, msg),
         }

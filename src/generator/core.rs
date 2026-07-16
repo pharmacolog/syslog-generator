@@ -1146,7 +1146,7 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
                         "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
                          {pos}/{len} {msg}",
                     )
-                    .unwrap()
+                    .unwrap_or_else(|_| ProgressStyle::default_bar())
                     .progress_chars("##-"),
                 );
                 pb.set_message(format!("phase {}", phase.name));

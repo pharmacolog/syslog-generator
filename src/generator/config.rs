@@ -462,7 +462,13 @@ pub fn load_profile_from_path(path: &Path) -> Result<Profile, ConfigError> {
                 source,
             })
         }
-        _ => unreachable!("расширение уже проверено выше"),
+        // Расширение уже проверено выше; если не сматчилось — это
+        // неожиданный кейс (новое расширение без обновления этого match).
+        // Возвращаем I/O ошибку (не unreachable!) для graceful degradation.
+        _ => Err(ConfigError::UnsupportedFormat {
+            path: path_str,
+            extension: "unknown".to_string(),
+        }),
     }
 }
 

@@ -834,13 +834,15 @@ fn validate_cef(
         "name",
     ] {
         // Через match, чтобы не использовать `reflect`-подобные трюки.
+        // Неизвестные поля пропускаем (defensive — массив полей может быть
+        // расширен в новой версии без обновления match здесь).
         let v = match field {
             "device_vendor" => &c.device_vendor,
             "device_product" => &c.device_product,
             "device_version" => &c.device_version,
             "signature_id" => &c.signature_id,
             "name" => &c.name,
-            _ => unreachable!(),
+            _ => continue,
         };
         if v.trim().is_empty() {
             errors.push(ValidationError::CefFieldEmpty {
@@ -875,12 +877,13 @@ fn validate_leef(
         return;
     };
     for field in ["vendor", "product", "version", "event_id"] {
+        // Неизвестные поля пропускаем (defensive).
         let v = match field {
             "vendor" => &l.vendor,
             "product" => &l.product,
             "version" => &l.version,
             "event_id" => &l.event_id,
-            _ => unreachable!(),
+            _ => continue,
         };
         if v.trim().is_empty() {
             errors.push(ValidationError::LeefFieldEmpty {

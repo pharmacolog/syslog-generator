@@ -2991,7 +2991,13 @@ impl syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::parse(&str) -> Self
 impl core::clone::Clone for syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::clone(&self) -> syslog_generator::transport::Framing
+impl core::cmp::Eq for syslog_generator::transport::Framing
+impl core::cmp::PartialEq for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::eq(&self, &syslog_generator::transport::Framing) -> bool
+impl core::fmt::Debug for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for syslog_generator::transport::Framing
+impl core::marker::StructuralPartialEq for syslog_generator::transport::Framing
 impl core::marker::Freeze for syslog_generator::transport::Framing
 impl core::marker::Send for syslog_generator::transport::Framing
 impl core::marker::Sync for syslog_generator::transport::Framing
@@ -2999,6 +3005,10 @@ impl core::marker::Unpin for syslog_generator::transport::Framing
 impl core::marker::UnsafeUnpin for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::Framing
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<T, U> core::convert::Into<U> for syslog_generator::transport::Framing where U: core::convert::From<T>
@@ -3555,7 +3565,13 @@ impl syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::parse(&str) -> Self
 impl core::clone::Clone for syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::clone(&self) -> syslog_generator::transport::Framing
+impl core::cmp::Eq for syslog_generator::transport::Framing
+impl core::cmp::PartialEq for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::eq(&self, &syslog_generator::transport::Framing) -> bool
+impl core::fmt::Debug for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for syslog_generator::transport::Framing
+impl core::marker::StructuralPartialEq for syslog_generator::transport::Framing
 impl core::marker::Freeze for syslog_generator::transport::Framing
 impl core::marker::Send for syslog_generator::transport::Framing
 impl core::marker::Sync for syslog_generator::transport::Framing
@@ -3563,6 +3579,10 @@ impl core::marker::Unpin for syslog_generator::transport::Framing
 impl core::marker::UnsafeUnpin for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::Framing
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<T, U> core::convert::Into<U> for syslog_generator::transport::Framing where U: core::convert::From<T>
@@ -4251,7 +4271,13 @@ impl syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::parse(&str) -> Self
 impl core::clone::Clone for syslog_generator::transport::Framing
 pub fn syslog_generator::transport::Framing::clone(&self) -> syslog_generator::transport::Framing
+impl core::cmp::Eq for syslog_generator::transport::Framing
+impl core::cmp::PartialEq for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::eq(&self, &syslog_generator::transport::Framing) -> bool
+impl core::fmt::Debug for syslog_generator::transport::Framing
+pub fn syslog_generator::transport::Framing::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for syslog_generator::transport::Framing
+impl core::marker::StructuralPartialEq for syslog_generator::transport::Framing
 impl core::marker::Freeze for syslog_generator::transport::Framing
 impl core::marker::Send for syslog_generator::transport::Framing
 impl core::marker::Sync for syslog_generator::transport::Framing
@@ -4259,6 +4285,10 @@ impl core::marker::Unpin for syslog_generator::transport::Framing
 impl core::marker::UnsafeUnpin for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::Framing
 impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::Framing
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::transport::Framing where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::Framing::equivalent(&self, &K) -> bool
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::Framing where ST: ?core::marker::Sized, DT: ?core::marker::Sized
 impl<T, U> core::convert::Into<U> for syslog_generator::transport::Framing where U: core::convert::From<T>

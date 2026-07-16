@@ -1,0 +1,78 @@
+# Pre-commit hooks для syslog-generator.
+#
+# Установка (кросс-платформенная):
+#   pip install --user pre-commit
+#   pre-commit install
+#
+# Или через brew (macOS):
+#   brew install pre-commit
+#
+# Hooks:
+# - pre-commit (T1): быстрые проверки на каждом коммите (~3-5 сек)
+#   - cargo fmt — formatting
+#   - cargo clippy (no features) — lint warnings
+#   - N7 invariant — no unwrap/expect в runtime
+# - pre-push (T2): тяжёлые проверки перед push (~30-60 сек)
+#   - scripts/quality-gates.sh (полный набор G1..G10)
+#   - toolchain check (rustc версия совпадает с rust-toolchain.toml)
+#
+# T3 (public-api gate), T4 (SBOM), T5 (examples) — проверяются в CI, не в pre-commit.
+#
+# Обход (НЕ рекомендуется):
+#   git commit --no-verify
+#   SKIP=pre-commit git commit
+
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit, pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      # ═══════════════════════════════════════════════════════════════
+      # PRE-COMMIT STAGE (быстрые проверки, ~3-5 сек)
+      # ═══════════════════════════════════════════════════════════════
+      - id: cargo-fmt
+        name: cargo fmt
+        stages: [pre-commit]
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy-nofeat
+        name: cargo clippy (no features)
+        stages: [pre-commit]
+        entry: cargo clippy --no-default-features --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: check-n7-invariant
+        name: N7 invariant (no unwrap/expect in runtime)
+        stages: [pre-commit]
+        entry: bash scripts/check-n7-invariant.sh
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # ═══════════════════════════════════════════════════════════════
+      # PRE-PUSH STAGE (тяжёлые проверки, ~30-60 сек)
+      # ═══════════════════════════════════════════════════════════════
+      - id: toolchain-check
+        name: Toolchain version matches rust-toolchain.toml
+        stages: [pre-push]
+        entry: bash scripts/check-toolchain.sh
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: quality-gates
+        name: Quality gates (G1..G10)
+        stages: [pre-push]
+        # Запускаем quality-gates.sh с проверкой coverage и changelog.
+        # Coverage gate может упасть если нет cargo-llvm-cov — тогда warning, не fail.
+        # CHECK_CHANGELOG=1 для PR'ов с bump version.
+        entry: bash -c 'source "$HOME/.cargo/env" 2>/dev/null; bash scripts/quality-gates.sh'
+        language: system
+        types: [rust]
+        pass_filenames: false

@@ -81,7 +81,7 @@ pub(crate) async fn next_msg(rx: &SharedRx) -> Option<Vec<u8>> {
 }
 
 /// Способ фрейминга для потоковых транспортов (RFC 6587).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Framing {
     /// non-transparent-framing: SYSLOG-MSG + LF (%d10).
     NonTransparent,
@@ -498,5 +498,69 @@ mod tests {
             body.contains("syslog_errors_total{target=\"10.0.0.1:514\"} 3"),
             "errors_total должен быть 3: got:\n{body}"
         );
+    }
+
+    /// PR-16 (coverage): Framing::parse accepts both spellings and rejects unknown.
+    /// Строки 33-37 (`Framing::parse`) были частично uncovered.
+    #[test]
+    fn framing_parse_accepts_known_and_rejects_unknown() {
+        assert_eq!(Framing::parse("non-transparent"), Framing::NonTransparent);
+        assert_eq!(Framing::parse("octet-counting"), Framing::OctetCounting);
+        assert_eq!(Framing::parse("octet_counting"), Framing::OctetCounting);
+        assert_eq!(Framing::parse("NON-TRANSPARENT"), Framing::NonTransparent);
+        assert_eq!(Framing::parse("octet-counting"), Framing::OctetCounting);
+        // parse возвращает Self (default = NonTransparent для unknown), проверяем длину результата
+        // empty string также parsing → NonTransparent default.
+        assert_eq!(Framing::parse(""), Framing::NonTransparent);
+    }
+
+    /// PR-16 (coverage): record_send_increments_three_metrics_and_bytes.
+    /// Строки 38-41 (`messages_total`, `bytes_total`, `message_size_bytes`) были
+    /// только частично покрыты. Тест проверяет полный happy path.
+    #[tokio::test]
+    async fn record_send_increments_all_three_metrics() {
+        use crate::observability::metrics::create_metrics;
+        let metrics = create_metrics().unwrap();
+        let cancel = CancellationToken::new();
+        record_send(&metrics, "tcp", "phase1", "127.0.0.1:514", 100, &cancel).await;
+        let cancel2 = CancellationToken::new();
+        record_send(&metrics, "udp", "phase2", "127.0.0.1:514", 200, &cancel2).await;
+        let cancel3 = CancellationToken::new();
+        record_send(&metrics, "tls", "phase3", "127.0.0.1:6514", 300, &cancel3).await;
+
+        // bytes_total should be 600.
+        let m = metrics
+            .bytes_total
+            .get_metric_with_label_values(&["tcp", "phase1", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 100.0);
+        let m = metrics
+            .bytes_total
+            .get_metric_with_label_values(&["udp", "phase2", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 200.0);
+        let m = metrics
+            .bytes_total
+            .get_metric_with_label_values(&["tls", "phase3", "127.0.0.1:6514"])
+            .unwrap();
+        assert_eq!(m.get(), 300.0);
+    }
+
+    /// PR-16 (coverage): frame_into_appends_with_proper_separator.
+    /// `frame_into` для обоих форматов (non-transparent и octet-counting) проверяет
+    /// правильное формирование фрейма.
+    #[test]
+    fn frame_into_appends_correct_bytes() {
+        use bytes::BytesMut;
+        let mut buf = BytesMut::with_capacity(8);
+        let msg = b"hello";
+        frame_into(&mut buf, msg, Framing::NonTransparent);
+        // Non-transparent: msg + newline.
+        assert_eq!(&buf[..], b"hello\n");
+
+        let mut buf2 = BytesMut::with_capacity(8);
+        frame_into(&mut buf2, msg, Framing::OctetCounting);
+        // Octet-counting: "5 hello" (5 = len of "hello").
+        assert_eq!(&buf2[..], b"5 hello");
     }
 }

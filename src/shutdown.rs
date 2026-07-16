@@ -296,4 +296,25 @@ mod tests {
         counter.fetch_add(1, Ordering::SeqCst);
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
+
+    /// PR-16 (coverage): graceful_drain_wait_returns_task_join_on_aborted_handle.
+    /// Line 124 first `?` (JoinError → DrainError::TaskJoin) was uncovered.
+    /// Aborted handle → `JoinError::is_cancelled() == true` → propagates to
+    /// `DrainError::TaskJoin`.
+    #[tokio::test]
+    async fn graceful_drain_wait_returns_task_join_on_aborted_handle() {
+        use crate::error::DrainError;
+        let metrics = create_metrics().expect("create_metrics ok");
+        // Spawn long-running task с anyhow::Result<(), then abort before drain.
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            Ok(())
+        });
+        handle.abort();
+        let result = graceful_drain_wait(vec![handle], 5, metrics).await;
+        match result {
+            Err(DrainError::TaskJoin(_)) => {}
+            other => panic!("expected DrainError::TaskJoin, got {:?}", other),
+        }
+    }
 }

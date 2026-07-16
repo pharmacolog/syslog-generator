@@ -32,6 +32,17 @@ on:
       - main
   workflow_dispatch:
     inputs:
+  # PR-15 (T6): docs-only commits не триггерят Docker build (экономит
+  # 5-30 мин CI time для image build).
+  paths-ignore:
+    - 'docs/**'
+    - '**.md'
+    - '.archived-releases/**'
+
+# PR-15 (T6): concurrency — новые runs отменяют предыдущие для той же ветки.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
       tag:
         description: "Docker image tag (default: dev-{short_sha})"
         required: false

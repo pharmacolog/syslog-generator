@@ -1,0 +1,90 @@
+# PR-12/PR-15: Generate SBOM (CycloneDX) — отдельный workflow.
+#
+# Выделено в отдельный файл чтобы:
+# 1. Не блокировать основной CI при broken cargo-cyclonedx (PR-12 bug).
+# 2. Не запускать SBOM на каждый PR push — только на release/* и main.
+# 3. Иметь собственный timeout + retry.
+
+name: SBOM (CycloneDX)
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - 'release/v*.*.*'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.archived-releases/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: Generate CycloneDX SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-sbom
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: Generate SBOM (CycloneDX JSON)
+        # --override-filename="sbom-${GITHUB_SHA::8}" → результат:
+        #   sbom-<sha8>.cdx.json (auto .cdx.json suffix)
+        # --spec-version=1.5 → современный формат (NIST/EO 14028 совместимый)
+        run: |
+          cargo cyclonedx \
+            --format json \
+            --override-filename "sbom-${GITHUB_SHA::8}" \
+            --spec-version 1.5
+
+      - name: Validate SBOM JSON
+        # Убеждаемся что файл валидный JSON и содержит обязательные поля.
+        run: |
+          SBOM_FILE=$(ls sbom-*.cdx.json | head -1)
+          echo "SBOM file: $SBOM_FILE"
+          test -f "$SBOM_FILE" || (echo "❌ SBOM file not generated" && exit 1)
+          # Валидируем JSON.
+          python3 -c "import json; json.load(open('$SBOM_FILE'))" || \
+            (echo "❌ Invalid JSON in SBOM" && exit 1)
+          # Проверяем обязательные поля CycloneDX.
+          python3 -c "
+          import json
+          d = json.load(open('$SBOM_FILE'))
+          assert d['bomFormat'] == 'CycloneDX', f'bad format: {d[\"bomFormat\"]}'
+          assert d['specVersion'] == '1.5', f'bad spec: {d[\"specVersion\"]}'
+          assert d['serialNumber'].startswith('urn:uuid:'), f'bad serial'
+          assert len(d.get('components', [])) > 0, 'no components'
+          print(f'✅ SBOM valid: {len(d[\"components\"])} components')
+          "
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cyclonedx-${{ github.sha }}
+          path: sbom-*.cdx.json
+          if-no-files-found: error
+
+      - name: Attach SBOM to GitHub release (только на тегах)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sbom-*.cdx.json
+          fail_on_unmatched_files: true

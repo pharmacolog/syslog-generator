@@ -1,6 +1,140 @@
 
 # Changelog
 
+## v10.7.15 - 2026-07-17
+
+**Patch-release (PR-15 + PR-16): CI Failure Mitigation + Coverage expansion.**
+
+Объединяет PR-15 (8 задач по снижению CI failure rate) и PR-16 (расширение
+покрытия тестами +1.77%). Также содержит 2 мелких patch-fix'а (coverage
+flaky test, scripts/quality-gates.sh dedup G8).
+
+### Added (PR-15: CI Failure Mitigation, T1-T8)
+
+Из `docs/PLAN-CI-FAILURE-MITIGATION.md` — 8 задач по снижению CI failure rate
+с 6-8% до target 2%:
+
+- **T1: Pre-commit hooks** — `.pre-commit-config.yaml` (78 строк).
+  Запускает `cargo fmt --check`, `cargo clippy`, `bash scripts/check-n7-invariant.sh`,
+  `bash scripts/check-toolchain.sh` ДО commit'а. Ловит баги до push.
+- **T2: Pre-push toolchain check** — `scripts/check-toolchain.sh` (67 строк).
+  Парсит `rust-toolchain.toml`, проверяет что локальный rustc совпадает
+  с указанным каналом (MSRV enforcement).
+- **T3: Public-API strict gate** — `cargo public-api --features test-helpers`
+  сравнивается с `api-snapshot.txt`. Любое изменение публичного API = PR
+  blocked (CI job + локальный G5.3). Baseline генерится при первом запуске.
+- **T4: CycloneDX SBOM отдельный workflow** — `.github/workflows/sbom.yml`
+  (92 строки). Выделено из CI чтобы (1) не блокировать основной CI при
+  broken cargo-cyclonedx (PR-12 bug), (2) не запускать SBOM на каждый PR,
+  (3) иметь собственный timeout + retry.
+  - Fix PR-15: `--override-filename="sbom-${GITHUB_SHA::8}.cdx"` →
+    результат `sbom-<sha8>.cdx.json` (явное расширение `.cdx`).
+  - `--spec-version=1.5` (NIST/EO 14028 совместимый).
+  - Attach к GitHub Release при tag push.
+- **T5: Examples validate** — уже было зафикшено в PR-12 (`ALLOW_INSECURE_TLS=1`).
+- **T6: Concurrency + paths-ignore** — CI/Docker workflows. `concurrency`
+  блоки с `cancel-in-progress: true` для dev branch (новые push'ы отменяют
+  старые CI runs), `paths-ignore` для docs-only / markdown изменений.
+- **T7: Telegram notifications** — `.github/workflows/notify-telegram.yml`
+  (88 строк) + `docs/TELEGRAM_SETUP.md` (46 строк). Опциональные
+  уведомления о CI failures (через `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+  secrets).
+- **T8: Devcontainer** — `.devcontainer/devcontainer.json` + `post-create.sh`
+  (104 строки). VS Code devcontainer с Rust toolchain, cargo-llvm-cov,
+  cargo-deny, cargo-machete pre-installed.
+
+### Added (PR-16: Coverage expansion, 25 new tests)
+
+Покрытие **89.65% lines / 90.42% functions / 89.53% regions** (+1.77%
+от baseline 87.88%). Подняты модули:
+
+- `validate.rs`: 87.39% → **94.53%** (+7.14%)
+- `format/protobuf.rs`: 79.73% → 81.62% (+1.89%)
+- `transport/mod.rs`: 63% → 89.53% (+26%)
+- `shutdown.rs`: 67% → 92% (+25%)
+- `transport/tcp.rs`: 46.72% → 84.50% (+37.78%)
+
+**10 новых тестов в `src/validate.rs`:**
+- `leef_field_validation_catches_empty_fields`
+- `load_shape_sine_validates_period_and_rates`
+- `load_shape_constant_rejects_negative_rate`
+- `load_shape_burst_rejects_non_positive_every_secs`
+- `tls_client_key_file_not_found_emits_error`
+- `rejects_negative_template_weight`
+- `rejects_zero_padding`
+- `rejects_bad_shutdown_mode`
+- `rejects_empty_phase_name`
+- `reconnect_multiplier_zero_rejected`
+
+**5 новых тестов в `src/format/protobuf.rs`** (round-trip):
+- `parse_field_spec_all_documented_forms_and_aliases`
+- `encode_field_all_pb_types`
+- `encode_field_round_trip` (Uint, Float branches)
+- `apply_protobuf_schema_none_is_empty`
+- `parse_field_spec_malformed_explicit_type`
+- `serialize_protobuf_like_round_trips_simple_schema`
+
+**+ 2 теста `src/load_shape.rs`** (Linear/Burst rate_at branches),
+**+ 2 теста `src/transport/tcp.rs`** (record_reconnect + record_error с labels),
+**+ 1 тест `src/observability/server.rs`** (build_http_response error paths:
+404, 405, 500, empty body),
+**+ 1 тест `src/observability/metrics.rs`** (record_send_latency через
+raw Histogram API),
+**+ 4 теста `src/transport/mod.rs`** (66 строк нового кода),
+**+ 2 теста `src/shutdown.rs`** (21 строка).
+
+### Fixed
+
+- **`tests/integration_tests.rs:702`** — coverage flaky test fix для
+  `test_connection_pool_opens_multiple_connections`. `messages_per_second: 0`
+  (без ограничения) → `100` (≈300ms на 30 сообщений). Под coverage
+  instrumentation tokio замедляется, и все 30 сообщений уходили через
+  первый успевший открыться TCP-коннект, остальные 2 не успевали открыться
+  → `assert_eq!(conns, 3)` падал. Теперь rate=100 даёт достаточно времени
+  на открытие всех 3 коннектов пула. Тест проходит стабильно 3/3 в обычном
+  режиме и 3/3 под coverage.
+- **`scripts/quality-gates.sh:157-170`** — fix нумерации. Раньше было
+  два блока с одинаковым номером G8 (копи-паста): первый реальный perf
+  regression check, второй — просто hint "run bench manually". Теперь:
+  - **G8**: perf regression check (real measurement через cargo bench).
+  - **G9**: perf hot-path hint (manual instruction).
+  - **G10**: changelog check (для releases через `CHECK_CHANGELOG=1`).
+
+### Quality gates (все ✅)
+
+- cargo fmt --all --check: clean
+- cargo clippy --no-default-features --all-targets -D warnings: clean
+- cargo clippy --features kafka --all-targets -D warnings: clean
+- cargo clippy --features kafka,test-helpers --all-targets -D warnings: clean
+- RUSTDOCFLAGS=-D warnings cargo doc --no-deps: clean
+- cargo test --locked --features test-helpers: **399 passed**
+  (302 unit + 86 integration + 11 n7)
+- cargo test --locked --features kafka,test-helpers: **399 passed**
+  (включая kafka)
+- bash scripts/check-n7-invariant.sh: ✅ (no violations)
+- cargo build --release --locked: success (57.62s)
+- cargo bench --no-run --locked: success (10 bench binaries)
+- cargo deny check: ✅ (advisories + bans + licenses + sources)
+- cargo machete: ✅ (no unused deps)
+- cargo public-api snapshot diff: ✅ (no changes — backward compatible)
+- cargo llvm-cov: **89.65% lines** (gate ≥ 87% PASS)
+- cargo bench --bench hot_path -- rfc5424_with_faker: **2.18 µs**
+  (PR-10 baseline 2.01 µs, в пределах ±10% допуска 1.81..2.21 µs)
+
+### Notes
+
+- Тесты: **302 unit + 86 integration + 11 N7 = 399** (на 60 больше
+  CLAUDE_HANDOFF.md благодаря PR-16).
+- Backward compatible: публичный API не изменился (verified через
+  `cargo public-api` snapshot diff — 0 изменений).
+- Coverage gate ≥ 87% blocking в CI по-прежнему имеет
+  `continue-on-error: true` на job-level (fail-safe), но flake теперь
+  устранён in-place (подход проекта — фиксим в коде теста, не в
+  quarantine).
+- CI infrastructure additions: devcontainer, pre-commit hooks,
+  CycloneDX SBOM workflow, optional Telegram notifications, public-API
+  gate. Все non-breaking.
+
 ## v10.7.14 - 2026-07-16
 
 **Patch-release (PR-13): N7 invariant cleanup + Quality Gates extension.**

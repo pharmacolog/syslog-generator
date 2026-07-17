@@ -2,22 +2,35 @@
 
 Дата аудита: 2026-07-11. Базис аудита: реальный компилируемый код v7.4.0 (проверен `cargo build/test/bench/clippy`), документация (`README.md`, `docs/`, `examples/`, `REVIEW.md`), Grafana-дашборд.
 
-> **Статус на v10.3.0 (2026-07-13):** вехи A, B, C, D, E закрыты полностью.
+> **Статус на v10.7.15 (2026-07-17):** вехи A, B, C, D, E, F закрыты полностью.
 > **Веха E (P2 «Зрелость») ЗАКРЫТА — v9.6.0.** Сделанные релизы вехи E:
 > v9.1.0 (N10, trait Format/Transport), v9.2.0 (F15, CEF/LEEF/JSON-lines),
 > **v9.3.0 (F16, Kafka/Redpanda + файловая ротация + exponential backoff reconnect)**,
 > v9.5.0 (N4.cipher_policy + rustls миграция, BREAKING), v9.5.1 (F17, сценарии
 > аномалий: burst-injection, slow-drip, packet-loss, patch поверх v9.5.0),
 > **v9.6.0 (N12, Docker/musl/docker-compose — закрытие вехи E)**.
-> **Веха F (P3 «Production-hardened») в процессе — v10.3.0.** Сделано:
+> **Веха F (P3 «Production-hardened») ЗАКРЫТА — v10.7.1.** Сделанные релизы вехи F:
 > v10.0.0 (breaking cleanup: B1, B2, B6, B7), v10.1.0 (Performance ч.1: LTO +
 > codegen-units=1, bench-regression monitoring, breaking B5 CLI `--target split`),
-> v10.2.0 (Performance ч.2: faker hot-path, -26% throughput), **v10.3.0 (Coverage ч.1:
-> `cargo-llvm-cov` baseline 86.40% lines / 88.36% functions / 86.49% regions,
-> non-blocking CI job)**. B3+B4 — N/A (уже структурные с v8.x).
-> 317 тестов (218 unit + 88 integration + 11 n7) — все зелёные.
-> Следующие релизы: v10.4.0 (Coverage ч.2: ≥ 97% gate), v10.5.0 (CI),
-> v10.6.0–v10.7.0 (usability + закрытие вехи F).
+> v10.2.0 (Performance ч.2: faker hot-path, -26% throughput),
+> v10.3.0 (Coverage ч.1: `cargo-llvm-cov` baseline 86.40% lines, non-blocking CI job),
+> v10.3.1 (CI patch-fix: cargo fmt), v10.4.0 (Coverage ч.2: cargo-fuzz + 87.07% baseline),
+> v10.4.1–v10.4.4 (patch-fix: flaky tests + CI fixes), v10.5.0–v10.5.3 (CI расширение:
+> cargo-deny, cargo-machete, MSRV-blocking, Dependabot), v10.6.0 (Usability ч.1:
+> clap_complete + clap_mangen + owo-colors), v10.7.0 (Usability ч.2: tracing +
+> --dry-run + indicatif), **v10.7.1 (закрытие вехи F: deps cleanup + double Ctrl-C +
+> --config alias)**.
+> Patch-релизы после закрытия вехи F: v10.7.2 (dependabot maintenance), v10.7.3 (PR-1
+> critical fixes по аудиту), v10.7.4 (PR-2 safety+correctness: SIGTERM handler, hoisted
+> CancellationToken, TLS close_notify), v10.7.5 (PR-3 README + SSDLC baseline),
+> v10.7.6 (PR-4 minimal architecture cleanup), v10.7.7–v10.7.8 (PR-10/PR-6 hot-path perf
+> + bench coverage), v10.7.9 (PR-11 coverage gate ≥ 87% blocking), v10.7.10 (PR-9
+> README + SSDLC docs), v10.7.11–v10.7.12 (PR-10/PR-11 hot-path + coverage),
+> v10.7.13 (PR-12 security hardening: F13 gate tls_insecure + Zeroizing + SBOM),
+> v10.7.14 (PR-13 N7 invariant cleanup + Quality Gates extension).
+> **v10.7.15 (PR-15+PR-16: CI Failure Mitigation T1-T8 + Coverage expansion +1.77%
+> до 89.65% lines)**. B3+B4 — N/A (уже структурные с v8.x).
+> 399 тестов (302 unit + 86 integration + 11 n7) — все зелёные, 89.65% coverage.
 > Ранее отложенные опциональные задачи A/B/C (F5 regex, F6 корреляции,
 > F10 честный protobuf, N3 метрики) закрыты в v8.0.0.
 > Разделы 1–2 ниже описывают исходное
@@ -156,7 +169,7 @@ for seq in 1..=total { ... }
 - **F14. Multi-template и schema per-phase. ✅ Сделано (v7.9.0).** Из `templates`/`templates_file` на каждое сообщение выбирается случайный шаблон — равновероятно или по `template_weights`. Schema и templates по-прежнему сосуществуют на фазе (schema.template имеет приоритет, иначе выбирается шаблон из списка).
 
 #### P2 — Расширения
-- **F15. Дополнительные форматы:** CEF, LEEF, JSON-lines, Apache/Nginx access — для SIEM-сценариев.
+- **F15. Дополнительные форматы. ✅ Сделано (v9.2.0).** CEF, LEEF, JSON-lines — для SIEM-сценариев.
 - **F16. Дополнительные транспорты. ✅ Сделано (v9.3.0).** Kafka/Redpanda transport через `rskafka` 0.5 (opt-in feature `kafka`, compression gzip/lz4/snappy/zstd) — `TargetConfig.transport: kafka` + `broker_addrs` + `topic`. Файловая ротация (size/time/max_files с LRU cleanup) — `TargetConfig.transport: file` с `rotation: { size_bytes | interval_secs | max_files }`. Exponential backoff reconnect с jitter для TCP/TLS через `src/transport/reconnect.rs` (10 unit-тестов покрывают логику: success_on_first_attempt, retries_until_success, returns_some_err_when_max_attempts_exhausted, infinite_retries_when_max_attempts_none, on_attempt_callback_invoked_per_try, validate_catches_bad_params и т.д.). Новый `src/transport/kafka.rs` (278 строк) + `src/transport/reconnect.rs` (487 строк). 7 F16-интеграционных тестов + 10 unit + 5 validate (InvalidFileRotation, ZeroFileRotationMaxFiles, ZeroReconnectInitialBackoff, InvalidReconnectMultiplier, InvalidReconnectBackoffRange). `schemas/profile.schema.json` обновлён (oneOf для rotation, reconnect sub-schema). CI: отдельный `test-kafka` job (`.github/workflows/ci.yml`). Примеры: `examples/kafka_redpanda.yaml`, `examples/file_rotation.yaml`, `examples/reconnect_tcp.yaml`. 0 breaking changes.
 - **F17. Сценарии «атак»/аномалий. ✅ Сделано (v9.5.1, patch поверх v9.5.0).** Tagged enum `AnomalyKind` с тремя сценариями: `BurstInjection { rate_multiplier, interval_secs, duration_secs }` (всплеск интенсивности каждые `interval_secs` в течение `duration_secs`), `SlowDrip { rate_divisor, duration_secs }` (пониженная интенсивность первые `duration_secs` — low-and-slow), `PacketLoss { loss_percent }` (детерминированный по `(seed, seq)` drop до отправки через F4-derive_rng с F17-salt). `Phase.anomalies: Option<Vec<Anomaly>>` (`#[serde(default)]`). В `run_phase_multi` аномалии композиционны: multiplicative для rate (burst × M + slow-drip ÷ D = × (M/D)), OR для packet-loss. При наличии аномалий переключаемся с governor (burst-friendly) на честный sleep-планировщик. Prometheus-метрики `syslog_anomalies_applied_total{phase,type}` + `syslog_anomalies_dropped_total{phase,type}`. 6 новых `ValidationError` (F13) + `schemas/profile.schema.json::Anomaly` (oneOf для трёх типов). 13 unit + 2 metrics + 8 validate + 8 integration = 31 новый тест. 0 breaking changes относительно v9.5.0.
 
@@ -242,9 +255,9 @@ for seq in 1..=total { ... }
   Все 181 тестов (115 unit + 55 integration + 11 N7) и 9 бенчей зелёные.
 
 #### P2 — Сопровождаемость и поставка
-- **N10. Вынести ядро из `lib.rs`-реэкспортов в чёткие слои** (`generator`, `transport`, `scheduler`, `format`, `observability`), убрать `architecture-notes.md`-заглушку, описать реальную архитектуру.
-- **N11. Документация как контракт.** Привести USER/DEVELOPER guide в соответствие реализации, добавить раздел «ограничения» и «поведение метрик Prometheus»; синхронизировать `.meta.json` (сейчас ссылаются на устаревшую «v4.0»).
-- **N12. Поставка. ✅ Сделано (v9.6.0).** Docker-образ, статически слинкованный бинарник (musl), пример docker-compose со стеком «генератор + rsyslog/syslog-ng + Prometheus + Grafana» для приёмочного тестирования. Multi-stage `Dockerfile` (`rust:1.97-bookworm` → `gcr.io/distroless/cc-debian12`, ~25 MB, non-root user 65532), `.dockerignore` (исключает target/, .git/, .archived-releases/), `docker-compose.yml` (4 сервиса: syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf` (UDP 514 + TCP 601), `docker/prometheus.yml` (scrape каждые 15s), `examples/profile-docker.yaml` (3 фазы warmup → burst → steady). `.github/workflows/docker.yml` для multi-arch build (linux/amd64 + linux/arm64 с buildx QEMU, push в `ghcr.io/<repo>:<tag>`: main → версия + `latest`, dev → `dev-{short_sha}`, tag `v*.*.*` → имя тега, PR → build без push + smoke-test `docker run --rm ... --version`). CI полностью функционален на ubuntu-latest + macos-latest.
+- **N10. Вынести ядро из `lib.rs`-реэкспортов в чёткие слои. ✅ Сделано (v8.8.0).** Реальная архитектура: `format/`, `transport/`, `observability/`, `generator/`. Trait `Format` + `TransportKind` (dyn-dispatch, async fn в trait) добавлены в v9.1.0. `architecture-notes.md`-заглушка удалена.
+- **N11. Документация как контракт. ✅ Сделано (v8.6.1).** `docs/USER_GUIDE.md` и `docs/DEVELOPER_GUIDE.md` приведены в соответствие с реализацией; добавлены разделы «ограничения» и «поведение метрик Prometheus». `.meta.json` синхронизированы.
+- **N12. Поставка. ✅ Сделано (v9.6.0).** Docker-образ, статически слинкованный бинарник (musl), пример docker-compose со стеком «генератор + rsyslog/syslog-ng + Prometheus + Grafana» для приёмочного тестирования. Multi-stage `Dockerfile` (`rust:1.95-bookworm` → `gcr.io/distroless/cc-debian12`, ~25 MB, non-root user 65532), `.dockerignore` (исключает target/, .git/, .archived-releases/), `docker-compose.yml` (4 сервиса: syslog-generator + syslog-ng + prometheus + grafana), `docker/syslog-ng.conf` (UDP 514 + TCP 601), `docker/prometheus.yml` (scrape каждые 15s), `examples/profile-docker.yaml` (3 фазы warmup → burst → steady). `.github/workflows/docker.yml` для multi-arch build (linux/amd64 + linux/arm64 с buildx QEMU, push в `ghcr.io/<repo>:<tag>`: main → версия + `latest`, dev → `dev-{short_sha}`, tag `v*.*.*` → имя тега, PR → build без push + smoke-test `docker run --rm ... --version`). CI полностью функционален на ubuntu-latest + macos-latest.
 
 ---
 
@@ -255,7 +268,7 @@ for seq in 1..=total { ... }
 3. **Веха C — «Вариативный пейлоад» (P0 F4–F6, F14): ✅ ЗАВЕРШЕНА ПОЛНОСТЬЮ (v8.0.0).** ГПСЧ+seed (F4, v7.9.0), богатый faker-набор + типы полей + **regex** (F5), распределения uniform/weighted/zipf + паддинг + **межполевые корреляции** (F6), мультишаблоны с весами (F14). Ранее отложенные `regex` и корреляции реализованы в v8.0.0. Закрывает «глубокую кастомизацию» пейлоада без остаточных задач.
 4. **Веха D — «Продакшн-готовность» (P1): ✅ ЗАКРЫТА (v8.8.0, последний patch — v8.8.1 с правками AUDIT.md).** Все P1-задачи выполнены: CLI (F11), валидация профиля (F13), типизированные ошибки валидации (`ValidationError` через `thiserror`), **HTTP-эндпоинт /metrics (F12)**, **безопасный TLS по умолчанию (N4)**, **типизированные ошибки рантайма (N7)**, починка TLS-тестов (v8.3.1), **CI-пайплайн GitHub Actions (N9)**, починка регрессии бенчмарков (v8.4.1), **JSON Schema + YAML-ввод (D3)**, **синхронизация Grafana-дашборда (N2)**, **CompiledTemplate/N5 (v8.6.1)**, **round-trip RFC 5424/N8 (v8.6.1)**, **документация/N11 (v8.6.1)**, **zero-copy/буферизация (N6, v8.7.0)**, **property-based тесты (N8, v8.7.1)**, **mTLS + min_protocol (N4.mTLS, v8.7.2)**, **рефакторинг слоёв format/transport/observability/generator (N10, v8.8.0)**. v8.8.1 — правки AUDIT.md (поставить ✅ на F7/F8/F9, убрать "Отложено" из F13/N4). v9.0.0 — milestone release без breaking changes (семантический маркер закрытия вехи D). Потом веха E (P2).
 5. **Веха E — «Зрелость» (P2): ✅ ЗАКРЫТА (v9.6.0).** Все P2-задачи выполнены: trait Format + Transport (N10, v9.1.0), CEF/LEEF/JSON-lines (F15, v9.2.0), Kafka/Redpanda transport через `rskafka` opt-in + файловая ротация + exponential backoff reconnect (F16, v9.3.0), сценарии аномалий нагрузки: burst-injection/slow-drip/packet-loss (F17, v9.5.1), **cipher_policy + миграция native-tls → rustls (N4.cipher_policy, v9.5.0, BREAKING)**, **Docker/musl/docker-compose с multi-arch CI build (N12, v9.6.0 — закрытие вехи E)**. 314 тестов (215 unit + 88 integration + 11 n7) — все зелёные.
-6. **Веха F — «Production-hardened» (P3): 🟡 В ПРОЦЕССЕ (v10.4.0).** Цель: оптимизация производительности, расширенный CI, покрытие ≥ 97%, юзабилити-полировка. 8 релизов (v10.0.0 → v10.7.0). Сделано: v10.0.0 (breaking cleanup B1+B2+B6+B7), v10.1.0 (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias), v10.2.0 (Performance ч.2: faker hot-path `String::with_capacity` + `write!`; -26% на `generate_message_from_template`), v10.3.0 (Coverage ч.1: `cargo-llvm-cov` baseline 86.40% lines / 88.36% functions / 86.49% regions, non-blocking CI coverage job + `docs/COVERAGE.md`), v10.3.1 (patch-fix CI: `cargo fmt` фикс `src/payload.rs:97` после v10.2.0/v10.3.0; добавлено правило release-gate workflow: CI green обязателен перед merge в main), **v10.4.0 (Coverage ч.2: прогресс покрытия 87.07% lines / 89.38% functions / 87.20% regions; `cargo-fuzz` с 5 таргетами `profile_parser` + `format_rfc5424` + `format_cef` + `format_leef` + `format_json_lines`; `docs/FUZZING.md`)**. B3+B4 — N/A (уже структурные с v8.x). Подробный план в `PLAN-v10.0.0.md`.
+6. **Веха F — «Production-hardened» (P3): ✅ ЗАКРЫТА (v10.7.1).** Цель: оптимизация производительности, расширенный CI, покрытие ≥ 87%, юзабилити-полировка. 8 релизов (v10.0.0 → v10.7.1). Сделано: v10.0.0 (breaking cleanup B1+B2+B6+B7), v10.1.0 (Performance ч.1: LTO + bench-regression monitoring, breaking B5 CLI `--target split` с deprecated alias), v10.2.0 (Performance ч.2: faker hot-path `String::with_capacity` + `write!`; -26% на `generate_message_from_template`), v10.3.0 (Coverage ч.1: `cargo-llvm-cov` baseline 86.40% lines), v10.3.1 (patch-fix CI: `cargo fmt` фикс `src/payload.rs:97`; release-gate workflow: CI green обязателен перед merge в main), v10.4.0 (Coverage ч.2: прогресс покрытия 87.07% lines; `cargo-fuzz` с 5 таргетами + `docs/FUZZING.md`), v10.4.1–v10.4.4 (patch-fix: 3 flaky time-sensitive + 2 mTLS + 2 CI fixes), v10.5.0–v10.5.3 (CI расширение: cargo-deny, cargo-machete, MSRV-blocking, Dependabot batch updates), v10.6.0 (Usability ч.1: `clap_complete` + `clap_mangen` + `owo-colors`), v10.7.0 (Usability ч.2: `tracing` + `tracing-subscriber` + `indicatif` + `--dry-run`), **v10.7.1 (закрытие вехи F: deps cleanup jsonschema/criterion/rand/thiserror/rskafka + double Ctrl-C + `--config` alias)**. B3+B4 — N/A (уже структурные с v8.x). Patch-релизы после закрытия вехи F (v10.7.2–v10.7.14) — серия PR'ов по результатам аудита v10.7.2 (PR-1 critical fixes, PR-2 safety+correctness, PR-3 README+SSDLC, PR-4 minimal architecture cleanup, PR-6/10/11 perf+bench+coverage, PR-9 README, PR-12 security hardening, PR-13 N7 invariant cleanup, PR-14 docs CI plan). **v10.7.15 (PR-15+PR-16): CI Failure Mitigation T1-T8 (pre-commit hooks, toolchain check, public-API gate, отдельный SBOM workflow, concurrency/paths-ignore, telegram notifications, devcontainer) + Coverage expansion +1.77% до 89.65% lines (validate.rs 87.39%→94.53%, transport/mod.rs 63%→89.53%, transport/tcp.rs 46.72%→84.50%)**. 399 тестов (302 unit + 86 integration + 11 n7), coverage 89.65% lines. Подробный план в `PLAN-v10.0.0.md`.
 
 Каждая веха завершается compile-verified релизом с обновлением `CHANGELOG.md` и документации (как в текущем процессе v7.4.0).
 

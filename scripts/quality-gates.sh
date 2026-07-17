@@ -154,18 +154,18 @@ if ! command -v cargo-criterion >/dev/null 2>&1; then
 fi
 
 # ─────────────────────────────────────────────────────────────────
-# G8. Performance regression (PR-10 target ≤ 2 µs/msg)
+# G9. Performance hot-path hint (non-enforced, manual check)
 # ─────────────────────────────────────────────────────────────────
 echo ""
-echo "▶ G8.1: performance hot-path (PR-10 target ≤ 2 µs/msg)"
+echo "▶ G9: performance hot-path hint (PR-10 target ≤ 2 µs/msg)"
 echo "  ⚠ Run \`cargo bench --bench hot_path -- --quick\` to verify (~30 секунд)."
 echo "  ⚠ Этот gate НЕ enforced в CI (только мониторинг через bench output artifact)."
 
 # ─────────────────────────────────────────────────────────────────
-# G9. Changelog + RELEASE_CHECK (для releases)
+# G10. Changelog + RELEASE_CHECK (для releases)
 # ─────────────────────────────────────────────────────────────────
 if [ -n "${CHECK_CHANGELOG:-}" ]; then
-    run_step "G9.1: CHANGELOG.md updated for new version" \
+    run_step "G10.1: CHANGELOG.md updated for new version" \
         "bash scripts/check-changelog.sh"
 fi
 

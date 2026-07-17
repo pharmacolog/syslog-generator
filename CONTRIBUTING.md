@@ -3,6 +3,58 @@
 Спасибо за интерес к проекту! Мы приветствуем любые вклады — bug fixes,
 features, документация, benchmarks.
 
+## ⚠️ Обязательный Git Flow (все мержи через PR)
+
+**Все изменения в syslog-generator мерджатся ТОЛЬКО через GitHub Pull Request**
+(никаких `git push` напрямую в `main` или `dev`). Это enforced через
+[Branch Protection Rules](.github/branch-protection.md) и обязательно для
+всех участников (включая maintainers).
+
+### Ветки и их назначение
+
+| Branch | Назначение | Кто может merge | Способ merge |
+|---|---|---|---|
+| **`main`** | Стабильный релизный код. Только релизы. | Maintainer (с review) | Только PR |
+| **`dev`** | Интеграционная ветка. Всегда зелёная. | Maintainer | PR (auto-sync через workflow) |
+| `feature/*`, `fix/*` | Новые фичи/фиксы | Maintainer + author | PR → dev |
+| `release/vX.Y.Z` | Подготовка релиза | Maintainer | PR → main |
+
+### Flow для нового изменения
+
+```text
+feature/pr-N-* → PR → dev → CI green → merge
+                            ↓
+                (когда готов релиз)
+                            ↓
+                            → release/vX.Y.Z → PR → main → CI green → merge
+                                                                          ↓
+                                                          auto-sync main → dev (workflow)
+```
+
+1. **Создайте feature branch от `dev`**: `git checkout -b feature/pr-N-my-feature dev`
+2. **Сделайте изменения** (код + тесты + docs)
+3. **Пройдите Quality Gates** локально (см. ниже)
+4. **Commit** с Conventional Commits message
+5. **Push** в fork или в origin (если у вас есть права на feature-ветки)
+6. **Откройте PR** `feature/*` → `dev` через [GitHub UI](https://github.com/pharmacolog/syslog-generator/compare)
+7. **Дождитесь CI** на этом PR (все 7 blocking jobs должны быть зелёные)
+8. **Maintainer review + merge** через GitHub UI
+9. **Никаких локальных `git merge` или `git push` в `main`/`dev`** — только PR
+
+### Sync main → dev
+
+После каждого merge в `main` GitHub Actions workflow
+`.github/workflows/sync-main-to-dev.yml` **автоматически** создаёт PR
+`main → dev` для синхронизации. Этот PR требует тех же 7 CI checks
+(что и любой другой PR в `dev`). После зелёного CI — merge.
+
+### Почему это важно
+
+- **Auditability:** каждый merge имеет PR, review, CI logs, conversation history
+- **Quality:** ни один merge не проходит без 7 CI checks (coverage ≥ 87%, cargo-deny, cargo-machete, public-api snapshot, etc.)
+- **Rollback:** через `git revert -m 1 <merge-sha>` или GitHub UI "Revert"
+- **CodeQL scanning:** PR триггерит CodeQL analysis, который ловит security issues (см. alert #7 — code injection в notify-telegram.yml, пофикшен через PR)
+
 ## Code of Conduct
 
 Участвуя в проекте, вы соглашаетесь следовать [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -37,27 +89,46 @@ docs/DEVELOPER_GUIDE.md, rustdoc-комментариев, или исправл
 
 ### Submitting Code
 
-#### Workflow
+#### Workflow (ОБЯЗАТЕЛЬНО через PR)
+
+> ⚠️ **Все мержи — через GitHub Pull Request.** Никаких прямых push'ей в
+> `main` или `dev`. Это enforced через [Branch Protection Rules](.github/branch-protection.md).
 
 ```text
-feature/pr-N-* → dev (CI green) → release/v*.*.* (CI green) →
-main (release-gate) → tag v*.*.* → push
+feature/pr-N-* → PR → dev → CI green → merge
+                            ↓
+                (когда готов релиз)
+                            ↓
+                dev → release/vX.Y.Z → PR → main → CI green → merge
+                                                                      ↓
+                                                      auto-sync main → dev (workflow)
 ```
 
-1. **Fork** репозиторий
-2. **Clone** ваш fork: `git clone https://github.com/YOUR_USERNAME/syslog-generator.git`
-3. **Создайте feature branch** от `dev`: `git checkout -b feature/pr-N-my-feature dev`
-4. **Сделайте изменения** (код + тесты + docs)
-5. **Запустите Quality Gates** (см. ниже)
-6. **Commit** с описательным сообщением
-7. **Push** в ваш fork
-8. **Откройте PR** в `dev` через [GitHub](https://github.com/pharmacolog/syslog-generator/compare)
-9. **Дождитесь CI** на dev (зелёный)
-10. **Maintainer** смерджит в release/vX.Y.Z → main → tag
+**Пошагово:**
+
+1. **Создайте feature branch от `dev`**: `git checkout -b feature/pr-N-my-feature dev`
+2. **Сделайте изменения** (код + тесты + docs)
+3. **Запустите Quality Gates** локально (см. ниже) — все должны пройти
+4. **Commit** с [Conventional Commits](#commit-messages) message
+5. **Push** в origin (или в ваш fork): `git push -u origin feature/pr-N-my-feature`
+6. **Откройте PR** `feature/*` → `dev` через [GitHub UI](https://github.com/pharmacolog/syslog-generator/compare)
+7. **Заполните PR template** (`.github/PULL_REQUEST_TEMPLATE.md`) — checklist обязателен
+8. **Дождитесь CI** на PR (все 7 blocking jobs должны быть зелёные)
+9. **Maintainer review + merge** через GitHub UI (НЕ локальный merge)
+10. **Auto-sync** из main в dev запустится автоматически (через `.github/workflows/sync-main-to-dev.yml`)
+
+**Что НЕЛЬЗЯ делать:**
+
+- ❌ `git push origin main` — прямой push в main заблокирован branch protection
+- ❌ `git push origin dev` — для maintainer'ов допустимо только для hotfix через PR
+- ❌ `git checkout main && git merge dev && git push` — прямой merge в main
+- ❌ Force push в любую защищённую ветку
+- ❌ Merge PR с красными CI checks (enforced через `strict: true` в required_status_checks)
 
 ## Quality Gates (ОБЯЗАТЕЛЬНО перед PR)
 
-Каждый PR обязан пройти все gates локально:
+Каждый PR обязан пройти все gates локально (они же дублируются в CI и
+проверяются через [Branch Protection](.github/branch-protection.md)):
 
 ```bash
 # Format
@@ -68,7 +139,7 @@ cargo clippy --no-default-features --all-targets -- -D warnings
 cargo clippy --features kafka --all-targets -- -D warnings
 cargo clippy --features kafka,test-helpers --all-targets -- -D warnings
 
-# Tests (339 unit/integration должны быть зелёные)
+# Tests (399 unit/integration должны быть зелёные)
 cargo test --locked --features test-helpers
 
 # Kafka tests
@@ -80,12 +151,23 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 # Public API (no breaking changes без обоснования)
 cargo public-api --features test-helpers 2>/dev/null > /tmp/api.txt
 diff -u api-snapshot.txt /tmp/api.txt  # должны быть идентичны
+# Если изменился API — обновите api-snapshot.txt и обоснуйте в PR
 
 # Build (release)
 cargo build --release --locked
 
 # Bench compiles
 cargo bench --no-run --locked
+
+# N7 invariant (no unwrap/expect/panic в runtime коде)
+bash scripts/check-n7-invariant.sh
+
+# Если меняли .github/workflows/*.yml: bash syntax check для embedded scripts
+for f in .github/workflows/*.yml; do
+  python3 -c "import yaml; yaml.safe_load(open('$f'))"  # yaml syntax
+  awk '/^      - name:/,/^      - name:|^jobs:/' "$f" | \
+    sed 's/^        //' | bash -n  # shell syntax в run: | блоках
+done
 ```
 
 **Лайфхак:** запустите всё одной командой:
@@ -247,16 +329,50 @@ chore(deps): bump tokio to 1.43
 
 ## Release Process (для maintainers)
 
-См. [CLAUDE_HANDOFF.md §12](CLAUDE_HANDOFF.md) и `.github/workflows/ci.yml`.
+> ⚠️ **Все шаги — через PR.** Никаких прямых push'ей в `main` или `dev`.
 
-1. `feature/pr-N-*` → `dev` (CI green)
-2. `dev` → `release/v*.*.*` (CI green)
-3. `release/v*.*.*` → `main` (release-gate, CI green)
-4. Bump `Cargo.toml` version
-5. Update `CHANGELOG.md`, `README.md`, `CLAUDE_HANDOFF.md`
-6. `cargo build --release`
-7. Tag `v*.*.*` и push
-8. Архив в `.archived-releases/` (НЕ в git)
+Полная документация — в [CLAUDE_HANDOFF.md](CLAUDE_HANDOFF.md) и
+[`.github/branch-protection.md`](.github/branch-protection.md).
+Конфигурация защиты веток — в [`.github/branch-protection.md`](.github/branch-protection.md).
+
+**Шаги для release PR (через GitHub UI):**
+
+1. **Убедиться, что dev зелёный** — все CI checks pass на последнем commit
+2. **Создать `release/vX.Y.Z` от main** (через GitHub UI или `git checkout -b release/vX.Y.Z origin/main`)
+3. **Открыть PR `dev` → `release/vX.Y.Z`** — merge после CI green
+4. **Bump `Cargo.toml`** версию (например `10.7.14` → `10.7.15`)
+5. **Обновить документацию** (в том же коммите или отдельным коммитом):
+   - `CHANGELOG.md` (новая секция vX.Y.Z)
+   - `README.md` (badge + Docker tags + docs table)
+   - `AUDIT.md` (статусы вех и задач)
+   - `CLAUDE_HANDOFF.md` (текущая версия + история)
+   - `examples/` (если нужно)
+6. **Push** `release/vX.Y.Z` в origin (через PR review, не напрямую)
+7. **Открыть PR `release/vX.Y.Z` → `main`** — требует 1 approval + 7 CI checks
+8. **Дождаться CI** на этом PR (все blocking jobs зелёные)
+9. **Merge** через GitHub UI (squash или merge commit — оба ОК)
+10. **Push tag `vX.Y.Z`**: `git push origin vX.Y.Z` (этот push НЕ идёт через PR — теги
+    обрабатываются отдельно; trigger'ит Docker + SBOM workflows)
+11. **Создать GitHub Release** через `gh release create vX.Y.Z --target vX.Y.Z --title ... --notes ...`
+    с архивом (`syslog-generator-vX.Y.Z-verified.zip`) и SBOM (`sbom-vX.Y.Z.cdx.json`)
+12. **Auto-sync main → dev** запустится автоматически (через `.github/workflows/sync-main-to-dev.yml`).
+    Maintainer merge'ит этот sync PR после CI green.
+
+**Что НЕЛЬЗЯ делать в release:**
+
+- ❌ `git push origin main` — заблокировано branch protection
+- ❌ Force push в `release/v*.*.*` после создания
+- ❌ Merge release PR с красными CI (даже если они non-blocking — strict mode требует fresh green)
+- ❌ Забыть bump `Cargo.toml` (это приведёт к несоответствию tag и версии в бинарнике)
+
+**Чек-лист перед merge release PR:**
+
+- [ ] Все 7 CI blocking checks SUCCESS
+- [ ] Все CodeQL analyses (Analyze (actions), Analyze (rust)) SUCCESS
+- [ ] `Cargo.toml` version совпадает с tag name
+- [ ] `CHANGELOG.md` содержит секцию vX.Y.Z
+- [ ] `git diff vX.Y.Z-1 vX.Y.Z -- Cargo.toml` показывает корректный bump
+- [ ] Локальный `cargo build --release` показывает новую версию через `--version`
 
 ## Questions?
 

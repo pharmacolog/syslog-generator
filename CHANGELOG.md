@@ -135,6 +135,39 @@ raw Histogram API),
   CycloneDX SBOM workflow, optional Telegram notifications, public-API
   gate. Все non-breaking.
 
+### Security fixes (post-release, через PR-only flow)
+
+**PR-18 (CodeQL alert #7, severity: critical):** code injection в
+`.github/workflows/notify-telegram.yml`. `github.event.workflow_run.head_branch`
+(и другие user inputs) интерполировались напрямую через `${{ }}` в bash
+`run:` блок — attacker мог выполнить произвольный shell код через имя
+branch. Fix: перенос всех user inputs в `env:` блок + bash native `${VAR}`
+syntax. Закрыто через PR #18 `dev → main`.
+
+**Dependabot alert #1 (CVE-2025-53605 protobuf 2.28.0):** dismissed с reason
+`not_used`. `protobuf 2.28.0` — транзитивная dev-only зависимость cargo-fuzz
+toolchain, НЕ runtime зависимость. Самописный protobuf encoder (~496 строк
+в `src/format/protobuf.rs`) реализует wire-format без `protobuf` crate.
+
+### Mandatory Git Flow (с v10.7.15)
+
+**Все мержи — через GitHub Pull Request.** Никаких прямых push'ей в `main`
+или `dev`. Enforced через Branch Protection Rules:
+
+- **`main`:** 7 required status checks (Test ubuntu, MSRV, cargo-deny,
+  cargo-machete, public-api, Coverage, Test kafka) + 1 PR review +
+  linear history + admin enforce + conversation resolution.
+- **`dev`:** те же 7 required status checks (strict mode), no review
+  required (для maintainer hotfix).
+- **Auto-sync `main → dev`** через `.github/workflows/sync-main-to-dev.yml` —
+  после каждого merge в main автоматически создаётся PR `main → dev`.
+- **PR template** `.github/PULL_REQUEST_TEMPLATE.md` со стандартным checklist.
+- **Документация** `.github/branch-protection.md` с конфигурацией.
+
+**Покрытие проверками не снижено** — все 7 blocking jobs обязательны для
+каждого PR. Дополнительно: CodeQL analyze (actions/rust) триггерится на
+каждый PR через GitHub default setup.
+
 ## v10.7.14 - 2026-07-16
 
 **Patch-release (PR-13): N7 invariant cleanup + Quality Gates extension.**

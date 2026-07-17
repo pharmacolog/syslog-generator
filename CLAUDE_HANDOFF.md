@@ -1,6 +1,6 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-17. Текущая версия: **v10.7.15** (patch-release: PR-15 CI Failure Mitigation T1-T8 + PR-16 Coverage expansion +1.77% до 89.65% lines — pre-commit hooks, toolchain check, public-API gate, отдельный SBOM workflow, concurrency/paths-ignore, telegram notifications, devcontainer; 25 новых тестов, validate.rs 87.39%→94.53%, transport/mod.rs 63%→89.53%, transport/tcp.rs 46.72%→84.50%). Дополнительно: coverage flaky test fix (messages_per_second 0→100) и dedup G8/G9/G10 в quality-gates.sh. Веха F закрыта на v10.7.1.
+Дата: 2026-07-17. Текущая версия: **v10.7.15** (patch-release: PR-15 CI Failure Mitigation T1-T8 + PR-16 Coverage expansion +1.77% до 89.65% lines — pre-commit hooks, toolchain check, public-API gate, отдельный SBOM workflow, concurrency/paths-ignore, telegram notifications, devcontainer; 25 новых тестов, validate.rs 87.39%→94.53%, transport/mod.rs 63%→89.53%, transport/tcp.rs 46.72%→84.50%). Дополнительно: coverage flaky test fix (messages_per_second 0→100), dedup G8/G9/G10 в quality-gates.sh, **fix code injection в notify-telegram.yml** (CodeQL alert #7 fixed через PR #18). **Обязательный Git Flow внедрён** (PR-only merges, Branch Protection Rules, auto-sync workflow) — см. раздел 0.5. Веха F закрыта на v10.7.1.
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.
@@ -15,6 +15,73 @@
 - **При выпуске версий обязательно обновлять документацию И changelog** (README.md, CHANGELOG.md,
   AUDIT.md, CLAUDE_HANDOFF.md, examples/). Каждая веха завершается compile-verified релизом.
 - Прежде чем заявлять результат/метрику — **проверять реальной компиляцией** (`cargo build/test/clippy`).
+
+---
+
+## 0.5 Обязательный Git Flow (с v10.7.15)
+
+**Все мержи в syslog-generator — ТОЛЬКО через GitHub Pull Request.** Это
+enforced через [Branch Protection Rules](.github/branch-protection.md)
+и обязательно для всех участников (включая maintainers).
+
+### Иерархия веток
+
+| Branch | Назначение | Кто мерджит | Способ | Защита |
+|---|---|---|---|---|
+| **`main`** | Стабильный релизный код | Maintainer (с review) | Только PR | 7 checks + 1 review + linear |
+| **`dev`** | Интеграционная ветка. Всегда зелёная. | Maintainer | PR (auto-sync через workflow) | 7 checks, no review |
+| `feature/*`, `fix/*` | Новые фичи/фиксы | Author + Maintainer | PR → dev | (нет protection) |
+| `release/vX.Y.Z` | Подготовка релиза | Maintainer | PR → main | (нет protection) |
+
+### Поток изменений
+
+```text
+feature/pr-N-* → PR → dev → CI green (7 checks) → merge
+                                              ↓
+                              (когда готов релиз ↓
+                                              ↓
+                                              → release/vX.Y.Z → PR → main → CI green → merge
+                                                                                              ↓
+                                                                          auto-sync main → dev (workflow)
+                                                                                              ↓
+                                                                          PR merge → CI green → merge
+```
+
+### Required status checks (7 blocking jobs для main и dev)
+
+1. `Test (ubuntu-latest)` — primary test run
+2. `MSRV check (blocking, v10.5.0)` — Rust MSRV enforcement
+3. `cargo-deny (advisories + licenses, blocking)` — security + license
+4. `cargo-machete (unused deps, blocking)` — unused dependency detection
+5. `cargo public-api snapshot (blocking)` — public API stability
+6. `Coverage (cargo-llvm-cov + codecov upload)` — coverage ≥ 87%
+7. `Test kafka feature (ubuntu-latest)` — kafka feature integration
+
+Плюс non-blocking: `Test (macos-latest)`, `Build & push (Docker)`, `Generate CycloneDX SBOM`, `Analyze (actions/rust)` (CodeQL).
+
+### Запрещено
+
+- ❌ `git push origin main` — branch protection блокирует
+- ❌ `git push origin dev` (для maintainers допустимо только через PR — для sync используется workflow)
+- ❌ Force push в любую защищённую ветку
+- ❌ Merge PR с красными CI (strict mode enforced)
+- ❌ Merge без review для main (1 approval required)
+- ❌ Squash merge для dev (для traceability оставляем merge commits)
+- ❌ Локальный `git merge origin/main && git push origin dev` (используется auto-sync workflow)
+
+### Автоматизация
+
+- `.github/workflows/sync-main-to-dev.yml` — auto-sync PR после merge в main
+- `.github/PULL_REQUEST_TEMPLATE.md` — стандартный checklist
+- `.github/branch-protection.md` — конфигурация protection rules
+- `scripts/quality-gates.sh` — локальные gates (G1..G10)
+
+### Lessons learned
+
+- **v10.7.15 (PR-18):** Code injection в `notify-telegram.yml` через `${{ github.event.workflow_run.head_branch }}`. Исправлено через PR #18 — перенос user inputs в `env:` блок. PR-only flow поймал это через CodeQL analyze.
+- **v10.7.15 (PR-17):** Bash syntax error в `ci.yml` (лишний `fi` после PR-15 merge). CI упал с exit code 2. Branch protection для main требует CI green — но я поторопился с merge до зелёного CI. Теперь защита от повторения: strict required_status_checks + workflow `sync-main-to-dev.yml` (нельзя merge dev → main напрямую, только через release flow).
+
+**Полная конфигурация:** [.github/branch-protection.md](.github/branch-protection.md)
 
 ---
 
@@ -237,7 +304,9 @@ D3, N2) сделаны. См. CHANGELOG.md и AUDIT.md §5.
 - **v10.7.12** — **Patch-release (PR-11): Test coverage + gate**. 87.94% lines. Coverage gate ≥ 87% blocking. 41+ новых тестов (validate.rs kafka/cipher, TCP/UDP/raw/rfc3164 sender loops, generator/core helpers).
 - **v10.7.13** — **Patch-release (PR-12): Security hardening + SSDLC**. F13 gate для `tls_insecure=true` (MITM-trivial fix). `Zeroizing<Vec<u8>>` для TLS private keys. Drop `RSA_PKCS1_SHA1` из `NoCertVerifier`. `tracing::warn!` для SIEM-indexed security warnings. `yanked = "deny"` в deny.toml. SBOM generation (cargo-cyclonedx). Docker SLSA Build L1 (provenance + sbom). Threat model в SECURITY.md. License policy drift исправлен.
 - **v10.7.14** — **Patch-release (PR-13): N7 invariant cleanup + Quality Gates extension**. После PR-10/12 осталось несколько `.expect()` и `unreachable!()` в runtime коде — все заменены на graceful fallbacks (5 в `src/format/json_lines.rs`, 4 в `src/validate.rs`, 1 в `src/generator/config.rs`, 1 в `src/generator/core.rs`, 5 в `src/payload.rs`). `scripts/quality-gates.sh` расширен до 9 gates G1..G9 (cargo-deny, cargo-machete, public-api, N7 invariant, coverage ≥ 87% blocking, perf regression hint, changelog check). 374 теста (277 unit + 86 integration + 11 n7), все зелёные.
-- **v10.7.15** — **Patch-release (PR-15+PR-16): CI Failure Mitigation T1-T8 + Coverage expansion +1.77%**. PR-15: 8 задач по снижению CI failure rate с 6-8% до target 2% — `.pre-commit-config.yaml` (T1), `scripts/check-toolchain.sh` + pre-push (T2), public-API strict gate через `cargo public-api` + `api-snapshot.txt` (T3), отдельный `.github/workflows/sbom.yml` с CycloneDX 1.5 SBOM (T4), examples validate (T5), concurrency + paths-ignore в CI/Docker workflows (T6), опциональный `.github/workflows/notify-telegram.yml` + `docs/TELEGRAM_SETUP.md` (T7), `.devcontainer/` (T8). PR-16: **25 новых тестов**, coverage **89.65% lines / 90.42% functions / 89.53% regions** (baseline 87.88% → +1.77%). `validate.rs` 87.39% → **94.53%** (+7.14%), `transport/mod.rs` 63% → 89.53% (+26%), `transport/tcp.rs` 46.72% → 84.50% (+37.78%). Patch-fix: `test_connection_pool_opens_multiple_connections` (rate 0→100 для coverage stability 3/3), `scripts/quality-gates.sh` dedup G8/G9/G10 (было два блока с номером G8). 399 тестов (302 unit + 86 integration + 11 n7). G8 perf regression 2.18 µs (в пределах ±10% от PR-10 baseline 2.01 µs). Quality Gates все ✅. ← текущая.
+- **v10.7.15** — **Patch-release (PR-15+PR-16): CI Failure Mitigation T1-T8 + Coverage expansion +1.77%**. PR-15: 8 задач по снижению CI failure rate с 6-8% до target 2% — `.pre-commit-config.yaml` (T1), `scripts/check-toolchain.sh` + pre-push (T2), public-API strict gate через `cargo public-api` + `api-snapshot.txt` (T3), отдельный `.github/workflows/sbom.yml` с CycloneDX 1.5 SBOM (T4), examples validate (T5), concurrency + paths-ignore в CI/Docker workflows (T6), опциональный `.github/workflows/notify-telegram.yml` + `docs/TELEGRAM_SETUP.md` (T7), `.devcontainer/` (T8). PR-16: **25 новых тестов**, coverage **89.65% lines / 90.42% functions / 89.53% regions** (baseline 87.88% → +1.77%). `validate.rs` 87.39% → **94.53%** (+7.14%), `transport/mod.rs` 63% → 89.53% (+26%), `transport/tcp.rs` 46.72% → 84.50% (+37.78%). Patch-fix: `test_connection_pool_opens_multiple_connections` (rate 0→100 для coverage stability 3/3), `scripts/quality-gates.sh` dedup G8/G9/G10 (было два блока с номером G8). 399 тестов (302 unit + 86 integration + 11 n7). G8 perf regression 2.18 µs (в пределах ±10% от PR-10 baseline 2.01 µs). Quality Gates все ✅.
+- **v10.7.15 (PR-18)** — **Security hotfix: Code injection в `notify-telegram.yml`** (CodeQL alert #7, severity: critical, CWE-94/95/116). `github.event.workflow_run.head_branch` (и другие user-controlled inputs) интерполировались напрямую в bash `run:` блок через `${{ }}`. Fix: перенос всех user inputs в `env:` блок + bash native `${VAR}` syntax. Закрыто через PR #18 `dev → main`. Также: Dependabot alert #1 (CVE-2025-53605 protobuf 2.28.0) dismissed с reason `not_used` — protobuf НЕ runtime зависимость (самописный encoder ~496 строк в `src/format/protobuf.rs`), только cargo-fuzz dev-toolchain.
+- **v10.7.15 (Mandatory Git Flow)** — **Все мержи через PR.** Branch Protection Rules настроены: main (7 required checks + 1 review + linear + admin enforce), dev (7 required checks, no review). Auto-sync workflow `.github/workflows/sync-main-to-dev.yml` создаёт PR `main → dev` после каждого merge в main. PR template `.github/PULL_REQUEST_TEMPLATE.md` со стандартным checklist. Документация: `.github/branch-protection.md`, обновлённые `CONTRIBUTING.md` + `CLAUDE_HANDOFF.md` раздел 0.5. Покрытие проверками не снижено — все 7 blocking jobs требуются на каждом PR. ← текущая.
 
 ---
 

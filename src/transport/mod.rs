@@ -600,8 +600,8 @@ mod tests {
     async fn phase6_transportkind_file_run_writes_to_file() {
         let metrics = create_metrics().expect("create_metrics ok");
         let shutdown = CancellationToken::new();
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(8);
-        let rx: SharedRx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(8);
+        let rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx_inner));
 
         // Временный файл в target dir тестов.
         let tmp =
@@ -627,8 +627,8 @@ mod tests {
                 .await
         });
 
-        tx.send(b"line-1".to_vec()).await.unwrap();
-        tx.send(b"line-2".to_vec()).await.unwrap();
+        tx.send(Bytes::from(b"line-1".to_vec())).await.unwrap();
+        tx.send(Bytes::from(b"line-2".to_vec())).await.unwrap();
         drop(tx);
 
         // Дождёмся flush BufWriter'а.
@@ -649,8 +649,8 @@ mod tests {
         let recv_addr = receiver.local_addr().unwrap();
         let metrics = create_metrics().expect("create_metrics ok");
         let shutdown = CancellationToken::new();
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(8);
-        let rx: SharedRx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(8);
+        let rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx_inner));
 
         let addr = recv_addr.to_string();
         let shutdown_clone = shutdown.clone();
@@ -671,7 +671,7 @@ mod tests {
                 .await
         });
 
-        tx.send(b"udp-msg".to_vec()).await.unwrap();
+        tx.send(Bytes::from(b"udp-msg".to_vec())).await.unwrap();
         drop(tx);
 
         // Получаем datagram.
@@ -703,8 +703,8 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let metrics = create_metrics().expect("create_metrics ok");
         let shutdown = CancellationToken::new();
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(8);
-        let rx: SharedRx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(8);
+        let rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx_inner));
 
         // Accept loop на стороне listener'а: первое сообщение — собираем в String.
         let accept_handle = tokio::spawn(async move {
@@ -737,7 +737,7 @@ mod tests {
                 .await
         });
 
-        tx.send(b"tcp-msg".to_vec()).await.unwrap();
+        tx.send(Bytes::from(b"tcp-msg".to_vec())).await.unwrap();
         drop(tx);
 
         let received = tokio::time::timeout(std::time::Duration::from_secs(2), accept_handle)
@@ -768,8 +768,8 @@ mod tests {
         // без попытки connect.
         let metrics = create_metrics().expect("create_metrics ok");
         let shutdown = CancellationToken::new();
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(8);
-        let rx: SharedRx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(8);
+        let rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx_inner));
 
         // Невалидный addr → TLS handshake падает → возврат Err.
         let addr = "127.0.0.1:1"; // Порт 1 — privileged, скорее всего откажет.

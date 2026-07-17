@@ -404,6 +404,7 @@ mod tests {
             procid: "1".into(),
             msgid: "X".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }

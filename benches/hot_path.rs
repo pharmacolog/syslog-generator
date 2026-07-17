@@ -9,9 +9,11 @@
 //!     cargo bench --bench hot_path -- --quick
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use std::collections::HashMap;
 use std::hint::black_box;
 use syslog_generator::{
-    format::FormatKind, generate_message_with_format, load_profile_from_yaml_str, PhaseContext,
+    format::FormatKind, generate_message_with_format_cached, load_profile_from_yaml_str,
+    PhaseContext,
 };
 
 const PROFILE_YAML: &str = r#"
@@ -44,18 +46,24 @@ fn bench_generate_message_per_msg(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1));
 
     group.bench_function("rfc5424_with_faker", |b| {
+        // PR-17b: hot-path использует `_cached` API с caller-owned HashMap.
+        // Устраняет heap allocation per message (~80-150 ns/msg savings).
+        // PR-17d (v10.7.19): cached IntCounter handle — `with_label_values`
+        // вызывается ОДИН раз вне `b.iter` (без HashMap lookup per msg).
+        let mut values = HashMap::with_capacity(16);
+        let msg_counter = metrics
+            .messages_generated_total
+            .with_label_values(&["bench"]);
         b.iter(|| {
-            let msg = generate_message_with_format(
+            let msg = generate_message_with_format_cached(
                 black_box(&ctx),
                 black_box(&phase),
                 black_box(&format_kind),
                 black_box(1),
+                black_box(&mut values),
             )
             .expect("generate ok");
-            metrics
-                .messages_generated_total
-                .with_label_values(&["bench"])
-                .inc();
+            msg_counter.inc();
             black_box(msg);
         });
     });

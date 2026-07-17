@@ -12,11 +12,12 @@ fn make_header() -> Header {
     Header {
         facility: 16,
         severity: 6,
-        hostname: "host01".to_string(),
-        app_name: "app".to_string(),
-        procid: "1234".to_string(),
-        msgid: "ID47".to_string(),
-        structured_data: "-".to_string(),
+        hostname: "host01".into(),
+        app_name: "app".into(),
+        procid: "1234".into(),
+        msgid: "ID47".into(),
+        structured_data: "-".into(),
+        timestamp: "".into(),
         bom: false,
     }
 }

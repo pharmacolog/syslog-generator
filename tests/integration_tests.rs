@@ -3176,12 +3176,12 @@ fn test_f16_example_reconnect_tcp_parses() {
 /// F16: реальная файловая ротация — sender создаёт rotated-файлы через 1 сек.
 #[tokio::test]
 async fn test_f16_file_rotation_creates_rotated_files_e2e() {
+    use bytes::Bytes;
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use syslog_generator::{create_metrics, target_sender_file_with_rotation, RotationConfig};
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
-    use bytes::Bytes;
 
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

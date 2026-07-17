@@ -47,7 +47,7 @@ mod tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::net::UdpSocket;
-    use tokio::sync::{mpsc, };
+    use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
     /// UDP sender отправляет datagram на указанный addr.

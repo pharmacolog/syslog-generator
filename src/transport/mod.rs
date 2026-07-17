@@ -91,9 +91,7 @@ pub(crate) async fn next_msg(rx: &SharedRx) -> Option<Bytes> {
     loop {
         // Scope guard tightly: `try_lock().and_then(...)` дропает guard
         // сразу после `and_then` возвращает, до await на `yield_now`.
-        let outcome = rx
-            .try_lock()
-            .and_then(|mut g| g.try_recv().ok());
+        let outcome = rx.try_lock().and_then(|mut g| g.try_recv().ok());
         match outcome {
             Some(msg) => return Some(msg),
             None => {

@@ -158,7 +158,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
-    use tokio::sync::{mpsc, };
+    use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
     /// TCP sender: connect → write → drain → exit.

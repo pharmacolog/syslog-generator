@@ -24,7 +24,7 @@ use std::io::IsTerminal;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, };
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub fn create_dispatcher(targets: &[TargetConfig], distribution: &str) -> Vec<usize> {

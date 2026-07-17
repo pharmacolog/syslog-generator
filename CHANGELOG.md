@@ -1,6 +1,58 @@
 
 # Changelog
 
+## v10.7.17 - 2026-07-17
+
+**Patch-release (PR-17b): pre-allocated HashMap + inline hot-path.**
+
+Второй шаг итеративной оптимизации. PR-17a дал 2.057 → 1.927 µs; PR-17b
+добавляет caller-owned HashMap + inline на hot-path → **1.815 µs/msg**
+(−5.8% vs PR-17a, **−11.8% vs v10.7.15 baseline**). Throughput 519 → 551 Kelem/s.
+
+### Added (PR-17b: hot-path infrastructure)
+
+- `default_values_into(&mut HashMap<String, String>, ctx, phase, seq, rng) -> usize` —
+  hot-path версия, заполняет caller-owned HashMap через `.clear()`. Устраняет
+  heap allocation per message.
+- `generate_message_with_format_cached(ctx, phase, format_kind, seq, &mut values) -> Result<Vec<u8>>` —
+  hot-path версия `generate_message_with_format`, переиспользует caller HashMap.
+- Re-exports в `generator::mod` и `lib.rs`.
+
+### Changed (PR-17b)
+
+- `#[inline]` атрибуты на hot-path: `generate_message_with_format`,
+  `generate_message_with_format_cached`, `pick_template_compiled`, `wrap_syslog`.
+- `default_values(ctx, phase, seq, rng) -> HashMap` остаётся как backward-compat
+  wrapper (использует `default_values_into` внутри).
+- `generate_message_with_format` остаётся как backward-compat wrapper
+  (создаёт HashMap::with_capacity(16) и делегирует `_cached` варианту).
+- Bench `benches/hot_path.rs` обновлён на `_cached` API.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | PR-17b     | Δ vs base  |
+|------------------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1926.7 ns  | **1815.1 ns** | **−11.8%**|
+| `template_render_only` | 124.7 ns   | 103.8 ns   | 106.5 ns   | −14.6%     |
+| `faker_ipv4`           | 90.3 ns    | 81.7 ns    | 81.5 ns    | −9.7%      |
+| **throughput**         | 486 Kelem/s| 519 Kelem/s| **551 Kelem/s** | **+13.4%**|
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --lib -- -D warnings`: clean
+
+### Не реализовано (план для PR-17c)
+
+- `Arc<str>` для `SyslogHeaderParts` — требует переделки `Header` struct +
+  `format::build` API (breaking). Намечено на PR-17c.
+- Single shared `Utc::now()` (один timestamp на msg, передаётся в обе функции).
+- Cached `IntCounter` handles для bench.
+- Миграция на `SmallRng` (xoshiro256++, быстрее StdRng на 30-50%).
+
+Refs: docs/PERFORMANCE.md, PR-17a baseline (1.927 µs), PR-10 baseline (2.01 µs).
+
 ## v10.7.16 - 2026-07-17
 
 **Patch-release (PR-17a): Hot-path micro-optics (format! → write!, inline attrs).**

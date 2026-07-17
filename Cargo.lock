@@ -2463,6 +2463,7 @@ dependencies = [
  "indicatif",
  "jsonschema",
  "owo-colors",
+ "parking_lot",
  "prometheus",
  "proptest",
  "rand 0.10.2",

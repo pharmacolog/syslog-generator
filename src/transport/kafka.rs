@@ -173,9 +173,11 @@ pub async fn target_sender_kafka(
             break;
         }
         let bytes = msg.len() as f64;
+        // PR-17e: msg is Bytes, rskafka expects Vec<u8> for Record.value.
+        // Конвертация через Bytes::into() — zero-copy если Bytes не shared.
         let record = Record {
             key: None,
-            value: Some(msg),
+            value: Some(msg.into()),
             headers: BTreeMap::new(),
             timestamp: chrono::Utc::now(),
         };

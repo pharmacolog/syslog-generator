@@ -43,10 +43,11 @@ pub async fn target_sender_udp(
 mod tests {
     use super::*;
     use crate::observability::metrics::create_metrics;
+    use bytes::Bytes;
     use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::net::UdpSocket;
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::{mpsc, };
     use tokio_util::sync::CancellationToken;
 
     /// UDP sender отправляет datagram на указанный addr.
@@ -57,8 +58,8 @@ mod tests {
         let receiver = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let recv_addr: SocketAddr = receiver.local_addr().unwrap();
         // Создаём SharedRx (mpsc + Arc<Mutex>).
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(16);
-        let rx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
         let metrics = create_metrics().unwrap();
         let shutdown = CancellationToken::new();
         // Запускаем sender.
@@ -71,7 +72,7 @@ mod tests {
         ));
         // Отправляем 3 сообщения.
         for i in 0..3 {
-            tx.send(format!("msg-{i}\n").into_bytes()).await.unwrap();
+            tx.send(Bytes::from(format!("msg-{i}\n"))).await.unwrap();
         }
         // Закрываем sender → sender loop завершается.
         drop(tx);
@@ -95,8 +96,8 @@ mod tests {
     async fn udp_sender_responds_to_shutdown() {
         // Receiver (не используется, но нужен для bind).
         let _receiver = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(16);
-        let rx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
         let metrics = create_metrics().unwrap();
         let shutdown = CancellationToken::new();
         let sender_handle = tokio::spawn(target_sender_udp(
@@ -107,7 +108,7 @@ mod tests {
             shutdown.clone(),
         ));
         // Sender ждёт на next_msg — он не завершится пока channel открыт.
-        tx.send(b"x".to_vec()).await.unwrap();
+        tx.send(Bytes::from(b"x".to_vec())).await.unwrap();
         // Cancel shutdown — sender должен увидеть cancellation в record_send и завершиться
         // (но не сразу, только при следующем сообщении).
         shutdown.cancel();

@@ -3179,8 +3179,9 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use syslog_generator::{create_metrics, target_sender_file_with_rotation, RotationConfig};
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
+    use bytes::Bytes;
 
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -3189,7 +3190,7 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
     let path = std::env::temp_dir().join(format!("sg_f16_e2e_{nanos}.log"));
     let metrics = create_metrics().expect("metrics");
     let (tx, rx) = mpsc::channel(16);
-    let shared_rx: syslog_generator::SharedRx = Arc::new(Mutex::new(rx));
+    let shared_rx: syslog_generator::SharedRx = Arc::new(parking_lot::Mutex::new(rx));
     let shutdown = CancellationToken::new();
     let rotation = RotationConfig {
         size_mb: None,
@@ -3206,7 +3207,7 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
         shutdown.clone(),
     ));
     for i in 0..3 {
-        tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+        tx.send(Bytes::from(format!("msg{i}"))).await.unwrap();
         tokio::time::sleep(Duration::from_millis(1100)).await;
     }
     drop(tx);

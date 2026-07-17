@@ -24,7 +24,7 @@ use std::io::IsTerminal;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, };
 use tokio_util::sync::CancellationToken;
 
 pub fn create_dispatcher(targets: &[TargetConfig], distribution: &str) -> Vec<usize> {
@@ -762,7 +762,7 @@ pub async fn run_phase_multi(
         // читает из неё через общий SharedRx (каждое сообщение — ровно одному воркеру).
         let (tx, rx) = mpsc::channel(1024);
         txs.push(tx);
-        let shared_rx = Arc::new(Mutex::new(rx));
+        let shared_rx = Arc::new(parking_lot::Mutex::new(rx));
         let pool_size = target.connections.max(1);
         total_workers += pool_size as u64;
         let framing = Framing::parse(&target.framing);
@@ -1185,14 +1185,17 @@ pub async fn run_phase_multi(
             continue;
         }
 
+        // PR-17e: Vec<u8> → Bytes один раз. Bytes::clone() = atomic increment,
+        // не memcpy. Для broadcast это экономит N-1 memcpys payload'а.
+        let msg_bytes: bytes::Bytes = bytes::Bytes::from(msg);
         if distribution == "broadcast" {
             for tx in &txs {
-                let _ = tx.send(msg.clone()).await;
+                let _ = tx.send(msg_bytes.clone()).await;
             }
         } else if !dispatch.is_empty() {
             let idx = dispatch[(seq - 1) % dispatch.len()];
             if let Some(tx) = txs.get(idx) {
-                let _ = tx.send(msg).await;
+                let _ = tx.send(msg_bytes).await;
             }
         }
     }

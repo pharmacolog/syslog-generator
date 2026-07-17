@@ -1,0 +1,123 @@
+# Sync main → dev через PR.
+#
+# Триггер: push в main (после merge PR).
+# Действие: создать PR main → dev для синхронизации.
+#
+# Это заменяет ручной `git checkout dev && git merge origin/main && git push`,
+# который ранее использовался и нарушал обязательный flow "все мержи через PR".
+#
+# Workflow использует `gh` CLI с auto-generated `GITHUB_TOKEN`, который
+# GitHub Actions создаёт для каждого run'а. Этот token имеет права push
+# в репозиторий (если branch protection не запрещает).
+#
+# Требует: `contents: write` + `pull-requests: write` permissions.
+
+name: Sync main → dev
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Open sync PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if sync is needed
+        id: check
+        run: |
+          git fetch origin main dev
+          # Если main == dev HEAD — sync не нужен.
+          if [ "$(git rev-parse origin/main)" = "$(git rev-parse origin/dev)" ]; then
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ main == dev, sync не требуется"
+          else
+            echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+            echo "ℹ main ahead of dev, sync нужен"
+          fi
+
+      - name: Create sync PR
+        if: steps.check.outputs.needs_sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Проверяем, нет ли уже открытого sync PR.
+          EXISTING_PR=$(gh pr list \
+            --base dev \
+            --head main \
+            --state open \
+            --json number \
+            --jq '.[].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "⚠ Sync PR уже открыт: #$EXISTING_PR"
+            echo "  URL: https://github.com/${{ github.repository }}/pull/$EXISTING_PR"
+            exit 0
+          fi
+
+          # Создаём sync PR.
+          # Title: "Sync main → dev after <merge commit sha>"
+          # Body: автоматический с ссылкой на merge commit и кратким summary.
+          MAIN_SHA=$(git rev-parse --short origin/main)
+          DEV_SHA=$(git rev-parse --short origin/dev)
+          COMMITS_BEHIND=$(git rev-list --count origin/dev..origin/main)
+
+          gh pr create \
+            --base dev \
+            --head main \
+            --title "🔄 Sync main → dev after $MAIN_SHA" \
+            --body "## Auto-generated sync PR
+
+          **Triggered by:** push to \`main\` (sha \`$MAIN_SHA\`)
+          **Commits behind:** $COMMITS_BEHIND
+          **dev HEAD:** \`$DEV_SHA\`
+
+          Этот PR автоматически создан GitHub Actions workflow для синхронизации \`main\` → \`dev\`.
+          Все мержи в проекте должны идти через PR (см. \`.github/branch-protection.md\`).
+
+          ### Quality Gates
+
+          Этот PR будет иметь те же required status checks, что и любой другой PR в \`dev\`:
+          - Test (ubuntu-latest)
+          - MSRV check (blocking, v10.5.0)
+          - cargo-deny (advisories + licenses, blocking)
+          - cargo-machete (unused deps, blocking)
+          - cargo public-api snapshot (blocking)
+          - Coverage (cargo-llvm-cov + codecov upload)
+          - Test kafka feature (ubuntu-latest)
+
+          После зелёного CI — squash merge или merge commit (оба ОК для dev).
+
+          ### История sync PR'ов
+
+          Все sync PR'ы автоматически создаются этим workflow'ом. История:
+          см. closed PR'ы с label \`sync\` или pattern \`Sync main → dev\`.
+          "
+
+          echo "✅ Sync PR создан"
+
+      - name: Summary
+        if: steps.check.outputs.needs_sync == 'true'
+        run: |
+          echo "## Sync main → dev" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- main HEAD: $(git rev-parse --short origin/main)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- dev HEAD: $(git rev-parse --short origin/dev)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Sync PR: см. https://github.com/${{ github.repository }}/pulls?q=is%3Apr+Sync+main" >> "$GITHUB_STEP_SUMMARY"

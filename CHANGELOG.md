@@ -1,6 +1,80 @@
 
 # Changelog
 
+## v10.7.18 - 2026-07-17
+
+**Patch-release (PR-17c): `Arc<str> Header + SyslogHeaderParts + shared Utc::now()`.**
+
+Третий шаг итеративной оптимизации. PR-17b дал 1.815 µs; PR-17c добавляет
+Arc<str> для Header полей (atomic clone вместо String alloc) + один shared
+`Utc::now()` per msg (вместо двух) → **1.801 µs/msg** (−0.75% vs PR-17b,
+**−12.4% vs v10.7.15 baseline**). Throughput 551 → 555 Kelem/s.
+
+### Changed (PR-17c: hot-path micro-optics pt.3)
+
+- `Header.hostname/app_name/procid/msgid/structured_data`: `String` → `Arc<str>`.
+  Clone в hot-path = atomic increment (~1-5 ns) вместо String alloc+memcpy
+  (~25-50 ns). Устраняет 4× String clone в `wrap_syslog` cache-hit path
+  (~100-200 нс/msg).
+- `SyslogHeaderParts`: то же — все 5 string-полей теперь `Arc<str>`.
+- `Header.timestamp: Arc<str>` — новое поле для pre-computed RFC 5424 timestamp.
+  `format::rfc5424::build` и `format::json_lines::build` используют его если
+  непустой (hot-path), иначе legacy fallback на внутренний `Utc::now()`.
+- `rfc5424_timestamp_at(now: DateTime<Utc>)` и
+  `datetime_now_jitter_at(now, jitter_secs, rng)` — hot-path версии,
+  принимающие уже вычисленный timestamp.
+- `generate_message_with_format_cached` теперь вызывает `Utc::now()` ОДИН раз
+  в начале, передаёт в `default_values_into` (через новый параметр `now`) и в
+  `finish_body`/`wrap_syslog` (через новый параметр `now: Option<DateTime<Utc>>`).
+  Устраняет 2-й `Utc::now()` + 2-й `chrono::format!()` per msg (~50-150 нс/msg).
+
+### Breaking changes (для миграции external consumers)
+
+- `Header.hostname/app_name/procid/msgid/structured_data`: `String` → `Arc<str>`
+- `Header`: добавлено поле `timestamp: Arc<str>` (обязательно в конструкторах)
+- `SyslogHeaderParts.*`: `String` → `Arc<str>` (derive Clone добавлен)
+- `default_values_into`: добавлен параметр `now: chrono::DateTime<chrono::Utc>`
+- `finish_body` и `wrap_syslog` (private): добавлен параметр `now: Option<DateTime<Utc>>`
+
+Migration:
+```rust
+// До:
+Header { hostname: "h".into(), app_name: "a".into(), procid: "1".into(),
+         msgid: "X".into(), structured_data: "-".into(), bom: false }
+// После (PR-17c):
+Header { hostname: "h".into(), app_name: "a".into(), procid: "1".into(),
+         msgid: "X".into(), structured_data: "-".into(),
+         timestamp: "".into(),  // empty = legacy Utc::now() внутри format::build
+         bom: false }
+```
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | PR-17b     | PR-17c     | Δ vs base  |
+|------------------------|------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1926.7 ns  | 1815.1 ns  | **1801.4 ns** | **−12.4%**|
+| `template_render_only` | 124.7 ns   | 103.8 ns   | 106.5 ns   | 104.7 ns   | −16.0%     |
+| `faker_ipv4`           | 90.3 ns    | 81.7 ns    | 81.5 ns    | 82.7 ns    | −8.4%      |
+| **throughput**         | 486 Kelem/s| 519 Kelem/s| 551 Kelem/s| **555 Kelem/s** | **+14.2%**|
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --lib -- -D warnings`: clean
+- Все тесты `format::*` и `tests/integration_tests.rs` обновлены под `Arc<str>` Header
+
+### Не реализовано (план для PR-17d/PR-17e)
+
+- Cached `IntCounter` handles в `PhaseContext` (нужно пробрасывать `Metrics`
+  через `PhaseContext::cache_counters`). Устранит 2× CounterVec HashMap lookup
+  в `run_phase_multi` (~90-190 нс/msg).
+- Миграция `StdRng` → `SmallRng` (xoshiro256++) — на 30-50% быстрее.
+- PGO (`-Cprofile-generate` + `-Cprofile-use`) в release pipeline.
+
+Refs: docs/PERFORMANCE.md, PR-17a baseline (1.927 µs), PR-17b (1.815 µs),
+PR-10 baseline (2.01 µs).
+
 ## v10.7.17 - 2026-07-17
 
 **Patch-release (PR-17b): pre-allocated HashMap + inline hot-path.**

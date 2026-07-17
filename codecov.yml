@@ -10,12 +10,13 @@
 # targets через `flags` + `component_management` (отдельный status per code area).
 
 codecov:
-  # Global target = Tier 1 minimum (97%) с допуском 1%.
+  # PR-Q.2 (v10.7.16): global target 92% (Phase 7 complete: main.rs assert_cmd,
+  # shutdown.rs coverage, validate.rs migration). Текущее 92.17% lines.
   # Per-component targets определены в `component_management` ниже.
   status:
     project:
       default:
-        target: 90%           # global minimum (Tier 1 + 2 mix)
+        target: 92%           # PR-Q.2: global minimum (Phase 7: main.rs, shutdown.rs, validate.rs)
         threshold: 1%         # PR не должен уменьшать coverage > 1%
         if_ci_failed: error
         only_pulls: false

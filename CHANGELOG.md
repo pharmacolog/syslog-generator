@@ -1,6 +1,51 @@
 
 # Changelog
 
+## v10.7.16 - 2026-07-17
+
+**Patch-release (PR-17a): Hot-path micro-optics (format! → write!, inline attrs).**
+
+Первый шаг итеративной оптимизации single-core perf после PR-10 baseline
+(2.057 µs → 1.927 µs/msg, **−6.3%**, throughput 486 → 519 Kelem/s).
+
+### Changed (PR-17a: hot-path micro-optics)
+
+**Устранены промежуточные `String` аллокации через прямой write в `Vec<u8>`:**
+
+- `src/format/rfc5424.rs` — `format!("<{}>1 {} ...")` → `write!(&mut out, ...) + extend_from_slice`. Устранена 1 String alloc + memcpy.
+- `src/format/rfc3164.rs` — 3× `format!()` (TAG-формирование, header) → ручная сборка в `Vec<u8>` через `extend_from_slice + push`. UTF-8 байт-итерация для hostname/app (без `chars()` walk).
+- `src/format/cef.rs` — `format!("CEF:0|...")` + `String::with_capacity` для ext → `Vec<u8>` напрямую. Добавлены `escape_header_into` / `escape_extension_value_into` helpers (`push` byte-per-char). `push_u8_decimal` для severity.
+- `src/format/leef.rs` — `format!("LEEF:2.0|...")` + `String` для attrs → `Vec<u8>` напрямую. Byte-level escape (ASCII-safe через `as_bytes()`).
+- `src/format/json_lines.rs` — `serde_json::to_string` → ручной JSON encoder с `escape_json_string_into` (RFC 8259 §7: `\b`, `\t`, `\n`, `\f`, `\r`, control chars, `"`, `\`). `BTreeMap<String, String>` сохранён (sorted iter, override-семантика для `extras`).
+
+**`#[inline(always)]` на hot-path функциях:**
+
+- `src/format/mod.rs`: `prival`, `sanitize_header`, `rfc5424_timestamp` (последняя вызывается per msg в rfc5424 и json_lines).
+- `src/payload.rs`: `derive_rng`, `faker`, `int_in_range`, `datetime_now_jitter`, `write_hex_pair`.
+- `src/template.rs`: `CompiledTemplate::render`.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | Δ          |
+|------------------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | **1926.7 ns** | **−6.3%** |
+| `template_render_only` | 124.7 ns   | **103.8 ns**  | **−16.8%**|
+| `faker_ipv4`           | 90.3 ns    | **81.7 ns**   | **−9.5%** |
+| `faker_uuid`           | 33.0 ns    | **31.9 ns**   | **−3.2%** |
+| `faker_username`       | 21.5 ns    | **19.7 ns**   | **−8.6%** |
+| `cef_build`            | ~132 ns    | **125.2 ns**  | **−5.1%** |
+| `leef_build`           | ~510 ns    | **500.5 ns**  | **−1.9%** |
+| `json_lines_build`     | ~1.55 µs   | 1.562 µs     | +0.8% (noise) |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo test --lib format::`: 36 тестов проходят (rfc5424, rfc3164, cef, leef, json_lines, mod)
+- `cargo clippy --lib -- -D warnings`: clean
+
+Refs: docs/PERFORMANCE.md, PR-10 baseline (2.01 µs/msg, target ≤ 2 µs ✅).
+
 ## v10.7.15 - 2026-07-17
 
 **Patch-release (PR-15 + PR-16): CI Failure Mitigation + Coverage expansion.**

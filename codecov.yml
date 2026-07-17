@@ -1,27 +1,27 @@
 # codecov.yml — codecov.io configuration.
 #
-# Используется codecov-action/codecov-benchmark-action для upload coverage.
+# Используется codecov-action для upload coverage.
 # URL: https://codecov.io/gh/pharmacolog/syslog-generator
 # Badge в README: codecov/c/github/pharmacolog/syslog-generator
 #
-# PR-9: coverage badge (через codecov.io). Альтернатива — shields.io endpoint
-# с codecov API, но codecov-action проще и нативнее.
+# PR-Q (v10.7.16): Tier-based coverage targets.
+# 100% покрытие для production binary нереалистично (CLI entrypoints, signal
+# handlers, broker-dependent code). Стандартная практика — multi-tier
+# targets через `flags` + `component_management` (отдельный status per code area).
 
 codecov:
-  # PR-11 (v10.7.12): coverage gate.
-  # Текущее baseline (v10.7.11): 87.94% lines.
-  # Target: 87% project (с allow list для TLS/Kafka/main.rs).
-  # Patch target: 80% (новый код в PR должен быть покрыт).
+  # Global target = Tier 1 minimum (97%) с допуском 1%.
+  # Per-component targets определены в `component_management` ниже.
   status:
     project:
       default:
-        target: 87%
-        threshold: 1%   # PR не должен уменьшать coverage более чем на 1%
+        target: 90%           # global minimum (Tier 1 + 2 mix)
+        threshold: 1%         # PR не должен уменьшать coverage > 1%
         if_ci_failed: error
         only_pulls: false
     patch:
       default:
-        target: 80%   # новый код в PR должен быть покрыт
+        target: 85%           # новый код в PR должен быть покрыт
         threshold: 5%
 
   # Notify в PR через GitHub Status API.
@@ -29,34 +29,108 @@ codecov:
     after_n_builds: 2  # ubuntu + kafka
     wait_for_ci: true
 
-# Что НЕ покрывать (CI-артефакты, examples).
+# Что НЕ покрывать (CI-артефакты, examples, тесты).
+# Эти файлы полностью исключены из coverage analysis.
 ignore:
   - "examples/**"
   - "benches/**"
   - "fuzz/**"
   - "tests/**"
   - "**/tests.rs"
-  # PR-11: исключаем модули которые сложно покрыть unit-тестами.
-  # - src/main.rs: CLI entrypoint (tested via integration tests)
-  # - src/payload_proptests.rs: тест-only файл
-  # - src/transport/tls.rs: TLS handshake требует реальных сертификатов
-  #   (покрыт integration tests в tests/integration_tests.rs)
-  # - src/transport/kafka.rs: feature-gated, требует Kafka broker
-  # - src/transport/file.rs RotationConfig branches, частично покрыты
+  # PR-11: CLI entrypoint (тестируется через integration tests).
   - "src/main.rs"
+  # PR-11: payload_proptests — test-only файл, не runtime код.
   - "src/payload_proptests.rs"
 
-# Flags — для аннотаций в PR.
+# Flags — для аннотаций в PR (раздельный coverage report per area).
 flags:
   unit:
     paths:
       - src/
     carryforward: true
-  integration:
-    paths:
-      - src/
-      - tests/
-    carryforward: true
+
+# Component management — per-file coverage targets.
+# PR-Q (v10.7.16): tier-based coverage enforcement.
+#  - Tier 1 (must be 97%): core library — блокирующий target
+#  - Tier 2 (target 85%): complex/integration-heavy modules
+component_management:
+  individual_components:
+    # Tier 1: core library — must be 97%+
+    - component_id: tier1_format
+      name: "Tier 1: format/* (must be 97%+)"
+      paths:
+        - src/format/cef.rs
+        - src/format/json_lines.rs
+        - src/format/leef.rs
+        - src/format/mod.rs
+        - src/format/protobuf.rs
+        - src/format/raw.rs
+        - src/format/rfc3164.rs
+        - src/format/rfc5424.rs
+      statuses:
+        - type: project
+          target: 97%
+          threshold: 1%
+    - component_id: tier1_transport_core
+      name: "Tier 1: transport/tcp|udp|file|reconnect (must be 97%+)"
+      paths:
+        - src/transport/file.rs
+        - src/transport/mod.rs
+        - src/transport/reconnect.rs
+        - src/transport/tcp.rs
+        - src/transport/udp.rs
+      statuses:
+        - type: project
+          target: 97%
+          threshold: 1%
+    - component_id: tier1_core
+      name: "Tier 1: core lib (must be 97%+)"
+      paths:
+        - src/anomaly.rs
+        - src/error.rs
+        - src/generator/config.rs
+        - src/generator/core.rs
+        - src/generator/mod.rs
+        - src/load_shape.rs
+        - src/observability/metrics.rs
+        - src/observability/mod.rs
+        - src/observability/server.rs
+        - src/payload.rs
+        - src/schema.rs
+        - src/schema_check.rs
+        - src/shutdown.rs
+        - src/template.rs
+        - src/validate.rs
+      statuses:
+        - type: project
+          target: 97%
+          threshold: 1%
+
+    # Tier 2: complex/integration-heavy (target 85%, allow lower)
+    - component_id: tier2_tls
+      name: "Tier 2: transport/tls (target 85%, real handshake)"
+      paths:
+        - src/transport/tls.rs
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 2%
+    - component_id: tier2_kafka
+      name: "Tier 2: transport/kafka (target 70%, requires broker)"
+      paths:
+        - src/transport/kafka.rs
+      statuses:
+        - type: project
+          target: 70%
+          threshold: 5%
+
+  # Default rules для файлов вне explicit components — Tier 1.
+  default_rules:
+    statuses:
+      - type: project
+        target: 97%
+        threshold: 1%
+        if_ci_failed: error
 
 # Комментарии в PR.
 comment:

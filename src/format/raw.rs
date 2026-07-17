@@ -21,11 +21,12 @@ mod tests {
         Header {
             facility: 16,
             severity: 6,
-            hostname: "test".to_string(),
-            app_name: "app".to_string(),
-            procid: "1".to_string(),
-            msgid: "ID".to_string(),
-            structured_data: "-".to_string(),
+            hostname: "test".into(),
+            app_name: "app".into(),
+            procid: "1".into(),
+            msgid: "ID".into(),
+            structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }

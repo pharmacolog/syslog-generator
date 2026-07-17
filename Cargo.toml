@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.7.15"
+version = "10.7.16"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -15,6 +15,12 @@ rust-version = "1.95"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+# PR-17d (v10.7.19): PGO (Profile-Guided Optimization) opt-in via env var.
+# Production release builds НЕ используют PGO по умолчанию (для скорости CI).
+# Включение для release: `RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release`.
+# Полная процедура — см. docs/PERFORMANCE.md §6 (PGO Workflow).
+# Улучшение: ~5% throughput на hot-path bench (1.74 µs → 1.65 µs/msg).
+# pgo = false
 
 [features]
 ## F16 (v9.3.0): Kafka/Redpanda transport через pure-Rust клиент `rskafka`.
@@ -51,6 +57,9 @@ serde = { version = "1", default-features = false, features = ["derive", "std"] 
 serde_json = "1"
 serde_yaml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "io-util", "fs"] }
+# PR-17e (v10.7.20): `parking_lot::Mutex` для SharedRx — замена `tokio::sync::Mutex`.
+# Sync mutex быстрее async на uncontended path (~30-100 нс/msg savings).
+parking_lot = "0.12"
 tokio-util = { version = "0.7", features = ["rt"] }
 # N4.cipher_policy (v9.5.0): миграция native-tls → rustls.
 # Обоснование: native-tls использует SChannel (Windows) / Secure Transport

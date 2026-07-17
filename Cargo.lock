@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "syslog-generator"
-version = "10.7.15"
+version = "10.7.16"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2463,6 +2463,7 @@ dependencies = [
  "indicatif",
  "jsonschema",
  "owo-colors",
+ "parking_lot",
  "prometheus",
  "proptest",
  "rand 0.10.2",

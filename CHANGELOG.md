@@ -1,6 +1,386 @@
 
 # Changelog
 
+## v10.7.16 - 2026-07-17
+
+**Release v10.7.16 (release-train): объединение PR-17a..e (hot-path optimization).**
+
+Этот релиз объединяет все PR-17a..e (squash-PR #31 в dev, commit `79842f6`).
+Все изменения перечислены ниже; release bumped с 10.7.15 → 10.7.16.
+
+### Hot-path optimization (cumulative changes — PR-17a..e)
+
+**Изменения в src/format/:**
+- rfc5424.rs: `format!("<{}>1 {} ...")` → прямой `write!` в `Vec<u8>`
+- rfc3164.rs: 3× `format!()` → ручная сборка в `Vec<u8>`
+- cef.rs / leef.rs: `format!("CEF:...")` / `format!("LEEF:...")` → write! + escape helpers
+- json_lines.rs: `serde_json::to_string` → ручной JSON encoder
+- mod.rs: `#[inline(always)]` на prival, sanitize_header, rfc5424_timestamp
+
+**Hot-path infra:**
+- `#[inline(always)]` на derive_rng, faker, int_in_range, datetime_now_jitter, write_hex_pair
+- `default_values_into(&mut HashMap)` — pre-allocated HashMap (~80-150 нс/msg savings)
+- `generate_message_with_format_cached(...)` — новый hot-path API
+- `Arc<str>` для Header и SyslogHeaderParts (atomic clone vs String alloc)
+- `Header.timestamp: Arc<str>` — pre-computed timestamp
+- Single shared `Utc::now()` per msg через `rfc5424_timestamp_at` + `datetime_now_jitter_at`
+- Cached `IntCounter` handles в `run_phase_multi`
+
+**Sender path:**
+- `SharedRx`: `tokio::sync::Mutex` → `parking_lot::Mutex` mpsc<Bytes>
+- `Bytes::clone()` = atomic increment — broadcast экономит N-1 memcpys payload'а
+
+### PGO (Profile-Guided Optimization) для release builds
+
+- `.github/workflows/release-pgo.yml` — workflow для release tags
+- `docs/PERFORMANCE.md §6` — полная процедура PGO
+- Cargo.toml opt-in через RUSTFLAGS=-Cprofile-use=...
+- Измеренный эффект PGO: −3.4% throughput дополнительно
+
+### Breaking changes (для external consumers)
+
+- `Header.{hostname,app_name,procid,msgid,structured_data}`: `String` → `Arc<str>`
+- `Header` добавлено поле `timestamp: Arc<str>` (default empty)
+- `SyslogHeaderParts.*`: `String` → `Arc<str>`
+- `default_values_into(...)`: добавлен параметр `now: DateTime<Utc>`
+- `generate_message_with_format_cached(...)` — новая функция
+- `datetime_now_jitter_at(...)` — новая функция
+- `SharedRx`: `tokio::sync::Mutex` → `parking_lot::Mutex`
+- mpsc каналы: `Sender<Bytes>` / `Receiver<Bytes>` (не `Vec<u8>`)
+
+Migration: см. подсекции PR-17a..v10.7.20 ниже для деталей.
+
+### Performance (cargo bench --bench hot_path -- --quick на Apple M1)
+
+| Bench | v10.7.15 baseline | v10.7.16 (после rebase) | С PGO |
+|---|---|---|---|
+| `rfc5424_with_faker` | 2056.7 нс | **1690.6 нс** (−17.8%) | ~1678 нс (−18.4%) |
+| `template_render_only` | 124.7 нс | ~104 нс (−16.6%) | - |
+| `faker_ipv4` | 90.3 нс | ~82 нс (−9.2%) | - |
+| **throughput** | 486 Kelem/s | **591 Kelem/s** (+21.6%) | ~596 Kelem/s (+22.6%) |
+
+### Test coverage (после rebase на dev)
+
+- Lines: **92.86%** (≥ 91.54% требуемого)
+- Functions: **92.45%** (≥ 91.86% требуемого)
+- Regions: **92.91%** (≥ 91.51% требуемого)
+
+328 tests pass (dev добавил 21 тест), `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean.
+
+### Files changed (squash-PR #31 summary)
+
+17 files, +11545 / −427:
+- `src/format/{mod,rfc5424,rfc3164,cef,leef,json_lines}.rs`
+- `src/payload.rs`, `src/template.rs`, `src/generator/core.rs`
+- `src/transport/{mod,tcp,udp,file}.rs`
+- `Cargo.toml` (`parking_lot = "0.12"`)
+- `.github/workflows/release-pgo.yml` (новый)
+- `api-snapshot.txt` (regenerated)
+- `lcov.info` (обновлён)
+- `CHANGELOG.md`, `CLAUDE_HANDOFF.md`
+- `docs/PERFORMANCE.md`
+
+### Release train (v10.7.15 → v10.7.16)
+
+1. ✅ PR-17a..e смержены в dev (squash-PR #31, `79842f6`)
+2. ✅ Cargo.toml: bump 10.7.15 → 10.7.16
+3. ✅ Cargo.lock: bump 10.7.15 → 10.7.16
+4. 🔜 release/v10.7.21 → main PR
+5. 🔜 Tag v10.7.21 после merge в main
+
+Refs: `PLAN-v10.0.0.md` (веха F), `docs/PERFORMANCE.md`, `PLAN-CI-FAILURE-MITIGATION.md`,
+`CLAUDE_HANDOFF.md` §6 (release train).
+
+---
+
+## Legacy: под-секции PR-17a..e (внутренние changelog entries — устарели)
+
+Ниже — детальные changelog-entries для каждого PR. Все они слиты в один релиз v10.7.16 выше.
+Эти секции сохранены для трассировки что было сделано в каждом под-PR, но реальные версии ещё не публиковались.
+
+## v10.7.20 - 2026-07-17
+
+**Patch-release (PR-17e): Bytes mpsc + parking_lot::Mutex.**
+
+Пятый шаг итеративной оптимизации (sender path). Два параллельных изменения:
+Bytes в mpsc вместо Vec<u8> (cheap broadcast clone) + parking_lot::Mutex
+вместо tokio::sync::Mutex (sync mutex быстрее async на uncontended path).
+
+### Changed (PR-17e)
+
+- `SharedRx`: `Arc<Mutex<mpsc::Receiver<Vec<u8>>>>` →
+  `Arc<parking_lot::Mutex<mpsc::Receiver<Bytes>>>`.
+  - `Bytes::clone()` = atomic increment (1-5 нс) вместо Vec<u8>::clone() (memcpy).
+  - `parking_lot::Mutex` — sync mutex, ~30-100 нс/msg быстрее async mutex.
+- `next_msg`: `parking_lot::Mutex::try_lock` + `tokio::task::yield_now().await`
+  retry (sync mutex guard `!Send`, scope tight через `and_then`).
+- `run_phase_multi`: `Bytes::from(msg)` ОДИН раз, затем `msg_bytes.clone()`
+  для broadcast — экономия N-1 memcpys payload'а на broadcast.
+- Все transport-ы (tcp, udp, tls, file) обновлены под `Bytes`.
+- Kafka: `Bytes → Vec<u8>` для rskafka `Record.value` (требование API).
+
+### Breaking changes (для external consumers)
+
+- `SharedRx` теперь содержит `parking_lot::Mutex` — нельзя использовать
+  `tokio::sync::Mutex`-специфичные методы.
+- mpsc каналы: `Sender<Bytes>` / `Receiver<Bytes>` (не `Vec<u8>`).
+
+### Cargo.toml
+
+- `parking_lot = "0.12"` (bytes уже был как `bytes = "1"`)
+
+### Performance (теоретический выигрыш)
+
+Hot-path bench измеряет только `generate_message_with_format_cached`,
+НЕ mpsc или sender. Теоретический выигрыш на broadcast с 2-3 targets:
+~50-150 нс/msg (Bytes cheap clone) + ~30-100 нс/msg (parking_lot mutex).
+
+| Bench | v10.7.15 | PR-17d | **PR-17e** | Δ vs base |
+|---|---|---|---|---|
+| `rfc5424_with_faker` | 2056.7 ns | 1737.5 | **1733.9 ns** | **−15.7%** |
+| `template_render_only` | 124.7 ns | 104.2 | 104.2 ns | −16.4% |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean
+
+Refs: docs/PERFORMANCE.md §5.1, PR-17a..d, PR-10 baseline (2.01 µs).
+
+## v10.7.19 - 2026-07-17
+
+**Patch-release (PR-17d): Cached IntCounter handles + PGO (Profile-Guided Optimization).**
+
+Четвёртый шаг итеративной оптимизации. PR-17c дал 1.801 µs; PR-17d добавляет
+cached IntCounter handles (no HashMap lookup в hot loop) + opt-in PGO workflow
+для release builds → **1.7375 µs/msg** (без PGO), **~1.65 µs с PGO**
+(−3.4% vs no-PGO, **−18.4% vs v10.7.15 baseline**). Throughput 555 → 575/596
+Kelem/s (без/с PGO).
+
+### Changed (PR-17d: IntCounter cache + PGO)
+
+- **Cached IntCounter handles** в `run_phase_multi` (src/generator/core.rs):
+  `messages_generated_total.with_label_values(&[phase.name])` и
+  `messages_by_format_total.with_label_values(...)` теперь вызываются ОДИН раз
+  вне hot loop. В hot loop — только `inc()` (atomic ~5-10 нс).
+  Устраняет 2× CounterVec HashMap lookup per msg (~100-200 нс/msg savings).
+
+- Bench `benches/hot_path.rs` обновлён аналогично — cached handle снаружи
+  `b.iter` (production-style).
+
+- **PGO (Profile-Guided Optimization)** добавлен как opt-in для release builds:
+  - `Cargo.toml`: комментарий в `[profile.release]` с инструкцией.
+  - `.github/workflows/release-pgo.yml`: новый workflow для release tags
+    (v*.*.*) — 5 шагов: profile-generate build → workload → profdata merge →
+    profile-use build → verify bench.
+  - `docs/PERFORMANCE.md` §6: полная процедура (5 команд) + драфт CI workflow.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17c     | PR-17d     | PR-17d+PGO | Δ vs base  |
+|------------------------|------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1801.4 ns  | **1737.5 ns** | **~1678 ns** | **−18.4%**|
+| `template_render_only` | 124.7 ns   | 104.7 ns   | 104.2 ns   | -          | −16.4%     |
+| `faker_ipv4`           | 90.3 ns    | 82.7 ns    | 81.6 ns    | -          | −9.6%      |
+| **throughput**         | 486 Kelem/s| 555 Kelem/s| **575 Kelem/s** | **~596 Kelem/s** | **+22.6%**|
+
+### Измеренный PGO impact (v10.7.19, Apple M1, hot_path bench)
+
+| Build | rfc5424_with_faker | throughput |
+|---|---|---|
+| Без PGO (release profile) | **1737.5 нс/msg** | 575 Kelem/s |
+| С PGO | **~1678 нс/msg** | 596 Kelem/s |
+| **Δ** | **−3.4%** | **+3.6%** |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean
+
+### Не реализовано (отложено — попытки показали регрессию в main bench)
+
+- **SmallRng migration** (xoshiro256++ вместо StdRng/ChaCha12): попробовал заменить
+  StdRng на SmallRng в hot-path. Результат: faker_uuid −35.7%, faker_ipv4 −5.2%,
+  **но main bench +21% regression** (из-за `derive_rng` seed expansion). Откатил.
+  Можно попробовать позже с гибридом: StdRng для derive_rng + SmallRng для bulk
+  fill (только faker.uuid). Не blocking — main bench уже на уровне 1.74 µs.
+
+Refs: docs/PERFORMANCE.md §6, PR-17a (1.927 µs), PR-17b (1.815 µs),
+PR-17c (1.801 µs), PR-10 baseline (2.01 µs).
+
+## v10.7.18 - 2026-07-17
+
+**Patch-release (PR-17c): `Arc<str> Header + SyslogHeaderParts + shared Utc::now()`.**
+
+Третий шаг итеративной оптимизации. PR-17b дал 1.815 µs; PR-17c добавляет
+Arc<str> для Header полей (atomic clone вместо String alloc) + один shared
+`Utc::now()` per msg (вместо двух) → **1.801 µs/msg** (−0.75% vs PR-17b,
+**−12.4% vs v10.7.15 baseline**). Throughput 551 → 555 Kelem/s.
+
+### Changed (PR-17c: hot-path micro-optics pt.3)
+
+- `Header.hostname/app_name/procid/msgid/structured_data`: `String` → `Arc<str>`.
+  Clone в hot-path = atomic increment (~1-5 ns) вместо String alloc+memcpy
+  (~25-50 ns). Устраняет 4× String clone в `wrap_syslog` cache-hit path
+  (~100-200 нс/msg).
+- `SyslogHeaderParts`: то же — все 5 string-полей теперь `Arc<str>`.
+- `Header.timestamp: Arc<str>` — новое поле для pre-computed RFC 5424 timestamp.
+  `format::rfc5424::build` и `format::json_lines::build` используют его если
+  непустой (hot-path), иначе legacy fallback на внутренний `Utc::now()`.
+- `rfc5424_timestamp_at(now: DateTime<Utc>)` и
+  `datetime_now_jitter_at(now, jitter_secs, rng)` — hot-path версии,
+  принимающие уже вычисленный timestamp.
+- `generate_message_with_format_cached` теперь вызывает `Utc::now()` ОДИН раз
+  в начале, передаёт в `default_values_into` (через новый параметр `now`) и в
+  `finish_body`/`wrap_syslog` (через новый параметр `now: Option<DateTime<Utc>>`).
+  Устраняет 2-й `Utc::now()` + 2-й `chrono::format!()` per msg (~50-150 нс/msg).
+
+### Breaking changes (для миграции external consumers)
+
+- `Header.hostname/app_name/procid/msgid/structured_data`: `String` → `Arc<str>`
+- `Header`: добавлено поле `timestamp: Arc<str>` (обязательно в конструкторах)
+- `SyslogHeaderParts.*`: `String` → `Arc<str>` (derive Clone добавлен)
+- `default_values_into`: добавлен параметр `now: chrono::DateTime<chrono::Utc>`
+- `finish_body` и `wrap_syslog` (private): добавлен параметр `now: Option<DateTime<Utc>>`
+
+Migration:
+```rust
+// До:
+Header { hostname: "h".into(), app_name: "a".into(), procid: "1".into(),
+         msgid: "X".into(), structured_data: "-".into(), bom: false }
+// После (PR-17c):
+Header { hostname: "h".into(), app_name: "a".into(), procid: "1".into(),
+         msgid: "X".into(), structured_data: "-".into(),
+         timestamp: "".into(),  // empty = legacy Utc::now() внутри format::build
+         bom: false }
+```
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | PR-17b     | PR-17c     | Δ vs base  |
+|------------------------|------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1926.7 ns  | 1815.1 ns  | **1801.4 ns** | **−12.4%**|
+| `template_render_only` | 124.7 ns   | 103.8 ns   | 106.5 ns   | 104.7 ns   | −16.0%     |
+| `faker_ipv4`           | 90.3 ns    | 81.7 ns    | 81.5 ns    | 82.7 ns    | −8.4%      |
+| **throughput**         | 486 Kelem/s| 519 Kelem/s| 551 Kelem/s| **555 Kelem/s** | **+14.2%**|
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --lib -- -D warnings`: clean
+- Все тесты `format::*` и `tests/integration_tests.rs` обновлены под `Arc<str>` Header
+
+### Не реализовано (план для PR-17d/PR-17e)
+
+- Cached `IntCounter` handles в `PhaseContext` (нужно пробрасывать `Metrics`
+  через `PhaseContext::cache_counters`). Устранит 2× CounterVec HashMap lookup
+  в `run_phase_multi` (~90-190 нс/msg).
+- Миграция `StdRng` → `SmallRng` (xoshiro256++) — на 30-50% быстрее.
+- PGO (`-Cprofile-generate` + `-Cprofile-use`) в release pipeline.
+
+Refs: docs/PERFORMANCE.md, PR-17a baseline (1.927 µs), PR-17b (1.815 µs),
+PR-10 baseline (2.01 µs).
+
+## v10.7.17 - 2026-07-17
+
+**Patch-release (PR-17b): pre-allocated HashMap + inline hot-path.**
+
+Второй шаг итеративной оптимизации. PR-17a дал 2.057 → 1.927 µs; PR-17b
+добавляет caller-owned HashMap + inline на hot-path → **1.815 µs/msg**
+(−5.8% vs PR-17a, **−11.8% vs v10.7.15 baseline**). Throughput 519 → 551 Kelem/s.
+
+### Added (PR-17b: hot-path infrastructure)
+
+- `default_values_into(&mut HashMap<String, String>, ctx, phase, seq, rng) -> usize` —
+  hot-path версия, заполняет caller-owned HashMap через `.clear()`. Устраняет
+  heap allocation per message.
+- `generate_message_with_format_cached(ctx, phase, format_kind, seq, &mut values) -> Result<Vec<u8>>` —
+  hot-path версия `generate_message_with_format`, переиспользует caller HashMap.
+- Re-exports в `generator::mod` и `lib.rs`.
+
+### Changed (PR-17b)
+
+- `#[inline]` атрибуты на hot-path: `generate_message_with_format`,
+  `generate_message_with_format_cached`, `pick_template_compiled`, `wrap_syslog`.
+- `default_values(ctx, phase, seq, rng) -> HashMap` остаётся как backward-compat
+  wrapper (использует `default_values_into` внутри).
+- `generate_message_with_format` остаётся как backward-compat wrapper
+  (создаёт HashMap::with_capacity(16) и делегирует `_cached` варианту).
+- Bench `benches/hot_path.rs` обновлён на `_cached` API.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | PR-17b     | Δ vs base  |
+|------------------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1926.7 ns  | **1815.1 ns** | **−11.8%**|
+| `template_render_only` | 124.7 ns   | 103.8 ns   | 106.5 ns   | −14.6%     |
+| `faker_ipv4`           | 90.3 ns    | 81.7 ns    | 81.5 ns    | −9.7%      |
+| **throughput**         | 486 Kelem/s| 519 Kelem/s| **551 Kelem/s** | **+13.4%**|
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --lib -- -D warnings`: clean
+
+### Не реализовано (план для PR-17c)
+
+- `Arc<str>` для `SyslogHeaderParts` — требует переделки `Header` struct +
+  `format::build` API (breaking). Намечено на PR-17c.
+- Single shared `Utc::now()` (один timestamp на msg, передаётся в обе функции).
+- Cached `IntCounter` handles для bench.
+- Миграция на `SmallRng` (xoshiro256++, быстрее StdRng на 30-50%).
+
+Refs: docs/PERFORMANCE.md, PR-17a baseline (1.927 µs), PR-10 baseline (2.01 µs).
+
+## v10.7.16 - 2026-07-17
+
+**Patch-release (PR-17a): Hot-path micro-optics (format! → write!, inline attrs).**
+
+Первый шаг итеративной оптимизации single-core perf после PR-10 baseline
+(2.057 µs → 1.927 µs/msg, **−6.3%**, throughput 486 → 519 Kelem/s).
+
+### Changed (PR-17a: hot-path micro-optics)
+
+**Устранены промежуточные `String` аллокации через прямой write в `Vec<u8>`:**
+
+- `src/format/rfc5424.rs` — `format!("<{}>1 {} ...")` → `write!(&mut out, ...) + extend_from_slice`. Устранена 1 String alloc + memcpy.
+- `src/format/rfc3164.rs` — 3× `format!()` (TAG-формирование, header) → ручная сборка в `Vec<u8>` через `extend_from_slice + push`. UTF-8 байт-итерация для hostname/app (без `chars()` walk).
+- `src/format/cef.rs` — `format!("CEF:0|...")` + `String::with_capacity` для ext → `Vec<u8>` напрямую. Добавлены `escape_header_into` / `escape_extension_value_into` helpers (`push` byte-per-char). `push_u8_decimal` для severity.
+- `src/format/leef.rs` — `format!("LEEF:2.0|...")` + `String` для attrs → `Vec<u8>` напрямую. Byte-level escape (ASCII-safe через `as_bytes()`).
+- `src/format/json_lines.rs` — `serde_json::to_string` → ручной JSON encoder с `escape_json_string_into` (RFC 8259 §7: `\b`, `\t`, `\n`, `\f`, `\r`, control chars, `"`, `\`). `BTreeMap<String, String>` сохранён (sorted iter, override-семантика для `extras`).
+
+**`#[inline(always)]` на hot-path функциях:**
+
+- `src/format/mod.rs`: `prival`, `sanitize_header`, `rfc5424_timestamp` (последняя вызывается per msg в rfc5424 и json_lines).
+- `src/payload.rs`: `derive_rng`, `faker`, `int_in_range`, `datetime_now_jitter`, `write_hex_pair`.
+- `src/template.rs`: `CompiledTemplate::render`.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17a     | Δ          |
+|------------------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | **1926.7 ns** | **−6.3%** |
+| `template_render_only` | 124.7 ns   | **103.8 ns**  | **−16.8%**|
+| `faker_ipv4`           | 90.3 ns    | **81.7 ns**   | **−9.5%** |
+| `faker_uuid`           | 33.0 ns    | **31.9 ns**   | **−3.2%** |
+| `faker_username`       | 21.5 ns    | **19.7 ns**   | **−8.6%** |
+| `cef_build`            | ~132 ns    | **125.2 ns**  | **−5.1%** |
+| `leef_build`           | ~510 ns    | **500.5 ns**  | **−1.9%** |
+| `json_lines_build`     | ~1.55 µs   | 1.562 µs     | +0.8% (noise) |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo test --lib format::`: 36 тестов проходят (rfc5424, rfc3164, cef, leef, json_lines, mod)
+- `cargo clippy --lib -- -D warnings`: clean
+
+Refs: docs/PERFORMANCE.md, PR-10 baseline (2.01 µs/msg, target ≤ 2 µs ✅).
+
 ## v10.7.15 - 2026-07-17
 
 **Patch-release (PR-15 + PR-16): CI Failure Mitigation + Coverage expansion.**

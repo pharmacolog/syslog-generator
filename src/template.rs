@@ -84,6 +84,10 @@ impl CompiledTemplate {
     /// Подставить значения из `values` в шаблон. Один проход по частям,
     /// O(N) где N — длина шаблона (а не O(N×M) как у старого `String::replace`).
     /// Неизвестные плейсхолдеры оставляются как `{{name}}` (для обратной совместимости).
+    ///
+    /// PR-17a (v10.7.16): `#[inline(always)]` — hot-path, вызывается per msg
+    /// в `core.rs:204,283`.
+    #[inline(always)]
     pub fn render(&self, values: &HashMap<String, String>) -> String {
         // Преаллоцируем: длина результата ≈ длина шаблона + сумма длин значений.
         let mut out = String::with_capacity(

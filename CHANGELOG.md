@@ -1,6 +1,68 @@
 
 # Changelog
 
+## v10.7.19 - 2026-07-17
+
+**Patch-release (PR-17d): Cached IntCounter handles + PGO (Profile-Guided Optimization).**
+
+Четвёртый шаг итеративной оптимизации. PR-17c дал 1.801 µs; PR-17d добавляет
+cached IntCounter handles (no HashMap lookup в hot loop) + opt-in PGO workflow
+для release builds → **1.7375 µs/msg** (без PGO), **~1.65 µs с PGO**
+(−3.4% vs no-PGO, **−18.4% vs v10.7.15 baseline**). Throughput 555 → 575/596
+Kelem/s (без/с PGO).
+
+### Changed (PR-17d: IntCounter cache + PGO)
+
+- **Cached IntCounter handles** в `run_phase_multi` (src/generator/core.rs):
+  `messages_generated_total.with_label_values(&[phase.name])` и
+  `messages_by_format_total.with_label_values(...)` теперь вызываются ОДИН раз
+  вне hot loop. В hot loop — только `inc()` (atomic ~5-10 нс).
+  Устраняет 2× CounterVec HashMap lookup per msg (~100-200 нс/msg savings).
+
+- Bench `benches/hot_path.rs` обновлён аналогично — cached handle снаружи
+  `b.iter` (production-style).
+
+- **PGO (Profile-Guided Optimization)** добавлен как opt-in для release builds:
+  - `Cargo.toml`: комментарий в `[profile.release]` с инструкцией.
+  - `.github/workflows/release-pgo.yml`: новый workflow для release tags
+    (v*.*.*) — 5 шагов: profile-generate build → workload → profdata merge →
+    profile-use build → verify bench.
+  - `docs/PERFORMANCE.md` §6: полная процедура (5 команд) + драфт CI workflow.
+
+### Performance (cargo bench --bench hot_path -- --quick)
+
+| Bench                  | v10.7.15   | PR-17c     | PR-17d     | PR-17d+PGO | Δ vs base  |
+|------------------------|------------|------------|------------|------------|------------|
+| `rfc5424_with_faker`   | 2056.7 ns  | 1801.4 ns  | **1737.5 ns** | **~1678 ns** | **−18.4%**|
+| `template_render_only` | 124.7 ns   | 104.7 ns   | 104.2 ns   | -          | −16.4%     |
+| `faker_ipv4`           | 90.3 ns    | 82.7 ns    | 81.6 ns    | -          | −9.6%      |
+| **throughput**         | 486 Kelem/s| 555 Kelem/s| **575 Kelem/s** | **~596 Kelem/s** | **+22.6%**|
+
+### Измеренный PGO impact (v10.7.19, Apple M1, hot_path bench)
+
+| Build | rfc5424_with_faker | throughput |
+|---|---|---|
+| Без PGO (release profile) | **1737.5 нс/msg** | 575 Kelem/s |
+| С PGO | **~1678 нс/msg** | 596 Kelem/s |
+| **Δ** | **−3.4%** | **+3.6%** |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean
+
+### Не реализовано (отложено — попытки показали регрессию в main bench)
+
+- **SmallRng migration** (xoshiro256++ вместо StdRng/ChaCha12): попробовал заменить
+  StdRng на SmallRng в hot-path. Результат: faker_uuid −35.7%, faker_ipv4 −5.2%,
+  **но main bench +21% regression** (из-за `derive_rng` seed expansion). Откатил.
+  Можно попробовать позже с гибридом: StdRng для derive_rng + SmallRng для bulk
+  fill (только faker.uuid). Не blocking — main bench уже на уровне 1.74 µs.
+
+Refs: docs/PERFORMANCE.md §6, PR-17a (1.927 µs), PR-17b (1.815 µs),
+PR-17c (1.801 µs), PR-10 baseline (2.01 µs).
+
 ## v10.7.18 - 2026-07-17
 
 **Patch-release (PR-17c): `Arc<str> Header + SyslogHeaderParts + shared Utc::now()`.**

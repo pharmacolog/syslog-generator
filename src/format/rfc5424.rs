@@ -10,6 +10,9 @@ use std::io::Write as _;
 
 /// Собрать полное сообщение RFC 5424:
 /// `<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [BOM]MSG`
+///
+/// PR-17c (v10.7.18): использует `h.timestamp` (pre-computed) если не пустой —
+/// устраняет `Utc::now()` + `chrono::format!` в hot-path (~80-150 нс/msg).
 #[inline]
 pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
     let pri = super::prival(h.facility, h.severity);
@@ -26,8 +29,14 @@ pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
 
     // `<PRI>1 TIMESTAMP`
     let _ = write!(out, "<{}>1 ", pri);
-    let ts = super::rfc5424_timestamp();
-    out.extend_from_slice(ts.as_bytes());
+    // PR-17c: используем pre-computed timestamp из Header (если есть),
+    // иначе legacy path с Utc::now() внутри.
+    if h.timestamp.is_empty() {
+        let ts = super::rfc5424_timestamp();
+        out.extend_from_slice(ts.as_bytes());
+    } else {
+        out.extend_from_slice(h.timestamp.as_bytes());
+    }
 
     // ` HOSTNAME APP-NAME PROCID MSGID SD`
     out.push(b' ');
@@ -68,6 +77,7 @@ mod tests {
             procid: "1234".into(),
             msgid: "ID47".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }
@@ -99,7 +109,7 @@ mod tests {
     #[test]
     fn empty_structured_data_becomes_nilvalue() {
         let mut h = hdr();
-        h.structured_data = String::new();
+        h.structured_data = "".into();
         let out = build(&h, b"x");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(s.contains(" - "), "expected NILVALUE for empty SD, got: {s}");

@@ -77,11 +77,12 @@ mod tests {
         Header {
             facility: 16, // local0
             severity: 6,  // info
-            hostname: "myhost".to_string(),
-            app_name: "myapp".to_string(),
-            procid: "1234".to_string(),
-            msgid: "ID".to_string(),
-            structured_data: "-".to_string(),
+            hostname: "myhost".into(),
+            app_name: "myapp".into(),
+            procid: "1234".into(),
+            msgid: "ID".into(),
+            structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }
@@ -116,7 +117,7 @@ mod tests {
     #[test]
     fn rfc3164_tag_without_procid() {
         let mut h = test_header();
-        h.procid = String::new();
+        h.procid = "".into();
         let out = build(&h, b"hello");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(
@@ -130,7 +131,7 @@ mod tests {
     #[test]
     fn rfc3164_tag_with_nilvalue_procid() {
         let mut h = test_header();
-        h.procid = "-".to_string();
+        h.procid = "-".into();
         let out = build(&h, b"hello");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(
@@ -144,7 +145,7 @@ mod tests {
     #[test]
     fn rfc3164_nilvalue_hostname_becomes_localhost() {
         let mut h = test_header();
-        h.hostname = String::new();
+        h.hostname = "".into();
         let out = build(&h, b"msg");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(
@@ -158,7 +159,7 @@ mod tests {
     #[test]
     fn rfc3164_empty_app_name_does_not_panic() {
         let mut h = test_header();
-        h.app_name = String::new();
+        h.app_name = "".into();
         let out = build(&h, b"msg");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(s.contains("myhost"), "expected hostname, got: {}", s);
@@ -169,7 +170,7 @@ mod tests {
     #[test]
     fn rfc3164_nilvalue_app_becomes_app() {
         let mut h = test_header();
-        h.app_name = "-".to_string();
+        h.app_name = "-".into();
         let out = build(&h, b"msg");
         let s = std::str::from_utf8(&out).unwrap();
         assert!(

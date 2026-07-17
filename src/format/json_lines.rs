@@ -97,9 +97,11 @@ fn escape_json_string_into(out: &mut String, s: &str) {
 }
 
 /// Собрать JSON-lines сообщение.
-/// Порядок полей в JSON — алфавитный (BTreeMap iter — sorted), что важно для
+/// Порядок полей в JSON — алфавитный (BTreeMap), что важно для
 /// детерминизма (F4) и удобства diff'а в тестах.
-#[inline]
+///
+/// PR-17c (v10.7.18): использует `h.timestamp` (pre-computed) если не пустой —
+/// устраняет `Utc::now()` в hot-path.
 pub fn build(
     header: &Header,
     extra_fields: Option<&BTreeMap<String, String>>,
@@ -108,19 +110,26 @@ pub fn build(
     // PR-17a: BTreeMap сохраняем ради (a) sorted iter → стабильный порядок полей,
     // (b) override-семантики (поздний insert перетирает ранний для extras).
     let mut obj: BTreeMap<String, String> = BTreeMap::new();
-    obj.insert(KEY_TS.to_string(), super::rfc5424_timestamp());
+    // PR-17c: pre-computed timestamp из Header (если есть), иначе legacy path.
+    let ts = if header.timestamp.is_empty() {
+        super::rfc5424_timestamp()
+    } else {
+        header.timestamp.to_string()
+    };
+    obj.insert(KEY_TS.to_string(), ts);
     obj.insert(
         KEY_LEVEL.to_string(),
         severity_to_level(header.severity).to_string(),
     );
     obj.insert(KEY_FACILITY.to_string(), header.facility.min(23).to_string());
-    obj.insert(KEY_HOST.to_string(), header.hostname.clone());
-    obj.insert(KEY_APP.to_string(), header.app_name.clone());
-    if !header.procid.is_empty() && header.procid != "-" {
-        obj.insert(KEY_PROCID.to_string(), header.procid.clone());
+    // PR-17c: Arc<str> → String (для BTreeMap<String, String>).
+    obj.insert(KEY_HOST.to_string(), header.hostname.to_string());
+    obj.insert(KEY_APP.to_string(), header.app_name.to_string());
+    if !header.procid.is_empty() && header.procid.as_ref() != "-" {
+        obj.insert(KEY_PROCID.to_string(), header.procid.to_string());
     }
-    if !header.msgid.is_empty() && header.msgid != "-" {
-        obj.insert(KEY_MSGID.to_string(), header.msgid.clone());
+    if !header.msgid.is_empty() && header.msgid.as_ref() != "-" {
+        obj.insert(KEY_MSGID.to_string(), header.msgid.to_string());
     }
     // msg: UTF-8 lossy — невалидные байты заменяются на U+FFFD (стандарт JSON).
     let msg_str = String::from_utf8_lossy(msg).into_owned();
@@ -167,6 +176,7 @@ mod tests {
             procid: "100".into(),
             msgid: "TST".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }

@@ -234,13 +234,26 @@ pub fn random_string(len: usize, rng: &mut StdRng) -> String {
 /// PR-17a (v10.7.16): `#[inline(always)]` — hot-path.
 #[inline(always)]
 pub fn datetime_now_jitter(jitter_secs: i64, rng: &mut StdRng) -> String {
-    use chrono::{Duration, Utc};
+    use chrono::Utc;
+    datetime_now_jitter_at(Utc::now(), jitter_secs, rng)
+}
+
+/// PR-17c (v10.7.18): hot-path версия — принимает уже вычисленный `now`.
+/// Позволяет shared timestamp между `rfc5424_timestamp_at` и
+/// `datetime_now_jitter_at` — один `Utc::now()` per msg вместо двух.
+#[inline(always)]
+pub fn datetime_now_jitter_at(
+    now: chrono::DateTime<chrono::Utc>,
+    jitter_secs: i64,
+    rng: &mut StdRng,
+) -> String {
+    use chrono::Duration;
     let delta = if jitter_secs > 0 {
         rng.random_range(-jitter_secs..=jitter_secs)
     } else {
         0
     };
-    let t = Utc::now() + Duration::seconds(delta);
+    let t = now + Duration::seconds(delta);
     t.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 

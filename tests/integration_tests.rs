@@ -699,7 +699,12 @@ async fn test_connection_pool_opens_multiple_connections() {
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "pool".into(),
-            messages_per_second: 0,
+            // v10.7.15: rate=100 (≈300 ms total для 30 сообщений) даёт
+            // достаточно времени на открытие 3 TCP-коннектов пула под
+            // coverage-instrumentation (cargo-llvm-cov замедляет tokio).
+            // Раньше rate=0 (без лимита) — все 30 сообщений уходили через
+            // первый успевший открыться коннект, остальные 2 не успевали.
+            messages_per_second: 100,
             total_messages: Some(30),
             templates: vec!["pool {{sequence}}".into()],
             ..Default::default()

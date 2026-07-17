@@ -106,7 +106,7 @@ syslog-generator/
 │
 ├── Dockerfile                    # multi-stage (distroless, ~25 MB)
 ├── docker-compose.yml
-├── Cargo.toml                    # v10.7.4, MSRV 1.95, features: kafka, test-helpers
+├── Cargo.toml                    # v10.7.15, MSRV 1.95, features: kafka, test-helpers
 ├── Cargo.lock
 ├── rust-toolchain.toml           # MSRV pin (v10.5.0)
 ├── CHANGELOG.md                  # все релизы от v7.4.0 до v10.7.4

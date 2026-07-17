@@ -107,9 +107,9 @@ let v = parse_tls_min_version("1.2")?; // возвращает TlsVersion::Tls12
 `::metrics::*`, `::metrics_server::*`, `::protobuf::*`) сохранены как thin
 re-export обёртки. Код, импортирующий через старые пути, продолжает работать.
 
-## 4. v10.7.4 — текущая версия
+## 4. v10.7.4 — v10.7.15 — patch-релизы (текущая версия)
 
-**0 breaking changes** от v10.7.3.
+**0 breaking changes** от v10.7.3 до v10.7.15 (серия patch-релизов по результатам аудита v10.7.2 + CI улучшения + Coverage expansion). Текущая версия — **v10.7.15**.
 
 PR-2 добавил:
 - SIGTERM handler (раньше был только SIGINT).

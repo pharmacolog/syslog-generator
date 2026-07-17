@@ -523,4 +523,19 @@ mod tests {
             "packet-loss должно быть = 42, got:\n{s}"
         );
     }
+
+    /// PR-16 (coverage): record_send_latency_increments_histogram_count.
+    /// `record_send_latency` нужно проверять unit-тестом.
+    #[test]
+    fn record_send_latency_increments_histogram_count() {
+        use crate::transport::record_send_latency;
+        let metrics = create_metrics().unwrap();
+        record_send_latency(&metrics, std::time::Duration::from_micros(100));
+        record_send_latency(&metrics, std::time::Duration::from_micros(200));
+        record_send_latency(&metrics, std::time::Duration::from_micros(300));
+        // Histogram count должен быть 3 (sample_count в prometheus API).
+        // Sample count check через raw Histogram API.
+        let sample_count = metrics.send_duration.get_sample_count();
+        assert_eq!(sample_count, 3);
+    }
 }

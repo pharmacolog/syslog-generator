@@ -110,10 +110,11 @@ pub use format::{
     build_rfc3164, build_rfc5424, escape_sd_value, prival, raw, rfc3164, rfc5424, Header,
 };
 pub use generator::{
-    create_dispatcher, default_values, generate_message, generate_message_with_format,
-    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, load_schema,
-    load_templates, run_phase_multi, run_profile, CefConfig, LeefConfig, Phase, PhaseContext,
-    Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    create_dispatcher, default_values, default_values_into, generate_message,
+    generate_message_with_format, generate_message_with_format_cached, load_profile_from_json_str,
+    load_profile_from_path, load_profile_from_yaml_str, load_schema, load_templates,
+    run_phase_multi, run_profile, CefConfig, LeefConfig, Phase, PhaseContext, Profile,
+    ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use load_shape::LoadShape;
 pub use observability::{

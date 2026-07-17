@@ -17,11 +17,11 @@
 //! - В extension-значениях: экранируются `\` → `\\`, `|` → `\|`, `=` → `\=`.
 //! - В extension-ключах: НЕ экранируются (ключ — фиксированное ASCII-имя).
 //!
-//! Замечание о горячем пути: на каждое сообщение выполняется O(N_extensions)
-//! экранирований. CEF-extension обычно 5-20 полей — приемлемо. Сообщение
-//! целиком собирается в `String` (одна аллокация) → `into_bytes()`.
-//! `String::with_capacity` задаёт ёмкость = суммарная длина всех частей,
-//! что исключает realloc'и.
+//! Замечание о горячем пути (PR-17a): сборка ведётся напрямую в `Vec<u8>`
+//! с предвычисленной ёмкостью (худший случай — каждый символ удваивается при
+//! escape). Никаких промежуточных `String` — экранирование пишет байты
+//! прямо в общий буфер через `escape_*_into`. Это устраняет O(N_extensions)
+//! промежуточных аллокаций `String` per call.
 
 use crate::generator::config::CefConfig;
 
@@ -29,90 +29,144 @@ use crate::generator::config::CefConfig;
 /// `msg` добавляется как extension-поле `msg=<body>` (если body непустой)
 /// с экранированием CEF. Это упрощает интеграцию с ArcSight SmartConnector'ами,
 /// которые ожидают полезную нагрузку в стандартном extension-поле.
+///
+/// Hot-path оптимизация (PR-17a): одна аллокация `Vec<u8>` с заранее
+/// вычисленной ёмкостью; escape-функции пишут байты прямо в этот буфер.
+#[inline]
 pub fn build(cfg: &CefConfig, msg: &[u8]) -> Vec<u8> {
     let severity = cfg.severity.unwrap_or(0);
-    let header = format!(
-        "CEF:0|{}|{}|{}|{}|{}|{}",
-        escape_header(&cfg.device_vendor),
-        escape_header(&cfg.device_product),
-        escape_header(&cfg.device_version),
-        escape_header(&cfg.signature_id),
-        escape_header(&cfg.name),
-        severity,
-    );
 
-    // Сборка extension-блока. Если есть пользовательские extensions — добавляем.
-    // Затем — `msg=<body>` с экранированием CEF.
-    let mut ext = String::new();
+    // Предвычисление ёмкости (худший случай: каждый символ удваивается).
+    let hdr_sum: usize = cfg.device_vendor.len()
+        + cfg.device_product.len()
+        + cfg.device_version.len()
+        + cfg.signature_id.len()
+        + cfg.name.len();
+    let (ext_pairs, ext_keys_len, ext_vals_len): (usize, usize, usize) = match &cfg.extensions {
+        Some(m) => (
+            m.len(),
+            m.keys().map(|k| k.len()).sum(),
+            m.values().map(|v| v.len()).sum(),
+        ),
+        None => (0, 0, 0),
+    };
+    let msg_str = std::str::from_utf8(msg).unwrap_or("");
+    // "CEF:0|"=7; 7 '|' (5 между полей + 1 после name + 1 после severity);
+    // 2 цифры sev; ext_pairs пробелов; ext_pairs '='; " msg=" = 5.
+    let estimated_capacity = 7
+        + 2 * hdr_sum
+        + 7
+        + 2
+        + ext_pairs
+        + ext_keys_len
+        + ext_pairs
+        + 2 * ext_vals_len
+        + 5
+        + 2 * msg_str.len();
+
+    let mut out = Vec::with_capacity(estimated_capacity);
+
+    // Header: "CEF:0|" + 5 escaped fields + "|" + severity + "|".
+    out.extend_from_slice(b"CEF:0|");
+    escape_header_into(&mut out, &cfg.device_vendor);
+    out.push(b'|');
+    escape_header_into(&mut out, &cfg.device_product);
+    out.push(b'|');
+    escape_header_into(&mut out, &cfg.device_version);
+    out.push(b'|');
+    escape_header_into(&mut out, &cfg.signature_id);
+    out.push(b'|');
+    escape_header_into(&mut out, &cfg.name);
+    out.push(b'|');
+    push_u8_decimal(&mut out, severity);
+    out.push(b'|');
+
+    // Extension pairs (BTreeMap — отсортированы по ключу для детерминизма).
     if let Some(extensions) = &cfg.extensions {
         for (i, (k, v)) in extensions.iter().enumerate() {
             if i > 0 {
-                ext.push(' ');
+                out.push(b' ');
             }
-            ext.push_str(k);
-            ext.push('=');
-            ext.push_str(&escape_extension_value(v));
+            out.extend_from_slice(k.as_bytes());
+            out.push(b'=');
+            escape_extension_value_into(&mut out, v);
         }
     }
     // `msg=` всегда присутствует — SmartConnector ожидает полезную нагрузку.
-    if !ext.is_empty() {
-        ext.push(' ');
+    if extensions_has_pairs(cfg) {
+        out.push(b' ');
     }
-    ext.push_str("msg=");
-    ext.push_str(&escape_extension_value(
-        std::str::from_utf8(msg).unwrap_or(""),
-    ));
+    out.extend_from_slice(b"msg=");
+    escape_extension_value_into(&mut out, msg_str);
 
-    let mut out = String::with_capacity(header.len() + ext.len() + 1);
-    out.push_str(&header);
-    out.push('|');
-    out.push_str(&ext);
-    out.into_bytes()
+    out
+}
+
+/// `true`, если extension-блок непустой (нужен разделитель-пробел перед `msg=`).
+#[inline]
+fn extensions_has_pairs(cfg: &CefConfig) -> bool {
+    matches!(&cfg.extensions, Some(m) if !m.is_empty())
+}
+
+/// Записать `u8` (0..=10) как 1-2 десятичных цифры в `Vec<u8>` без аллокаций.
+#[inline]
+fn push_u8_decimal(out: &mut Vec<u8>, mut n: u8) {
+    if n >= 100 {
+        let q = n / 100;
+        out.push(b'0' + q);
+        n -= q * 100;
+    }
+    if n >= 10 {
+        let q = n / 10;
+        out.push(b'0' + q);
+        n -= q * 10;
+    }
+    out.push(b'0' + n);
 }
 
 /// Экранирование для header-полей CEF: `\` → `\\`, `|` → `\|`.
-fn escape_header(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => {
-                out.push('\\');
-                out.push('\\');
+/// Пишет байты прямо в `out` — без промежуточных `String`.
+#[inline]
+fn escape_header_into(out: &mut Vec<u8>, s: &str) {
+    for &b in s.as_bytes() {
+        match b {
+            b'\\' => {
+                out.push(b'\\');
+                out.push(b'\\');
             }
-            '|' => {
-                out.push('\\');
-                out.push('|');
+            b'|' => {
+                out.push(b'\\');
+                out.push(b'|');
             }
-            _ => out.push(c),
+            _ => out.push(b),
         }
     }
-    out
 }
 
 /// Экранирование для extension-значений CEF: `\` → `\\`, `|` → `\|`, `=` → `\=`.
+/// Пишет байты прямо в `out` — без промежуточных `String`.
 /// Новой строки (`\n`) НЕ экранируются — CEF-парсер ArcSight обычно принимает
 /// multi-line значения в кавычках; для простоты передаём как есть (ArcSight
 /// SmartConnector обрабатывает LF внутри значения).
-fn escape_extension_value(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => {
-                out.push('\\');
-                out.push('\\');
+#[inline]
+fn escape_extension_value_into(out: &mut Vec<u8>, s: &str) {
+    for &b in s.as_bytes() {
+        match b {
+            b'\\' => {
+                out.push(b'\\');
+                out.push(b'\\');
             }
-            '|' => {
-                out.push('\\');
-                out.push('|');
+            b'|' => {
+                out.push(b'\\');
+                out.push(b'|');
             }
-            '=' => {
-                out.push('\\');
-                out.push('=');
+            b'=' => {
+                out.push(b'\\');
+                out.push(b'=');
             }
-            _ => out.push(c),
+            _ => out.push(b),
         }
     }
-    out
 }
 
 #[cfg(test)]
@@ -145,7 +199,6 @@ mod tests {
         c.name = "alert|critical".into();
         let out = build(&c, b"x");
         let s = std::str::from_utf8(&out).unwrap();
-        // `|` в header экранируется → `\|`. Двойной `|` между полями не экранируется.
         assert!(s.contains("Acme\\|Inc"), "got: {s}");
         assert!(s.contains("alert\\|critical"), "got: {s}");
     }
@@ -169,10 +222,8 @@ mod tests {
         c.extensions = Some(exts);
         let out = build(&c, b"");
         let s = std::str::from_utf8(&out).unwrap();
-        // Значения экранируются, ключи — нет.
         assert!(s.contains("user=alice\\=bob"), "got: {s}");
         assert!(s.contains("path=C:\\\\Windows\\|\\=foo"), "got: {s}");
-        // src — без спецсимволов.
         assert!(s.contains("src=10.0.0.1"), "got: {s}");
     }
 
@@ -185,7 +236,6 @@ mod tests {
 
     #[test]
     fn handles_invalid_utf8_msg_as_empty() {
-        // Бинарный msg (не UTF-8) — body экранируется как пустая строка.
         let out = build(&cfg(), &[0xFF, 0xFE]);
         let s = std::str::from_utf8(&out).unwrap();
         assert!(s.ends_with("|msg="), "got: {s}");
@@ -202,8 +252,6 @@ mod tests {
 
     #[test]
     fn extensions_sorted_by_key_for_determinism() {
-        // BTreeMap гарантирует порядок ключей; это важно для детерминизма
-        // (тот же seed → тот же вывод).
         let mut c = cfg();
         let mut exts = std::collections::BTreeMap::new();
         exts.insert("z".into(), "1".into());
@@ -212,7 +260,6 @@ mod tests {
         c.extensions = Some(exts);
         let out = build(&c, b"");
         let s = std::str::from_utf8(&out).unwrap();
-        // Должен быть порядок a, m, z.
         let a_pos = s.find("a=2").unwrap();
         let m_pos = s.find("m=3").unwrap();
         let z_pos = s.find("z=1").unwrap();

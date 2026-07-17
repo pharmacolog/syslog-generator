@@ -22,16 +22,30 @@
 use crate::generator::config::{CefConfig, LeefConfig};
 use chrono::Utc;
 use std::fmt;
+use std::sync::Arc;
 
 /// Параметры заголовка, уже с подставленными значениями шаблона.
+///
+/// PR-17c (v10.7.18): поля используют `Arc<str>` вместо `String` —
+/// clone = atomic increment (~1-5 ns), а не heap alloc+memcpy (~25-50 ns).
+/// Устраняет 4× String clone per rfc5424 msg (~100-200 нс/msg).
+///
+/// Также добавлено поле `timestamp: Arc<str>` — pre-computed timestamp
+/// (из `rfc5424_timestamp_at(now)` в hot-path). Используется format::build
+/// вместо внутреннего `Utc::now()` — экономит ещё ~50-100 нс/msg
+/// (1 `Utc::now()` + `chrono::format!` call).
+#[derive(Debug, Clone)]
 pub struct Header {
     pub facility: u8,
     pub severity: u8,
-    pub hostname: String,
-    pub app_name: String,
-    pub procid: String,
-    pub msgid: String,
-    pub structured_data: String,
+    pub hostname: Arc<str>,
+    pub app_name: Arc<str>,
+    pub procid: Arc<str>,
+    pub msgid: Arc<str>,
+    pub structured_data: Arc<str>,
+    /// PR-17c: pre-computed RFC 5424 timestamp string (например `"2026-07-11T14:30:00.123Z"`).
+    /// Если пустой — format::build вызывает `rfc5424_timestamp()` самостоятельно.
+    pub timestamp: Arc<str>,
     pub bom: bool,
 }
 
@@ -40,6 +54,9 @@ pub(crate) const BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
 /// PRIVAL = facility*8 + severity (RFC 5424 §6.2.1).
 /// facility зажимается в 0..=23, severity в 0..=7.
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path.
+#[inline(always)]
 pub fn prival(facility: u8, severity: u8) -> u16 {
     let f = facility.min(23) as u16;
     let s = severity.min(7) as u16;
@@ -49,6 +66,9 @@ pub fn prival(facility: u8, severity: u8) -> u16 {
 /// Санитизация printable-US-ASCII поля заголовка: пустое → NILVALUE, пробелы и
 /// непечатаемые символы заменяются на '_', длина обрезается до `max` октетов.
 /// Пустое значение или явный "-" даёт NILVALUE.
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path (вызывается 4× per rfc5424 msg).
+#[inline(always)]
 pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
     if value.is_empty() || value == NILVALUE {
         return NILVALUE.to_string();
@@ -67,8 +87,19 @@ pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
 
 /// TIMESTAMP по RFC 5424: RFC3339, UTC, миллисекунды, суффикс Z.
 /// Пример: 2026-07-11T14:30:00.123Z
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path.
+#[inline(always)]
 pub(crate) fn rfc5424_timestamp() -> String {
-    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    rfc5424_timestamp_at(Utc::now())
+}
+
+/// PR-17c (v10.7.18): hot-path версия — принимает уже вычисленный timestamp.
+/// Устраняет 2-й `Utc::now()` per msg (один timestamp shared между
+/// `datetime_now_jitter` и `rfc5424_timestamp`). Экономия ~30-100 нс/msg.
+#[inline(always)]
+pub(crate) fn rfc5424_timestamp_at(now: chrono::DateTime<Utc>) -> String {
+    now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// Экранирование PARAM-VALUE для STRUCTURED-DATA (RFC 5424 §6.3.3):
@@ -169,14 +200,15 @@ impl Format for FormatKind {
             Self::Protobuf(map) => {
                 // Преобразуем текущий `Header` в `HashMap<String, String>` для
                 // совместимости с существующим API `serialize_protobuf`.
+                // PR-17c: Arc<str> → String clone (для protobuf HashMap<String,String>).
                 let values: std::collections::HashMap<String, String> = [
-                    ("hostname", ctx.header.hostname.clone()),
-                    ("app_name", ctx.header.app_name.clone()),
-                    ("procid", ctx.header.procid.clone()),
-                    ("msgid", ctx.header.msgid.clone()),
+                    ("hostname", ctx.header.hostname.as_ref()),
+                    ("app_name", ctx.header.app_name.as_ref()),
+                    ("procid", ctx.header.procid.as_ref()),
+                    ("msgid", ctx.header.msgid.as_ref()),
                 ]
                 .iter()
-                .map(|(k, v)| (k.to_string(), v.clone()))
+                .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect();
                 protobuf::serialize_protobuf(map.as_ref(), &values)
             }
@@ -285,6 +317,7 @@ mod tests {
             procid: "1".into(),
             msgid: "X".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         };
         let ctx = FormatContext {
@@ -310,6 +343,7 @@ mod tests {
             procid: "".into(),
             msgid: "".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         };
         let ctx = FormatContext {
@@ -370,6 +404,7 @@ mod tests {
             procid: "1".into(),
             msgid: "X".into(),
             structured_data: "-".into(),
+            timestamp: "".into(),
             bom: false,
         }
     }

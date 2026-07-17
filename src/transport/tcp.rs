@@ -154,10 +154,11 @@ async fn run_send_loop(
 mod tests {
     use super::*;
     use crate::observability::metrics::create_metrics;
+    use bytes::Bytes;
     use std::sync::Arc;
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
     /// TCP sender: connect → write → drain → exit.
@@ -174,8 +175,8 @@ mod tests {
             buf
         });
         // Client side: SharedRx.
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(16);
-        let rx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
         let metrics = create_metrics().unwrap();
         let shutdown = CancellationToken::new();
         let sender_handle = tokio::spawn(target_sender_tcp(
@@ -189,7 +190,7 @@ mod tests {
         ));
         // Отправляем 3 сообщения через non-transparent framing (newline-separated).
         for i in 0..3 {
-            tx.send(format!("msg-{i}\n").into_bytes()).await.unwrap();
+            tx.send(Bytes::from(format!("msg-{i}\n"))).await.unwrap();
         }
         drop(tx);
         sender_handle.await.unwrap().unwrap();
@@ -212,8 +213,8 @@ mod tests {
             stream.read_to_end(&mut buf).await.unwrap();
             buf
         });
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(16);
-        let rx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
         let metrics = create_metrics().unwrap();
         let shutdown = CancellationToken::new();
         let sender_handle = tokio::spawn(target_sender_tcp(
@@ -226,7 +227,7 @@ mod tests {
             None,
         ));
         let msg = b"hello world".to_vec();
-        tx.send(msg.clone()).await.unwrap();
+        tx.send(Bytes::from(msg.clone())).await.unwrap();
         drop(tx);
         sender_handle.await.unwrap().unwrap();
         let received = server.await.unwrap();
@@ -256,8 +257,8 @@ mod tests {
             // Никогда не закрываем stream — держим connection alive.
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
         });
-        let (tx, rx_inner) = mpsc::channel::<Vec<u8>>(16);
-        let rx = Arc::new(Mutex::new(rx_inner));
+        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
         let metrics = create_metrics().unwrap();
         let shutdown = CancellationToken::new();
         let sender_handle = tokio::spawn(target_sender_tcp(
@@ -272,7 +273,7 @@ mod tests {
         // Дать sender подключиться.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         // Отправить сообщение, потом закрыть tx.
-        tx.send(b"hello\n".to_vec()).await.unwrap();
+        tx.send(Bytes::from(b"hello\n".to_vec())).await.unwrap();
         drop(tx);
         // Sender должен корректно завершиться после drain.
         let result = tokio::time::timeout(std::time::Duration::from_secs(2), sender_handle)

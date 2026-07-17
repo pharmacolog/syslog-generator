@@ -328,9 +328,10 @@ mod tests {
     use super::*;
     use crate::observability::metrics::create_metrics;
     use crate::transport::SharedRx;
+    use bytes::Bytes;
     use std::sync::Arc;
     use tokio::io::AsyncReadExt;
-    use tokio::sync::{mpsc, Mutex};
+    use tokio::sync::mpsc;
 
     fn temp_path(name: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
@@ -363,7 +364,7 @@ mod tests {
         let path = temp_path("no_rot");
         let metrics = make_metrics().await;
         let (tx, rx) = mpsc::channel(16);
-        let shared_rx: SharedRx = Arc::new(Mutex::new(rx));
+        let shared_rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx));
         let shutdown = CancellationToken::new();
         let path_str = path.to_string_lossy().to_string();
         let h = tokio::spawn(target_sender_file(
@@ -374,7 +375,7 @@ mod tests {
             shutdown,
         ));
         for i in 0..5 {
-            tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+            tx.send(Bytes::from(format!("msg{i}"))).await.unwrap();
         }
         drop(tx);
         h.await.unwrap().unwrap();
@@ -436,7 +437,7 @@ mod tests {
         let path = temp_path("interval_rot");
         let metrics = make_metrics().await;
         let (tx, rx) = mpsc::channel(16);
-        let shared_rx: SharedRx = Arc::new(Mutex::new(rx));
+        let shared_rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx));
         let shutdown = CancellationToken::new();
 
         // interval=1 sec, max_files=3. Каждое сообщение — отдельная ротация
@@ -455,7 +456,7 @@ mod tests {
             shutdown,
         ));
         for i in 0..3 {
-            tx.send(format!("msg{i}").into_bytes()).await.unwrap();
+            tx.send(Bytes::from(format!("msg{i}"))).await.unwrap();
             tokio::time::sleep(Duration::from_millis(1100)).await;
         }
         drop(tx);

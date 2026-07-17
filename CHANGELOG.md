@@ -1,6 +1,62 @@
 
 # Changelog
 
+## v10.7.21 (RESERVED, next minor) — планируется
+
+**Status:** RESERVED. Не выпущен.
+
+Этот changelog-entry — **трейсер** для следующего планируемого minor release.
+Git-traceability через `git notes --ref=v10.7.16` (attached на tag v10.7.16^{}).
+
+### Когда планируется
+
+- После существенных накопленных изменений в `dev`:
+  - PR-17f+ hand-written primitives (timestamp formatter, JSON encoder)
+    для достижения target ≤1.3 µs/msg (−37% от baseline).
+  - Coverage expansion ≥97% (gate в CI).
+  - Любые новые patch-улучшения (PR-quality, security fixes).
+- Trigger — коммит, после которого накопленных изменений достаточно для minor bump.
+
+### План release-train v10.7.21 (когда наступит)
+
+1. **feature/X работы** → squash PR в `dev` через PR-only flow
+2. После достаточного накопления: создать `release/v10.7.21` от main HEAD (FF от v10.7.16)
+3. `Cargo.toml` bump 10.7.16 → 10.7.21
+4. PR `release/v10.7.21 → main` (squash merge)
+5. `git tag -a v10.7.21` и `git push origin v10.7.21`
+6. `gh release create v10.7.21` с release-notes
+
+### Почему НЕ создан `release/v10.7.21` branch заранее
+
+Создание branch ДО release-train:
+- ❌ misleading: branch предполагает "это линейная история release-train v10.7.21"
+- ❌ загрязняет `git branch --list`
+- ❌ может случайно мержиться/пушиться не в то время
+
+Использование `git notes`:
+- ✅ lightweight reference, прикреплён к tag v10.7.16
+- ✅ searchable (`git log --notes`, `git notes show v10.7.16`)
+- ✅ pushable через `refs/notes/*` (refs существуют на origin)
+- ✅ не влияет на branches/tags
+
+### Git commands для просмотра трейсера
+
+```bash
+# Просмотр note на v10.7.16:
+git notes --ref=v10.7.16 show v10.7.16
+
+# Или через fetch:
+git fetch origin refs/notes/v10.7.16:refs/notes/v10.7.16
+
+# Когда release-train v10.7.21 фактически начнётся:
+git fetch origin main
+git checkout -b release/v10.7.21 origin/main  # FF от v10.7.16
+```
+
+Refs: CLAUDE_HANDOFF.md §6 (release train), PLAN-v10.0.0.md.
+
+---
+
 ## v10.7.16 - 2026-07-17
 
 **Release v10.7.16 (release-train): объединение PR-17a..e (hot-path optimization).**

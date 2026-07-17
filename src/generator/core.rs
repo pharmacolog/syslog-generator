@@ -1426,4 +1426,284 @@ phases:
         assert_eq!(profile.phases[0].name, "test");
         assert_eq!(profile.phases[0].total_messages, Some(100));
     }
+
+    // ===== Phase 6 (PR-Q.1): coverage для generator/core.rs =====
+
+    /// Phase 6: `load_templates` без `templates_file` возвращает копию `phase.templates`.
+    /// Покрывает ветку `Ok(phase.templates.clone())` (строка 114).
+    #[test]
+    fn phase6_load_templates_no_file_returns_phase_templates() {
+        let phase = Phase {
+            name: "t".into(),
+            templates: vec!["a".to_string(), "b".to_string()],
+            ..Default::default()
+        };
+        let v = load_templates(&phase).expect("ok");
+        assert_eq!(v, vec!["a", "b"]);
+    }
+
+    /// Phase 6: `load_templates` с несуществующим `templates_file` возвращает `Err`.
+    /// Покрывает error path `fs::read_to_string` (строки 109-112).
+    #[test]
+    fn phase6_load_templates_missing_file_returns_io_error() {
+        let phase = Phase {
+            name: "t".into(),
+            templates_file: Some("/nonexistent/path/templates_xyz_999.json".to_string()),
+            ..Default::default()
+        };
+        let result = load_templates(&phase);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        // Сообщение об ошибке содержит упоминание файла / NotFound.
+        assert!(
+            err_msg.contains("No such file")
+                || err_msg.contains("not found")
+                || err_msg.contains("templates_xyz_999"),
+            "err msg: {err_msg}"
+        );
+    }
+
+    /// Phase 6: `load_templates` с битым JSON → возвращает `Err` от serde.
+    /// Покрывает error path `serde_json::from_str` (строка 111).
+    #[test]
+    fn phase6_load_templates_invalid_json_returns_parse_error() {
+        let tmp = std::env::temp_dir().join(format!(
+            "syslog-gen-phase6-bad-templates-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&tmp, b"{not valid json").expect("write tmp");
+        let phase = Phase {
+            name: "t".into(),
+            templates_file: Some(tmp.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let result = load_templates(&phase);
+        assert!(result.is_err());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// Phase 6: `load_schema` без `schema_file` возвращает `Ok(None)`.
+    /// Покрывает ветку `Ok(None)` (строка 123).
+    #[test]
+    fn phase6_load_schema_no_file_returns_none() {
+        let phase = Phase {
+            name: "t".into(),
+            ..Default::default()
+        };
+        let result = load_schema(&phase).expect("ok");
+        assert!(result.is_none());
+    }
+
+    /// Phase 6: `load_schema` с несуществующим `schema_file` возвращает `Err`.
+    /// Покрывает error path `fs::read_to_string` (строки 118-122).
+    #[test]
+    fn phase6_load_schema_missing_file_returns_io_error() {
+        let phase = Phase {
+            name: "t".into(),
+            schema_file: Some("/nonexistent/path/schema_xyz_999.json".to_string()),
+            ..Default::default()
+        };
+        let result = load_schema(&phase);
+        assert!(result.is_err());
+    }
+
+    /// Phase 6: `load_schema` с валидным JSON → `Ok(Some(schema))`.
+    /// Покрывает happy path (строки 119-122).
+    #[test]
+    fn phase6_load_schema_valid_json_returns_some() {
+        let tmp = std::env::temp_dir().join(format!(
+            "syslog-gen-phase6-schema-{}.json",
+            std::process::id()
+        ));
+        // Валидный schema JSON: пустые fields, без template.
+        std::fs::write(&tmp, br#"{"fields":{}}"#).expect("write tmp");
+        let phase = Phase {
+            name: "t".into(),
+            schema_file: Some(tmp.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let result = load_schema(&phase).expect("ok");
+        assert!(result.is_some());
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    /// Phase 6: schema-driven generation path в `generate_message_with_format_inner`
+    /// (строки 146-185): schema.fields генерируются, schema.template рендерится
+    /// и оборачивается в указанный формат.
+    #[test]
+    fn phase6_generate_message_with_schema_renders_template() {
+        use crate::schema::{Schema, SchemaField};
+
+        let mut fields = HashMap::new();
+        fields.insert(
+            "user".to_string(),
+            SchemaField {
+                field_type: "string".to_string(),
+                len: Some(5),
+                ..Default::default()
+            },
+        );
+        let schema = Schema {
+            fields,
+            template: Some("user={{user}} seq={{sequence}}".to_string()),
+            output: None,
+        };
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            // Без `templates` — контент идёт из schema.template.
+            ..Default::default()
+        };
+        let ctx = PhaseContext {
+            templates: vec![],
+            compiled_templates: vec![],
+            compiled_fallback: Arc::new(template::CompiledTemplate::compile("")),
+            cached_syslog_header: None,
+            faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
+            referenced_fakers: None,
+            schema: Some(Arc::new(schema)),
+        };
+        // Resolved FormatKind::Rfc5424 (default).
+        let format_kind = FormatKind::Rfc5424;
+        let msg = generate_message_with_format(&ctx, &phase, &format_kind, 7).expect("generate ok");
+        let s = std::str::from_utf8(&msg).expect("utf8");
+        // RFC 5424 префикс присутствует.
+        assert!(s.starts_with("<"), "got: {s}");
+        // body содержит подставленные значения из schema и sequence.
+        assert!(s.contains("seq=7"), "got: {s}");
+        assert!(s.contains("user="), "got: {s}");
+    }
+
+    /// Phase 6: schema with template + `FormatKind::Raw` → schema template
+    /// рендерится и оборачивается в raw (passthrough).
+    #[test]
+    fn phase6_generate_message_with_schema_raw_format() {
+        use crate::schema::Schema;
+
+        let schema = Schema {
+            fields: HashMap::new(),
+            template: Some("hello {{sequence}}".to_string()),
+            output: None,
+        };
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            ..Default::default()
+        };
+        let ctx = PhaseContext {
+            templates: vec![],
+            compiled_templates: vec![],
+            compiled_fallback: Arc::new(template::CompiledTemplate::compile("")),
+            cached_syslog_header: None,
+            faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
+            referenced_fakers: None,
+            schema: Some(Arc::new(schema)),
+        };
+        let format_kind = FormatKind::Raw;
+        let msg =
+            generate_message_with_format(&ctx, &phase, &format_kind, 42).expect("generate ok");
+        // Raw = passthrough = тело сообщения как есть.
+        assert_eq!(msg, b"hello 42");
+    }
+
+    /// Phase 6: generate_message_with_format для `FormatKind::Protobuf(None)` +
+    /// phase.format_type() != "protobuf" → fallback в template.render() →
+    /// wrap_syslog с FormatKind::Protobuf(map=None) → protobuf::serialize_protobuf(None, ...)
+    /// → пустой Vec. Покрывает ветку `matches!(format_kind, FormatKind::Protobuf(_))` (строка 277)
+    /// и `serialize_protobuf_like(None, ...)` → empty schema → empty bytes.
+    #[test]
+    fn phase6_generate_message_protobuf_none_yields_empty_bytes() {
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["hello".to_string()],
+            format: Some("protobuf".to_string()),
+            protobuf_schema: None,
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let format_kind = FormatKind::Protobuf(None);
+        let msg = generate_message_with_format(&ctx, &phase, &format_kind, 1).expect("generate ok");
+        // Empty protobuf schema → empty bytes.
+        assert!(msg.is_empty(), "got: {:?}", msg);
+    }
+
+    /// Phase 6: `run_phase_multi` propagates error из `PhaseContext::resolve`
+    /// когда templates_file задан, но файла нет (строки 654-655).
+    #[tokio::test]
+    async fn phase6_run_phase_multi_propagates_resolve_error() {
+        use crate::config::ShutdownConfig;
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates_file: Some("/nonexistent/path/xyz_999.json".to_string()),
+            ..Default::default()
+        };
+        let targets = vec![TargetConfig::default()];
+        let metrics = crate::observability::create_metrics().expect("metrics");
+        let shutdown = CancellationToken::new();
+        let result = run_phase_multi(
+            &phase,
+            &targets,
+            "round-robin",
+            &ShutdownConfig::default(),
+            metrics,
+            &shutdown,
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    /// Phase 6: `run_phase_multi` happy-path с file target — пишет 2 сообщения в файл.
+    /// Покрывает transport dispatch (строки 893-908) для ветки `_` (file default)
+    /// и завершение через total_messages limit.
+    #[tokio::test]
+    async fn phase6_run_phase_multi_file_target_writes_messages() {
+        use crate::config::ShutdownConfig;
+        let tmp = std::env::temp_dir().join(format!(
+            "syslog-gen-phase6-run-multi-{}.log",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&tmp);
+
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(2),
+            messages_per_second: 1000,
+            duration_secs: 0,
+            templates: vec!["hello seq={{sequence}}".to_string()],
+            ..Default::default()
+        };
+        let targets = vec![TargetConfig {
+            address: tmp.to_string_lossy().to_string(),
+            transport: "file".to_string(),
+            ..Default::default()
+        }];
+        let metrics = crate::observability::create_metrics().expect("metrics");
+        let shutdown = CancellationToken::new();
+        run_phase_multi(
+            &phase,
+            &targets,
+            "round-robin",
+            &ShutdownConfig::default(),
+            metrics,
+            &shutdown,
+        )
+        .await
+        .expect("run_phase_multi ok");
+
+        let body = std::fs::read_to_string(&tmp).expect("read file");
+        // Каждое сообщение = body + `\n` (file framing).
+        assert!(body.contains("hello seq=1"), "got: {body}");
+        assert!(body.contains("hello seq=2"), "got: {body}");
+        let _ = std::fs::remove_file(&tmp);
+    }
 }

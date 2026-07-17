@@ -452,19 +452,19 @@ jobs:
         # LCOV-формат для codecov.io upload.
         # PR-11 (v10.7.12): blocking coverage gate с `--fail-under-lines=87`.
         # Текущее baseline (v10.7.15, PR-16 Coverage expansion): 89.65% lines.
-        # При падении ниже 87% — job fails.
+        # При падении ниже 90% — job fails.
         run: |
-          # PR-Q (v10.7.16, Фаза 0): --fail-under-lines поэтапно повышается:
-          # - v10.7.16 (этот PR): 87% (текущий baseline, чтобы CI не сломался)
-          # - v10.7.16 PR-Q.1: 88% (после P1 тестов: format/mod.rs, generator/core.rs, transport/mod.rs)
-          # - v10.7.16 PR-Q.2: 90% (после P2: main.rs assert_cmd, shutdown.rs, validate.rs)
-          # - v10.7.16 PR-Q.3: 95% (после P3: transport/tcp.rs reconnect, observability/server.rs)
-          # - v10.7.17: 97% (Tier 1 enforcement, см. codecov.yml component_management)
+          # PR-Q (v10.7.16): --fail-under-lines поэтапно повышается:
+          # - PR-Q (merged): 87% (baseline)
+          # - PR-Q.1 (этот PR): 90% (после Phase 5+6: test smells + format/mod.rs, generator/core.rs, transport/mod.rs)
+          # - PR-Q.2: 92% (после Phase 7: main.rs assert_cmd, shutdown.rs, validate.rs)
+          # - PR-Q.3: 95% (после Phase 8: transport/tcp.rs reconnect, observability/server.rs)
+          # - v10.7.17: 97% (Tier 1 enforcement per codecov.yml component_management)
           cargo llvm-cov \
             --features kafka,test-helpers \
             --workspace --all-targets \
             --lcov --output-path lcov.info \
-            --fail-under-lines=87 \
+            --fail-under-lines=90 \
             --summary-only 2>&1 | tee coverage-summary.txt
 
       - name: Upload coverage to codecov.io

@@ -42,15 +42,14 @@ pub fn build(cfg: &CefConfig, msg: &[u8]) -> Vec<u8> {
         + cfg.device_version.len()
         + cfg.signature_id.len()
         + cfg.name.len();
-    let (ext_pairs, ext_keys_len, ext_vals_len): (usize, usize, usize) =
-        match &cfg.extensions {
-            Some(m) => (
-                m.len(),
-                m.keys().map(|k| k.len()).sum(),
-                m.values().map(|v| v.len()).sum(),
-            ),
-            None => (0, 0, 0),
-        };
+    let (ext_pairs, ext_keys_len, ext_vals_len): (usize, usize, usize) = match &cfg.extensions {
+        Some(m) => (
+            m.len(),
+            m.keys().map(|k| k.len()).sum(),
+            m.values().map(|v| v.len()).sum(),
+        ),
+        None => (0, 0, 0),
+    };
     let msg_str = std::str::from_utf8(msg).unwrap_or("");
     // "CEF:0|"=7; 7 '|' (5 между полей + 1 после name + 1 после severity);
     // 2 цифры sev; ext_pairs пробелов; ext_pairs '='; " msg=" = 5.

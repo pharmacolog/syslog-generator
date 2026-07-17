@@ -23,8 +23,13 @@ pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
 
     // Грубая оценка ёмкости: <pri>1(4) + ts(24) + 5 hostname/app/procid/msgid (≤463)
     // + sd (variable) + BOM(3) + msg + пробелы.
-    let estimated = 200 + hostname.len() + app_name.len() + procid.len()
-        + msgid.len() + h.structured_data.len() + msg.len();
+    let estimated = 200
+        + hostname.len()
+        + app_name.len()
+        + procid.len()
+        + msgid.len()
+        + h.structured_data.len()
+        + msg.len();
     let mut out = Vec::with_capacity(estimated);
 
     // `<PRI>1 TIMESTAMP`
@@ -103,7 +108,10 @@ mod tests {
         h.bom = true;
         let out = build(&h, b"x");
         // BOM EF BB BF
-        assert!(out.windows(3).any(|w| w == BOM), "expected BOM, got: {out:?}");
+        assert!(
+            out.windows(3).any(|w| w == BOM),
+            "expected BOM, got: {out:?}"
+        );
     }
 
     #[test]
@@ -112,7 +120,10 @@ mod tests {
         h.structured_data = "".into();
         let out = build(&h, b"x");
         let s = std::str::from_utf8(&out).unwrap();
-        assert!(s.contains(" - "), "expected NILVALUE for empty SD, got: {s}");
+        assert!(
+            s.contains(" - "),
+            "expected NILVALUE for empty SD, got: {s}"
+        );
     }
 
     #[test]

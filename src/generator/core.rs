@@ -1,7 +1,5 @@
 use crate::anomaly::AnomalyPlanner;
-use crate::format::{
-    protobuf::serialize_protobuf_like, Format, FormatContext, FormatKind, Header,
-};
+use crate::format::{protobuf::serialize_protobuf_like, Format, FormatContext, FormatKind, Header};
 use crate::generator::config::{Phase, Profile, TargetConfig};
 use crate::observability::metrics::Metrics;
 use crate::schema::Schema;
@@ -1456,9 +1454,8 @@ mod tests {
         // PR-17d (v10.7.19): один template → всегда возвращается этот template
         // (без RNG-зависимости). Тест упрощён по сравнению с оригиналом,
         // который путал 'single' с 'first'.
-        let templates: Vec<Arc<template::CompiledTemplate>> = vec![Arc::new(
-            template::CompiledTemplate::compile("a"),
-        )];
+        let templates: Vec<Arc<template::CompiledTemplate>> =
+            vec![Arc::new(template::CompiledTemplate::compile("a"))];
         let mut rng = crate::payload::derive_rng(Some(42), 1);
         let picked = pick_template_compiled(&templates, None, &mut rng);
         assert!(picked.is_some());

@@ -41,9 +41,15 @@ pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
 
     // Оценка ёмкости: <pri>(4) + ts(15) + ' ' + hostname(≤255) + ' ' + app(≤32)
     // + [pid](≤130) + ':' + ' ' + msg
-    let estimated = 4 + ts.len() + 1 + hostname.len() + 1 + app.len()
+    let estimated = 4
+        + ts.len()
+        + 1
+        + hostname.len()
+        + 1
+        + app.len()
         + if has_pid { pid.len() + 3 } else { 1 }
-        + 1 + msg.len();
+        + 1
+        + msg.len();
     let mut out = Vec::with_capacity(estimated);
 
     // <PRI>TIMESTAMP HOSTNAME TAG MSG

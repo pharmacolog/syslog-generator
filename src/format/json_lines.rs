@@ -121,7 +121,10 @@ pub fn build(
         KEY_LEVEL.to_string(),
         severity_to_level(header.severity).to_string(),
     );
-    obj.insert(KEY_FACILITY.to_string(), header.facility.min(23).to_string());
+    obj.insert(
+        KEY_FACILITY.to_string(),
+        header.facility.min(23).to_string(),
+    );
     // PR-17c: Arc<str> → String (для BTreeMap<String, String>).
     obj.insert(KEY_HOST.to_string(), header.hostname.to_string());
     obj.insert(KEY_APP.to_string(), header.app_name.to_string());

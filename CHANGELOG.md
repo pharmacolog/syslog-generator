@@ -1,6 +1,103 @@
 
 # Changelog
 
+## v10.7.16 - 2026-07-17
+
+**Release v10.7.16 (release-train): объединение PR-17a..e (hot-path optimization).**
+
+Этот релиз объединяет все PR-17a..e (squash-PR #31 в dev, commit `79842f6`).
+Все изменения перечислены ниже; release bumped с 10.7.15 → 10.7.16.
+
+### Hot-path optimization (cumulative changes — PR-17a..e)
+
+**Изменения в src/format/:**
+- rfc5424.rs: `format!("<{}>1 {} ...")` → прямой `write!` в `Vec<u8>`
+- rfc3164.rs: 3× `format!()` → ручная сборка в `Vec<u8>`
+- cef.rs / leef.rs: `format!("CEF:...")` / `format!("LEEF:...")` → write! + escape helpers
+- json_lines.rs: `serde_json::to_string` → ручной JSON encoder
+- mod.rs: `#[inline(always)]` на prival, sanitize_header, rfc5424_timestamp
+
+**Hot-path infra:**
+- `#[inline(always)]` на derive_rng, faker, int_in_range, datetime_now_jitter, write_hex_pair
+- `default_values_into(&mut HashMap)` — pre-allocated HashMap (~80-150 нс/msg savings)
+- `generate_message_with_format_cached(...)` — новый hot-path API
+- `Arc<str>` для Header и SyslogHeaderParts (atomic clone vs String alloc)
+- `Header.timestamp: Arc<str>` — pre-computed timestamp
+- Single shared `Utc::now()` per msg через `rfc5424_timestamp_at` + `datetime_now_jitter_at`
+- Cached `IntCounter` handles в `run_phase_multi`
+
+**Sender path:**
+- `SharedRx`: `tokio::sync::Mutex` → `parking_lot::Mutex` mpsc<Bytes>
+- `Bytes::clone()` = atomic increment — broadcast экономит N-1 memcpys payload'а
+
+### PGO (Profile-Guided Optimization) для release builds
+
+- `.github/workflows/release-pgo.yml` — workflow для release tags
+- `docs/PERFORMANCE.md §6` — полная процедура PGO
+- Cargo.toml opt-in через RUSTFLAGS=-Cprofile-use=...
+- Измеренный эффект PGO: −3.4% throughput дополнительно
+
+### Breaking changes (для external consumers)
+
+- `Header.{hostname,app_name,procid,msgid,structured_data}`: `String` → `Arc<str>`
+- `Header` добавлено поле `timestamp: Arc<str>` (default empty)
+- `SyslogHeaderParts.*`: `String` → `Arc<str>`
+- `default_values_into(...)`: добавлен параметр `now: DateTime<Utc>`
+- `generate_message_with_format_cached(...)` — новая функция
+- `datetime_now_jitter_at(...)` — новая функция
+- `SharedRx`: `tokio::sync::Mutex` → `parking_lot::Mutex`
+- mpsc каналы: `Sender<Bytes>` / `Receiver<Bytes>` (не `Vec<u8>`)
+
+Migration: см. подсекции PR-17a..v10.7.20 ниже для деталей.
+
+### Performance (cargo bench --bench hot_path -- --quick на Apple M1)
+
+| Bench | v10.7.15 baseline | v10.7.16 (после rebase) | С PGO |
+|---|---|---|---|
+| `rfc5424_with_faker` | 2056.7 нс | **1690.6 нс** (−17.8%) | ~1678 нс (−18.4%) |
+| `template_render_only` | 124.7 нс | ~104 нс (−16.6%) | - |
+| `faker_ipv4` | 90.3 нс | ~82 нс (−9.2%) | - |
+| **throughput** | 486 Kelem/s | **591 Kelem/s** (+21.6%) | ~596 Kelem/s (+22.6%) |
+
+### Test coverage (после rebase на dev)
+
+- Lines: **92.86%** (≥ 91.54% требуемого)
+- Functions: **92.45%** (≥ 91.86% требуемого)
+- Regions: **92.91%** (≥ 91.51% требуемого)
+
+328 tests pass (dev добавил 21 тест), `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean.
+
+### Files changed (squash-PR #31 summary)
+
+17 files, +11545 / −427:
+- `src/format/{mod,rfc5424,rfc3164,cef,leef,json_lines}.rs`
+- `src/payload.rs`, `src/template.rs`, `src/generator/core.rs`
+- `src/transport/{mod,tcp,udp,file}.rs`
+- `Cargo.toml` (`parking_lot = "0.12"`)
+- `.github/workflows/release-pgo.yml` (новый)
+- `api-snapshot.txt` (regenerated)
+- `lcov.info` (обновлён)
+- `CHANGELOG.md`, `CLAUDE_HANDOFF.md`
+- `docs/PERFORMANCE.md`
+
+### Release train (v10.7.15 → v10.7.16)
+
+1. ✅ PR-17a..e смержены в dev (squash-PR #31, `79842f6`)
+2. ✅ Cargo.toml: bump 10.7.15 → 10.7.16
+3. ✅ Cargo.lock: bump 10.7.15 → 10.7.16
+4. 🔜 release/v10.7.21 → main PR
+5. 🔜 Tag v10.7.21 после merge в main
+
+Refs: `PLAN-v10.0.0.md` (веха F), `docs/PERFORMANCE.md`, `PLAN-CI-FAILURE-MITIGATION.md`,
+`CLAUDE_HANDOFF.md` §6 (release train).
+
+---
+
+## Legacy: под-секции PR-17a..e (внутренние changelog entries — устарели)
+
+Ниже — детальные changelog-entries для каждого PR. Все они слиты в один релиз v10.7.16 выше.
+Эти секции сохранены для трассировки что было сделано в каждом под-PR, но реальные версии ещё не публиковались.
+
 ## v10.7.20 - 2026-07-17
 
 **Patch-release (PR-17e): Bytes mpsc + parking_lot::Mutex.**

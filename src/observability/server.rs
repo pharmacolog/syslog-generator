@@ -310,4 +310,30 @@ mod tests {
         assert!(text.starts_with("HTTP/1.1 404 Not Found"), "resp: {text}");
         shutdown.cancel();
     }
+
+    /// PR-16 (coverage): build_http_response_404_sets_content_length.
+    /// `build_http_response` для 404 и 405 paths были частично uncovered.
+    #[test]
+    fn build_http_response_error_paths() {
+        // 404 Not Found.
+        let r = build_http_response("404 Not Found", "text/plain", "page not found\n");
+        assert!(r.starts_with("HTTP/1.1 404 Not Found\r\n"));
+        assert!(r.contains("Content-Type: text/plain"));
+        assert!(r.contains("Content-Length: 15")); // "page not found\n"
+        assert!(r.ends_with("page not found\n"));
+
+        // 405 Method Not Allowed.
+        let r = build_http_response("405 Method Not Allowed", "text/plain", "POST not allowed\n");
+        assert!(r.starts_with("HTTP/1.1 405 Method Not Allowed\r\n"));
+        assert!(r.contains("Content-Length: 17"));
+
+        // 500 Internal Server Error.
+        let r = build_http_response("500 Internal Server Error", "text/plain", "err\n");
+        assert!(r.starts_with("HTTP/1.1 500 Internal Server Error\r\n"));
+
+        // Empty body.
+        let r = build_http_response("200 OK", "text/plain", "");
+        assert!(r.contains("Content-Length: 0"));
+        assert!(r.ends_with("\r\n\r\n"));
+    }
 }

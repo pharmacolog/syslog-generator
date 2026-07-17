@@ -1,10 +1,11 @@
 # COVERAGE
 
-> **v10.7.4 current:** данные по coverage берутся из последнего запуска
+> **v10.7.15 current:** данные по coverage берутся из последнего запуска
 > coverage job в CI (`.github/workflows/ci.yml` job `coverage`).
 > Baseline milestones:
 > - **v10.3.0 (Coverage ч.1):** **86.40% lines / 88.36% functions / 86.49% regions**
 > - **v10.4.0 (Coverage ч.2):** **87.07% lines / 89.38% functions / 87.20% regions** (+0.67pp)
+> - **v10.7.15 (Coverage expansion, PR-16):** **89.65% lines / 90.42% functions / 89.53% regions** (+1.77pp от v10.7.9 baseline 87.88%, 25 новых тестов)
 >
 > Coverage gate (≥ 97% lines) **НЕ активирован** — backlog. PR-3 закрывает
 > доки, gate переедет в отдельный release (требует ~50-80 новых unit-тестов).

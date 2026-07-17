@@ -14,14 +14,29 @@ name: CI
 on:
   push:
     branches: [main, dev, "release/v*"]
+    # PR-15 (T6): docs-only commits не запускают CI.
+    # Экономит CI runner time.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
 
 # v10.7.1: явные permissions на уровне workflow (Code Scanning
 # actions/missing-workflow-permissions). Принцип least privilege.
 # Глобальные permissions: только contents: read для checkout.
 permissions:
   contents: read
+
+# PR-15 (T6): concurrency group (НЕ cancel-in-progress — отменённые jobs
+# приводят к "failure" report, что misleads).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
 
 # PR-7 fix: macos-latest runners в GH Actions периодически зависают
 # (видимо infrastructure issue) на 30+ минут без логов. Добавляем
@@ -432,7 +447,8 @@ jobs:
         # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97% (PR-11).
         # LCOV-формат для codecov.io upload.
         # PR-11 (v10.7.12): blocking coverage gate с `--fail-under-lines=87`.
-        # Текущее baseline (v10.7.11): 87.94% lines. При падении ниже 87% — job fails.
+        # Текущее baseline (v10.7.15, PR-16 Coverage expansion): 89.65% lines.
+        # При падении ниже 87% — job fails.
         run: |
           cargo llvm-cov \
             --features kafka,test-helpers \
@@ -463,27 +479,10 @@ jobs:
             coverage-summary.txt
           if-no-files-found: warn
 
-      # PR-12 (security hardening): SBOM generation в CI.
-      # `cargo-cyclonedx` создаёт CycloneDX SBOM из Cargo.lock для
-      # supply-chain transparency (EO 14028, EU CRA Art. 13(5)).
-      # Артефакт публикуется как `sbom-cyclonedx` для каждого run.
-      - name: Install cargo-cyclonedx
-        run: cargo install cargo-cyclonedx --locked
-
-      - name: Generate SBOM (CycloneDX JSON)
-        run: |
-          cargo cyclonedx --format json \
-            --override-filename "sbom-${GITHUB_SHA::8}" \
-            --spec-version 1.5 \
-            --output-pattern "{{ package_path }}.cdx.json"
-
-      - name: Upload SBOM artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sbom-cyclonedx
-          path: "*.cdx.json"
-          if-no-files-found: warn
+      # SBOM generation moved to separate workflow (.github/workflows/sbom.yml).
+      # PR-15 (CI Failure Mitigation): cargo-cyclonedx 0.5/0.6 API mismatch
+      # на --output-pattern ломал coverage job. Вынесли в отдельный workflow
+      # чтобы broken SBOM не маскировал coverage failure (проблема из PR-12).
 
   # v10.7.4 (PR-3): public-api snapshot — фиксирует публичный API крейта.
   # При PR если diff показывает breaking changes — job падает (после
@@ -509,14 +508,24 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-public-api
       - name: Install cargo-public-api
         run: cargo install cargo-public-api --locked
-      - name: Run public-api diff
-        # Если файл api-snapshot.txt существует — diff с ним.
-        # Если нет (первый запуск) — exit 0 (baseline генерируется локально).
+      - name: Run public-api diff (STRICT GATE)
+        # PR-15 (CI Failure Mitigation): жёсткий gate.
+        # Если snapshot отсутствует → init baseline и warning
+        # (только при первом запуске в новом repo / после force-push).
+        # В нормальном случае — diff должен быть пустым, иначе FAIL.
         run: |
           cargo public-api --features test-helpers 2>/dev/null > /tmp/current-api.txt
-          if [ -f api-snapshot.txt ]; then
-            diff -u api-snapshot.txt /tmp/current-api.txt
-          else
-            echo "::warning::api-snapshot.txt not found, skipping diff"
-            echo "::warning::Generate baseline locally: cargo public-api --features test-helpers > api-snapshot.txt"
+          if [ ! -f api-snapshot.txt ]; then
+            echo "::warning::api-snapshot.txt not found, initializing baseline"
+            cp /tmp/current-api.txt api-snapshot.txt
+            git add api-snapshot.txt
+            git commit -m "chore: initialize public-api baseline"
+            echo "::warning::Baseline committed. Re-run CI to verify gate."
+            exit 1   # fail first run to force explicit baseline review
           fi
+          if ! diff -u api-snapshot.txt /tmp/current-api.txt > /tmp/api-diff.txt; then
+            echo "::error::Public API changed!"
+            cat /tmp/api-diff.txt
+            exit 1
+          fi
+          echo "✅ Public API matches baseline"

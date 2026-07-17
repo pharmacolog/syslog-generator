@@ -92,14 +92,14 @@ run_step "G6.1: N7 invariant — no unwrap()/expect() in non-test src/" \
     "bash scripts/check-n7-invariant.sh"
 
 # ─────────────────────────────────────────────────────────────────
-# G7. Coverage gate (cargo-llvm-cov, ≥ 87%)
+# G7. Coverage gate (cargo-llvm-cov, ≥ 92% per PR-Q.2)
 # ─────────────────────────────────────────────────────────────────
 if command -v cargo-llvm-cov >/dev/null 2>&1; then
-    run_step "G7.1: coverage ≥ 87% (cargo-llvm-cov)" \
-        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --fail-under-lines=87 --summary-only 2>&1 | tail -5"
+    run_step "G7.1: coverage ≥ 92% (cargo-llvm-cov, PR-Q.2 Phase 7 target)" \
+        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --fail-under-lines=92 --summary-only 2>&1 | tail -5"
 else
     echo ""
-    echo "▶ G7.1: coverage ≥ 87% (cargo-llvm-cov)"
+    echo "▶ G7.1: coverage ≥ 92% (cargo-llvm-cov)"
     echo "  ⚠ cargo-llvm-cov not installed (skipping — CI will catch)"
 fi
 

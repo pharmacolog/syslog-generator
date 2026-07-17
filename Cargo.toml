@@ -100,6 +100,16 @@ proptest = "1"
 # tokio::net::TcpStream::set_linger deprecated, поэтому используем
 # socket2::Socket::set_linger напрямую.
 socket2 = "0.6"
+# PR-Q.2 (Phase 7a): CLI integration tests через assert_cmd.
+# Тестирует subcommands (completions, man), flags (--dry-run, --print-config,
+# --version, --help) и error paths через реальный бинарник (build + execute).
+# Тесты живут в tests/cli_integration.rs (НЕ tests/integration_tests.rs —
+# этот файл уже большой, 3233 строк).
+assert_cmd = "1"
+predicates = "3"
+# PR-Q.2 (Phase 7b): subprocess SIGTERM test в shutdown.rs использует
+# libc::kill для посылки сигнала spawned бинарю.
+libc = "0.2"
 
 [[bench]]
 name = "message_generation"

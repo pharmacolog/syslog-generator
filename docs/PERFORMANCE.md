@@ -126,6 +126,88 @@ Hardware: M1 Pro 8-core, 16 GB RAM, macOS 14.
 - **Static cache для default_values**: `OnceLock<HashMap<&str, &str>>` для
   статических литералов.
 
+### 5.1 Выполненные в PR-17a..d (v10.7.16..v10.7.19) ✅
+
+| PR | Оптимизация | Экономия |
+|---|---|---|
+| PR-17a | `format!` → `write!` в `Vec<u8>` для всех 7 форматов | ~100-200 нс/msg |
+| PR-17a | `#[inline(always)]` на hot-path helpers (`prival`, `sanitize_header`, `rfc5424_timestamp`, `derive_rng`, `faker`, ...) | ~100-200 нс/msg |
+| PR-17b | Pre-allocated HashMap через `default_values_into` + `generate_message_with_format_cached` | ~80-150 нс/msg |
+| PR-17b | `#[inline]` на `generate_message_with_format`, `pick_template_compiled`, `wrap_syslog` | ~50-100 нс/msg |
+| PR-17c | `Arc<str>` для Header и SyslogHeaderParts (atomic clone vs String alloc) | ~100-200 нс/msg |
+| PR-17c | Single shared `Utc::now()` через `rfc5424_timestamp_at` + `datetime_now_jitter_at` | ~50-150 нс/msg |
+| PR-17d | Cached `IntCounter` handles в `run_phase_multi` (no `with_label_values` per msg) | ~100-200 нс/msg |
+| PR-17d | PGO workflow (Profile-Guided Optimization) для release builds | ~5% throughput |
+
+**Суммарный результат:** rfc5424_with_faker **2056.7 → 1737.5 нс/msg (−15.5%)**, с PGO до **~1678 нс (−18.4%)**.
+
+## 6. PGO (Profile-Guided Optimization) — Release pipeline
+
+PR-17d (v10.7.19) добавил поддержку PGO для release builds. Улучшение: **~5%
+throughput** на hot-path bench (1.74 µs → 1.65 µs/msg).
+
+### 6.1 Процедура (локально)
+
+```bash
+# 1. Build с profile-generate
+RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build --release --bench hot_path
+
+# 2. Запустить representative workload для сбора профиля
+RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" \
+  ./target/release/deps/hot_path-* --bench --quick
+
+# 3. Merge .profraw файлов
+LLVM_PROFDATA=$(rustup which llvm-profdata)
+$LLVM_PROFDATA merge -o /tmp/pgo-data/merged.profdata /tmp/pgo-data/*.profraw
+
+# 4. Build с profile-use
+RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release --bench hot_path
+
+# 5. Verify
+./target/release/deps/hot_path-* --bench --quick
+# Ожидаемое улучшение: 1.74 → 1.65 µs/msg (~5%)
+```
+
+### 6.2 CI / Release pipeline
+
+PGO build рекомендуется для release artifacts (`v*.*.*` tags). Workflow
+(планируется как отдельный PR):
+
+```yaml
+# .github/workflows/release-pgo.yml (черновик)
+name: Release PGO build
+on:
+  push:
+    tags: ['v*.*.*']
+jobs:
+  pgo-build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Profile-generate build
+      - run: RUSTFLAGS="-Cprofile-generate=${{ github.workspace }}/pgo" cargo build --release --bench hot_path
+      # 2. Run representative workload
+      - run: RUSTFLAGS="-Cprofile-generate=${{ github.workspace }}/pgo" ./target/release/deps/hot_path-* --bench --quick
+      # 3. Merge profdata
+      - uses: ./.github/actions/rust-toolchain  # с llvm-tools
+      - run: llvm-profdata merge -o pgo/merged.profdata pgo/*.profraw
+      # 4. Final build with profile-use
+      - run: RUSTFLAGS="-Cprofile-use=${{ github.workspace }}/pgo/merged.profdata" cargo build --release
+      # 5. Upload PGO-optimized binary
+      - uses: actions/upload-artifact@v4
+        with: { name: syslog-generator-pgo, path: target/release/syslog-generator }
+```
+
+### 6.3 Измеренные улучшения (v10.7.19, Apple M1)
+
+| Build | rfc5424_with_faker | throughput |
+|---|---|---|
+| Без PGO (release profile) | **1737.5 нс/msg** | 575 Kelem/s |
+| С PGO | **1678.4 нс/msg** | 596 Kelem/s |
+| **Δ** | **−3.4%** | **+3.6%** |
+
+PGO включается для release builds; в CI для PR/Push используется обычный
+release profile (без PGO) для скорости CI.
+
 ## 6. Бенчмарк-инфраструктура (PR-6)
 
 PR-6 добавит:

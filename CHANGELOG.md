@@ -1,6 +1,56 @@
 
 # Changelog
 
+## v10.7.20 - 2026-07-17
+
+**Patch-release (PR-17e): Bytes mpsc + parking_lot::Mutex.**
+
+Пятый шаг итеративной оптимизации (sender path). Два параллельных изменения:
+Bytes в mpsc вместо Vec<u8> (cheap broadcast clone) + parking_lot::Mutex
+вместо tokio::sync::Mutex (sync mutex быстрее async на uncontended path).
+
+### Changed (PR-17e)
+
+- `SharedRx`: `Arc<Mutex<mpsc::Receiver<Vec<u8>>>>` →
+  `Arc<parking_lot::Mutex<mpsc::Receiver<Bytes>>>`.
+  - `Bytes::clone()` = atomic increment (1-5 нс) вместо Vec<u8>::clone() (memcpy).
+  - `parking_lot::Mutex` — sync mutex, ~30-100 нс/msg быстрее async mutex.
+- `next_msg`: `parking_lot::Mutex::try_lock` + `tokio::task::yield_now().await`
+  retry (sync mutex guard `!Send`, scope tight через `and_then`).
+- `run_phase_multi`: `Bytes::from(msg)` ОДИН раз, затем `msg_bytes.clone()`
+  для broadcast — экономия N-1 memcpys payload'а на broadcast.
+- Все transport-ы (tcp, udp, tls, file) обновлены под `Bytes`.
+- Kafka: `Bytes → Vec<u8>` для rskafka `Record.value` (требование API).
+
+### Breaking changes (для external consumers)
+
+- `SharedRx` теперь содержит `parking_lot::Mutex` — нельзя использовать
+  `tokio::sync::Mutex`-специфичные методы.
+- mpsc каналы: `Sender<Bytes>` / `Receiver<Bytes>` (не `Vec<u8>`).
+
+### Cargo.toml
+
+- `parking_lot = "0.12"` (bytes уже был как `bytes = "1"`)
+
+### Performance (теоретический выигрыш)
+
+Hot-path bench измеряет только `generate_message_with_format_cached`,
+НЕ mpsc или sender. Теоретический выигрыш на broadcast с 2-3 targets:
+~50-150 нс/msg (Bytes cheap clone) + ~30-100 нс/msg (parking_lot mutex).
+
+| Bench | v10.7.15 | PR-17d | **PR-17e** | Δ vs base |
+|---|---|---|---|---|
+| `rfc5424_with_faker` | 2056.7 ns | 1737.5 | **1733.9 ns** | **−15.7%** |
+| `template_render_only` | 124.7 ns | 104.2 | 104.2 ns | −16.4% |
+
+### Quality gates
+
+- `cargo build --release`: ✓
+- `cargo test --lib`: 307 passed; 0 failed
+- `cargo clippy --all-targets --features kafka,test-helpers -- -D warnings`: clean
+
+Refs: docs/PERFORMANCE.md §5.1, PR-17a..d, PR-10 baseline (2.01 µs).
+
 ## v10.7.19 - 2026-07-17
 
 **Patch-release (PR-17d): Cached IntCounter handles + PGO (Profile-Guided Optimization).**

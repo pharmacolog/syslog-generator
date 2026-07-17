@@ -17,7 +17,7 @@
 //!
 //! PR-17e (v10.7.20): два изменения:
 //! 1. `Bytes` в mpsc вместо `Vec<u8>` — broadcast clone = atomic increment,
-//!    а не Vec<u8> deep clone (memcpy всего payload'а). Экономия на broadcast
+//!    а не `Vec<u8>` deep clone (memcpy всего payload'а). Экономия на broadcast
 //!    ~50-150 нс/msg за каждый target после первого.
 //! 2. `parking_lot::Mutex` для SharedRx — sync mutex быстрее async mutex на
 //!    uncontended path (~30-100 нс/msg). Lock acquisition через `try_lock`

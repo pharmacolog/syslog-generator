@@ -358,4 +358,224 @@ mod tests {
         ));
         assert!(FormatKind::parse("unknown").is_none());
     }
+
+    // ===== Phase 6 (PR-Q.1): coverage gaps в format/mod.rs =====
+
+    fn hdr_basic() -> Header {
+        Header {
+            facility: 1,
+            severity: 6,
+            hostname: "host".into(),
+            app_name: "app".into(),
+            procid: "1".into(),
+            msgid: "X".into(),
+            structured_data: "-".into(),
+            bom: false,
+        }
+    }
+
+    /// Phase 6: `escape_sd_value` экранирует `"`, `\`, `]` (RFC 5424 §6.3.3).
+    /// Остальные символы (включая `]`) остаются как есть.
+    #[test]
+    fn phase6_escape_sd_value_special_chars() {
+        // No-op: нет специальных символов.
+        assert_eq!(escape_sd_value("normal"), "normal");
+        assert_eq!(escape_sd_value(""), "");
+        // Каждый из трёх специальных символов экранируется обратным слэшем.
+        assert_eq!(escape_sd_value("with\"quote"), "with\\\"quote");
+        assert_eq!(escape_sd_value("with\\backslash"), "with\\\\backslash");
+        assert_eq!(escape_sd_value("with]bracket"), "with\\]bracket");
+        // Смешанный ввод — все три символа экранируются, остальное без изменений.
+        assert_eq!(escape_sd_value("a\"b\\c]d"), "a\\\"b\\\\c\\]d");
+    }
+
+    /// Phase 6: `build_rfc5424` — публичный wrapper, делегирует в `rfc5424::build`.
+    #[test]
+    fn phase6_build_rfc5424_helper_matches_inner() {
+        let h = hdr_basic();
+        let via_helper = build_rfc5424(&h, b"hello");
+        let via_inner = crate::format::rfc5424::build(&h, b"hello");
+        assert_eq!(via_helper, via_inner);
+        // Smoke-check структуры: PRIVAL + RFC 5424 версия + body.
+        assert!(via_helper.starts_with(b"<14>1 "));
+        assert!(via_helper.ends_with(b" hello"));
+    }
+
+    /// Phase 6: `build_rfc3164` — публичный wrapper, делегирует в `rfc3164::build`.
+    #[test]
+    fn phase6_build_rfc3164_helper_matches_inner() {
+        let h = hdr_basic();
+        let via_helper = build_rfc3164(&h, b"ping");
+        let via_inner = crate::format::rfc3164::build(&h, b"ping");
+        assert_eq!(via_helper, via_inner);
+        assert!(via_helper.starts_with(b"<14>"));
+    }
+
+    /// Phase 6: `build_raw` — passthrough, копия `msg`.
+    #[test]
+    fn phase6_build_raw_is_passthrough() {
+        let h = hdr_basic();
+        assert_eq!(build_raw(&h, b"raw-payload"), b"raw-payload");
+        // Пустое сообщение → пустой результат.
+        assert_eq!(build_raw(&h, b""), b"");
+    }
+
+    /// Phase 6: `FormatKind::Protobuf(None)` → render идёт в ветку `Self::Protobuf(map)`
+    /// где `map.as_ref() = None` → `serialize_protobuf(None, ...)` → пустой Vec
+    /// (валидный пустой protobuf-блоб).
+    #[test]
+    fn phase6_formatkind_protobuf_none_renders_empty() {
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Protobuf(None).render(&ctx, b"ignored");
+        // Empty schema → empty buffer (per `empty_schema_yields_empty_buffer`).
+        assert!(out.is_empty());
+    }
+
+    /// Phase 6: `FormatKind::Protobuf(Some(schema))` → render с реальной схемой.
+    /// Покрывает ветку `Self::Protobuf(map)` где `map.is_some()`.
+    #[test]
+    fn phase6_formatkind_protobuf_some_renders_wire_format() {
+        use crate::generator::config::ProtobufSchemaFieldMap;
+        let mut schema = ProtobufSchemaFieldMap::default();
+        // field 1 (uint, template "42"), field 2 (str, template "alice").
+        // Спецификация поля: "<field_number>:<type>:<template>".
+        schema
+            .fields
+            .insert("id".to_string(), "1:uint:42".to_string());
+        schema
+            .fields
+            .insert("name".to_string(), "2:str:alice".to_string());
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Protobuf(Some(schema)).render(&ctx, b"ignored");
+        // wire-format: tag(1, VARINT)=0x08, varint(42)=0x2A, tag(2, LEN)=0x12, len=5, "alice".
+        assert!(out.starts_with(&[0x08, 0x2A, 0x12, 0x05]));
+        assert!(out.ends_with(b"alice"));
+    }
+
+    /// Phase 6: `FormatKind::Cef` с `ctx.cef = None` → fallback на passthrough.
+    /// Покрывает ветку `None => msg.to_vec()` (строки 187-189).
+    #[test]
+    fn phase6_formatkind_cef_none_ctx_falls_back_to_raw() {
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let payload = b"cef-fallback";
+        let out = FormatKind::Cef.render(&ctx, payload);
+        assert_eq!(out, payload);
+    }
+
+    /// Phase 6: `FormatKind::Cef` с `ctx.cef = Some(cfg)` → render через cef::build.
+    /// Покрывает ветку `Some(cef) => cef::build(...)` (строки 186-187).
+    #[test]
+    fn phase6_formatkind_cef_some_ctx_renders_cef_format() {
+        use crate::generator::config::CefConfig;
+        let cfg = CefConfig {
+            device_vendor: "ACME".into(),
+            device_product: "FW".into(),
+            device_version: "1.0".into(),
+            signature_id: "100".into(),
+            name: "login".into(),
+            severity: Some(5),
+            extensions: None,
+        };
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: Some(&cfg),
+            leef: None,
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Cef.render(&ctx, b"hello");
+        let s = std::str::from_utf8(&out).expect("utf8");
+        // CEF header: "CEF:0|Vendor|Product|Ver|SigID|Name|Sev|msg=<body>".
+        assert!(
+            s.starts_with("CEF:0|ACME|FW|1.0|100|login|5|msg=hello"),
+            "got: {s}"
+        );
+    }
+
+    /// Phase 6: `FormatKind::Leef` с `ctx.leef = None` → fallback на passthrough.
+    /// Покрывает ветку `None => msg.to_vec()` (строки 194-195).
+    #[test]
+    fn phase6_formatkind_leef_none_ctx_falls_back_to_raw() {
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: None,
+        };
+        let payload = b"leef-fallback";
+        let out = FormatKind::Leef.render(&ctx, payload);
+        assert_eq!(out, payload);
+    }
+
+    /// Phase 6: `FormatKind::Leef` с `ctx.leef = Some(cfg)` → render через leef::build.
+    /// Покрывает ветку `Some(leef) => leef::build(...)` (строки 193-194).
+    #[test]
+    fn phase6_formatkind_leef_some_ctx_renders_leef_format() {
+        use crate::generator::config::LeefConfig;
+        let cfg = LeefConfig {
+            vendor: "VendorCo".into(),
+            product: "IDS".into(),
+            version: "2.1".into(),
+            event_id: "evt-001".into(),
+            attributes: None,
+        };
+        let h = hdr_basic();
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: Some(&cfg),
+            json_lines_fields: None,
+        };
+        let out = FormatKind::Leef.render(&ctx, b"alert");
+        let s = std::str::from_utf8(&out).expect("utf8");
+        // LEEF header: "LEEF:2.0|Vendor|Product|Ver|EventID<TAB>msg=<body>\n".
+        assert!(
+            s.starts_with("LEEF:2.0|VendorCo|IDS|2.1|evt-001\tmsg=alert\n"),
+            "got: {s}"
+        );
+    }
+
+    /// Phase 6: `FormatKind::JsonLines` → render через json_lines::build.
+    /// Покрывает ветку `Self::JsonLines => json_lines::build(...)` (строка 198).
+    #[test]
+    fn phase6_formatkind_json_lines_renders_json() {
+        use std::collections::BTreeMap;
+        let h = hdr_basic();
+        let mut extras = BTreeMap::new();
+        extras.insert("region".to_string(), "eu-west-1".to_string());
+        let ctx = FormatContext {
+            header: &h,
+            cef: None,
+            leef: None,
+            json_lines_fields: Some(&extras),
+        };
+        let out = FormatKind::JsonLines.render(&ctx, b"payload");
+        let s = std::str::from_utf8(&out).expect("utf8");
+        // JSON-lines: должен содержать стандартные поля + пользовательское `region`.
+        assert!(s.starts_with('{'), "got: {s}");
+        assert!(s.contains("\"app\":\"app\""), "got: {s}");
+        assert!(s.contains("\"host\":\"host\""), "got: {s}");
+        assert!(s.contains("\"msg\":\"payload\""), "got: {s}");
+        assert!(s.contains("\"region\":\"eu-west-1\""), "got: {s}");
+        assert!(s.ends_with('\n'));
+    }
 }

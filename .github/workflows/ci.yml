@@ -529,4 +529,3 @@ jobs:
             exit 1
           fi
           echo "✅ Public API matches baseline"
-          fi

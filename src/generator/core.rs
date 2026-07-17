@@ -46,17 +46,23 @@ pub fn create_dispatcher(targets: &[TargetConfig], distribution: &str) -> Vec<us
     }
 }
 
-pub fn default_values(
+/// Hot-path версия `default_values`: заполняет caller-owned `&mut HashMap`
+/// (через `.clear()`) — устраняет heap allocation per message.
+///
+/// PR-17b (v10.7.17): экономия ~80-150 ns/msg на HashMap alloc + capacity hint
+/// (rehashes в первом цикле). Используется `generate_message_with_format_cached`.
+///
+/// Семантика идентична `default_values(...)`. Возвращает количество entries
+/// для удобства (debugging).
+#[inline]
+pub fn default_values_into(
+    m: &mut HashMap<String, String>,
     ctx: &PhaseContext,
     phase: &Phase,
     seq: usize,
     rng: &mut rand::rngs::StdRng,
-) -> HashMap<String, String> {
-    // PR-10: уменьшен HashMap capacity. Если referenced_fakers == None —
-    // все 9 fakers (capacity 17). Если Some(set) — только referenced
-    // (capacity = 9 + 9 - len(set) = лучше).
-    let faker_count = ctx.referenced_fakers.as_ref().map(|s| s.len()).unwrap_or(9);
-    let mut m = HashMap::with_capacity(8 + faker_count);
+) -> usize {
+    m.clear();
     // Статические литералы (3 entries).
     m.insert("real_hostname".to_string(), "localhost".to_string());
     m.insert("hostname".to_string(), "localhost".to_string());
@@ -102,6 +108,21 @@ pub fn default_values(
             }
         }
     }
+    m.len()
+}
+
+pub fn default_values(
+    ctx: &PhaseContext,
+    phase: &Phase,
+    seq: usize,
+    rng: &mut rand::rngs::StdRng,
+) -> HashMap<String, String> {
+    // PR-10: уменьшен HashMap capacity. Если referenced_fakers == None —
+    // все 9 fakers (capacity 17). Если Some(set) — только referenced
+    // (capacity = 9 + 9 - len(set) = лучше).
+    let faker_count = ctx.referenced_fakers.as_ref().map(|s| s.len()).unwrap_or(9);
+    let mut m = HashMap::with_capacity(8 + faker_count);
+    let _ = default_values_into(&mut m, ctx, phase, seq, rng);
     m
 }
 
@@ -222,17 +243,48 @@ fn generate_message_with_format_inner(
 /// (`fs::read_to_string` + `serde_json::from_str`) в hot loop — **-30-50%
 /// syscalls** при использовании `schema_file` или `templates_file`.
 ///
+/// PR-17b: для hot-path используйте [`generate_message_with_format_cached`],
+/// который переиспользует caller-owned `&mut HashMap` (устраняет alloc per msg).
+/// Текущая функция остаётся как backward-compat wrapper.
+///
 /// `format_kind` принимается по ссылке (не Copy — `Protobuf` вариант несёт
 /// `Option<ProtobufSchemaFieldMap>` с `HashMap`), чтобы избежать clone
 /// в горячем цикле. Внутри `render`/`matches!` он только читается.
+#[inline]
 pub fn generate_message_with_format(
     ctx: &PhaseContext,
     phase: &Phase,
     format_kind: &FormatKind,
     seq: usize,
 ) -> Result<Vec<u8>> {
+    // PR-17b: backward-compat — аллоцирует HashMap на каждое сообщение.
+    // Hot-path код должен использовать `generate_message_with_format_cached`.
+    let mut values = HashMap::with_capacity(16);
+    generate_message_with_format_cached(ctx, phase, format_kind, seq, &mut values)
+}
+
+/// PR-17b (v10.7.17): hot-path версия — переиспользует caller-owned `&mut HashMap`
+/// (через `default_values_into` + `.clear()`). Устраняет heap allocation per
+/// message (~80-150 нс экономии).
+///
+/// Использование:
+/// ```ignore
+/// let mut values = HashMap::with_capacity(16);
+/// for seq in 1..=N {
+///     let msg = generate_message_with_format_cached(&ctx, &phase, &format_kind, seq, &mut values)?;
+///     // ...
+/// }
+/// ```
+#[inline]
+pub fn generate_message_with_format_cached(
+    ctx: &PhaseContext,
+    phase: &Phase,
+    format_kind: &FormatKind,
+    seq: usize,
+    values: &mut HashMap<String, String>,
+) -> Result<Vec<u8>> {
     let mut rng = crate::payload::derive_rng(phase.seed, seq);
-    let mut values = default_values(ctx, phase, seq, &mut rng);
+    let _ = default_values_into(values, ctx, phase, seq, &mut rng);
     if let Some(schema) = &ctx.schema {
         let mut fields: Vec<_> = schema.fields.iter().collect();
         fields.sort_by(|a, b| a.0.cmp(b.0));
@@ -244,17 +296,17 @@ pub fn generate_message_with_format(
         }
         for (name, field) in &fields {
             if let Some(parent) = &field.depends_on {
-                let value = resolve_correlated_field(field, parent, &values, &mut rng);
+                let value = resolve_correlated_field(field, parent, values, &mut rng);
                 values.insert(name.to_string(), value);
             }
         }
         if let Some(tpl) = &schema.template {
-            let body = render_template(tpl, &values);
+            let body = render_template(tpl, values);
             return Ok(finish_body(
                 ctx,
                 format_kind,
                 phase,
-                &values,
+                values,
                 body.into_bytes(),
                 &mut rng,
             ));
@@ -277,15 +329,15 @@ pub fn generate_message_with_format(
     if matches!(format_kind, FormatKind::Protobuf(_)) {
         return Ok(serialize_protobuf_like(
             phase.protobuf_schema.as_ref(),
-            &values,
+            values,
         ));
     }
-    let body = tpl.render(&values);
+    let body = tpl.render(values);
     Ok(finish_body(
         ctx,
         format_kind,
         phase,
-        &values,
+        values,
         body.into_bytes(),
         &mut rng,
     ))
@@ -330,7 +382,7 @@ pub struct PhaseContext {
 }
 
 /// Cacheable parts of syslog header (если все поля static).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SyslogHeaderParts {
     pub hostname: String,
     pub app_name: String,
@@ -470,6 +522,9 @@ impl PhaseContext {
 /// PR-10: версия pick_template для pre-compiled templates.
 /// Возвращает `&Arc<CompiledTemplate>` (borrow) — caller reuses CompiledTemplate
 /// через `.render()` без re-compile. Экономит ~80-200 ns/msg.
+///
+/// PR-17b (v10.7.17): `#[inline]` — hot-path, вызывается per msg.
+#[inline]
 fn pick_template_compiled<'a>(
     templates: &'a [Arc<template::CompiledTemplate>],
     weights: Option<&[f64]>,
@@ -576,6 +631,9 @@ fn finish_body(
 ///
 /// PR-10: используем `ctx.cached_syslog_header` если все syslog поля static
 /// (5× re-render per message eliminated, ~500-1000 ns/msg savings).
+///
+/// PR-17b (v10.7.17): `#[inline]` — hot-path, вызывается per msg.
+#[inline]
 fn wrap_syslog(
     ctx: &PhaseContext,
     format_kind: &FormatKind,

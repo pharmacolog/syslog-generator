@@ -21,6 +21,7 @@ pub use config::{
     LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use core::{
-    create_dispatcher, default_values, generate_message, generate_message_with_format, load_schema,
+    create_dispatcher, default_values, default_values_into, generate_message,
+    generate_message_with_format, generate_message_with_format_cached, load_schema,
     load_templates, run_phase_multi, run_profile, PhaseContext,
 };

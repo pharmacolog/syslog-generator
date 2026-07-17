@@ -1,0 +1,41 @@
+{
+  "name": "syslog-generator",
+  "image": "mcr.microsoft.com/devcontainers/rust:1.95-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.95",
+      "profile": "minimal"
+    },
+    "ghcr.io/jungaretti/features/cargo-cyclonedx:1": {},
+    "ghcr.io/stuartleeks/vsc-pre-commit:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "vadimcn.vscode-lldb",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.check.extraArgs": [
+          "--no-default-features",
+          "--all-targets",
+          "-Dwarnings"
+        ],
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-lang",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "CARGO_TERM_COLOR": "always"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/cargo-cache,target=/usr/local/cargo/registry,type=cache"
+  ]
+}

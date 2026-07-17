@@ -104,18 +104,68 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────
-# G8. Performance regression (PR-10 target ≤ 2 µs/msg)
+# G8. Performance regression (PR-10 target ≤ 2 µs/msg, ±10% tolerance)
 # ─────────────────────────────────────────────────────────────────
 echo ""
-echo "▶ G8.1: performance hot-path (PR-10 target ≤ 2 µs/msg)"
+echo "▶ G8: performance regression check (PR-10 target ≤ 2 µs/msg, ±10%)"
+if ! command -v cargo-criterion >/dev/null 2>&1; then
+    echo "  Запускаем cargo bench hot_path (только rfc5424_with_faker)..."
+    # Запускаем только нужный benchmark с явным фильтром (--bench hot_path + grep).
+    # Criterion поддерживает позиционный фильтр: `cargo bench --bench hot_path -- <filter>`.
+    # Используем 180 сек timeout.
+    BENCH_OUTPUT=""
+    if command -v perl >/dev/null 2>&1; then
+        TIMEOUT_CMD="perl -e 'alarm shift @ARGV; exec @ARGV' 180"
+    else
+        # fallback (на macOS perl есть; это на случай экзотики)
+        TIMEOUT_CMD=""
+    fi
+    if [ -n "$TIMEOUT_CMD" ]; then
+        BENCH_OUTPUT=$(eval $TIMEOUT_CMD cargo bench --bench hot_path -- rfc5424_with_faker --quick 2>&1)
+    else
+        BENCH_OUTPUT=$(cargo bench --bench hot_path -- rfc5424_with_faker --quick 2>&1)
+    fi
+
+    # Извлекаем median value из строки "time: [min µs center µs max µs]".
+    # Нужно второе число (center/median).
+    # Pattern: time:   [1.9742 µs 1.9804 µs 1.9820 µs]
+    BENCH_TIME=$(echo "$BENCH_OUTPUT" | grep -oE 'time:[[:space:]]*\[[^]]+\]' | grep -oE '[0-9]+\.[0-9]+ µs' | sed 's/ µs//' | head -2 | tail -1)
+    if [ -z "$BENCH_TIME" ]; then
+        # Fallback: первый float в time line.
+        BENCH_TIME=$(echo "$BENCH_OUTPUT" | grep -oE 'time:[[:space:]]*\[[^]]+\]' | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    fi
+    if [ -z "$BENCH_TIME" ]; then
+        echo "  ⚠ Не удалось извлечь bench time (bench может быть не установлен)"
+        echo "  Run manually: cargo bench --bench hot_path -- rfc5424_with_faker --quick"
+    else
+        # PR-10 target: 2.01 µs, допустимое отклонение ±10% = 1.81..2.21 µs.
+        # Используем awk для сравнения float.
+        BELOW=$(awk -v t="$BENCH_TIME" 'BEGIN { print (t < 1.81) ? "YES" : "NO" }')
+        ABOVE=$(awk -v t="$BENCH_TIME" 'BEGIN { print (t > 2.21) ? "YES" : "NO" }')
+        if [ "$BELOW" = "YES" ]; then
+            echo "  ✅ PASS: hot_path/rfc5424_with_faker = ${BENCH_TIME}µs (PR-10 target ≤ 2.01µs, lower is better)"
+        elif [ "$ABOVE" = "YES" ]; then
+            echo "  ⚠ WARN: hot_path/rfc5424_with_faker = ${BENCH_TIME}µs > 2.21µs (regressed >10% from PR-10 baseline 2.01µs)"
+            FAILED=$((FAILED + 1))
+        else
+            echo "  ✅ PASS: hot_path/rfc5424_with_faker = ${BENCH_TIME}µs (within ±10% of PR-10 baseline 2.01µs)"
+        fi
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# G9. Performance hot-path hint (non-enforced, manual check)
+# ─────────────────────────────────────────────────────────────────
+echo ""
+echo "▶ G9: performance hot-path hint (PR-10 target ≤ 2 µs/msg)"
 echo "  ⚠ Run \`cargo bench --bench hot_path -- --quick\` to verify (~30 секунд)."
 echo "  ⚠ Этот gate НЕ enforced в CI (только мониторинг через bench output artifact)."
 
 # ─────────────────────────────────────────────────────────────────
-# G9. Changelog + RELEASE_CHECK (для releases)
+# G10. Changelog + RELEASE_CHECK (для releases)
 # ─────────────────────────────────────────────────────────────────
 if [ -n "${CHECK_CHANGELOG:-}" ]; then
-    run_step "G9.1: CHANGELOG.md updated for new version" \
+    run_step "G10.1: CHANGELOG.md updated for new version" \
         "bash scripts/check-changelog.sh"
 fi
 

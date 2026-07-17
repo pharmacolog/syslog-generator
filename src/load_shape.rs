@@ -259,4 +259,42 @@ mod tests {
             900.0,
         );
     }
+
+    /// PR-16 (coverage): load_shape_linear_target_function_basic.
+    /// `Linear { start_rate, end_rate }` rate_at body (line 78) was uncovered.
+    #[test]
+    fn load_shape_linear_rate_at_basic() {
+        use crate::load_shape::LoadShape;
+        let shape = LoadShape::Linear {
+            start_rate: 0.0,
+            end_rate: 100.0,
+        };
+        // t=0 → start_rate=0, t=end → end_rate=100.
+        assert_eq!(shape.rate_at(0.0, 10.0, 0.0), 0.0);
+        assert_eq!(shape.rate_at(10.0, 10.0, 0.0), 100.0);
+        // Линейная интерполяция: середина = 50.
+        assert_eq!(shape.rate_at(5.0, 10.0, 0.0), 50.0);
+    }
+
+    /// PR-16 (coverage): load_shape_burst_target_function_basic.
+    /// `Burst` rate_at body (line 103) was uncovered.
+    #[test]
+    fn load_shape_burst_rate_at_basic() {
+        use crate::load_shape::LoadShape;
+        let shape = LoadShape::Burst {
+            base_rate: 10.0,
+            burst_rate: 100.0,
+            every_secs: 10.0,
+            burst_secs: 2.0,
+        };
+        // Внутри burst window (t % 10 < 2) — burst_rate.
+        assert_eq!(shape.rate_at(0.0, 0.0, 0.0), 100.0);
+        assert_eq!(shape.rate_at(1.0, 0.0, 0.0), 100.0);
+        // Вне burst window — base_rate.
+        assert_eq!(shape.rate_at(5.0, 0.0, 0.0), 10.0);
+        assert_eq!(shape.rate_at(9.999, 0.0, 0.0), 10.0);
+        // Следующий burst window.
+        assert_eq!(shape.rate_at(10.0, 0.0, 0.0), 100.0);
+        assert_eq!(shape.rate_at(11.5, 0.0, 0.0), 100.0);
+    }
 }

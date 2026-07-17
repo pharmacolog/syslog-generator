@@ -1,7 +1,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver&v=v10.7.14)](https://github.com/pharmacolog/syslog-generator/releases)
+[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver&v=v10.7.15)](https://github.com/pharmacolog/syslog-generator/releases)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://github.com/pharmacolog/syslog-generator/blob/main/Cargo.toml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/syslog-generator)](https://crates.io/crates/syslog-generator)
@@ -89,7 +89,7 @@ cargo build --release
 ./target/release/syslog-generator --profile examples/multi_target_roundrobin.yaml
 
 # Docker (multi-arch, ~25 MB image)
-docker run --rm ghcr.io/pharmacolog/syslog-generator:v10.7.9 --version
+docker run --rm ghcr.io/pharmacolog/syslog-generator:v10.7.15 --version
 ```
 
 ---
@@ -115,12 +115,12 @@ cargo build --release --features test-helpers
 ### Docker
 ```bash
 # Pre-built images (multi-arch: linux/amd64, linux/arm64)
-docker pull ghcr.io/pharmacolog/syslog-generator:v10.7.9
+docker pull ghcr.io/pharmacolog/syslog-generator:v10.7.15
 
 # Запуск
 docker run --rm \
   -v $PWD/examples:/examples:ro \
-  ghcr.io/pharmacolog/syslog-generator:v10.7.9 \
+  ghcr.io/pharmacolog/syslog-generator:v10.7.15 \
   --profile /examples/multi_target_roundrobin.json
 
 # Полный стек (syslog-generator + syslog-ng + Prometheus + Grafana)
@@ -289,7 +289,7 @@ src/
 - `observability/` → только `error::*`
 - `generator/` → оркестратор всех слоёв
 
-**Подробнее:** [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (v10.7.4).
+**Подробнее:** [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (v10.7.15).
 
 ---
 
@@ -408,14 +408,14 @@ gh pr create --base dev
 
 | Документ | Описание |
 |----------|----------|
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Полное руководство пользователя (v10.7.4) |
-| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Архитектура + как добавить свой формат/транспорт (v10.7.4) |
-| [docs/MIGRATION.md](docs/MIGRATION.md) | Breaking changes + миграция между версиями (v10.7.4) |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Оптимизации + методика замера (v10.7.4) |
-| [docs/COVERAGE.md](docs/COVERAGE.md) | Coverage отчёты (v10.3.0 → v10.4.0 baseline) |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Полное руководство пользователя (v10.7.15) |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Архитектура + как добавить свой формат/транспорт (v10.7.15) |
+| [docs/MIGRATION.md](docs/MIGRATION.md) | Breaking changes + миграция между версиями (v10.7.15) |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Оптимизации + методика замера (v10.7.15) |
+| [docs/COVERAGE.md](docs/COVERAGE.md) | Coverage отчёты (v10.3.0 → v10.4.0 → v10.7.15) |
 | [docs/FUZZING.md](docs/FUZZING.md) | Инструкции по cargo-fuzz (v10.4.0) |
 | [CHANGELOG.md](CHANGELOG.md) | История всех релизов |
-| [AUDIT.md](AUDIT.md) | Реестр задач (базис v10.7.2) |
+| [AUDIT.md](AUDIT.md) | Реестр задач (базис v10.7.2, текущий v10.7.15) |
 | [CLAUDE_HANDOFF.md](CLAUDE_HANDOFF.md) | Перенос контекста для Claude |
 | [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributing guide |

@@ -402,13 +402,22 @@ mod tests {
 
     // === v10.6.0 (Usability ч.1): тесты subcommand'ов ===
 
-    /// `Args::command()` создаёт корректный clap Command (без panic).
+    /// `Args::command()` содержит subcommands `completions` и `man`.
     #[test]
-    fn v10_6_0_args_command_constructs() {
+    fn v10_6_0_args_has_completions_and_man_subcommands() {
         use clap::CommandFactory;
-        let _app = Args::command();
-        // Smoke: construction without panic. clap сам генерирует --help,
-        // --version, и subcommand'ы.
+        let app = Args::command();
+        let subcommands: Vec<&str> = app.get_subcommands().map(|c| c.get_name()).collect();
+        assert!(
+            subcommands.contains(&"completions"),
+            "missing 'completions' subcommand; got: {:?}",
+            subcommands
+        );
+        assert!(
+            subcommands.contains(&"man"),
+            "missing 'man' subcommand; got: {:?}",
+            subcommands
+        );
     }
 
     /// `Command` enum имеет 2 варианта: Completions и Man.
@@ -491,56 +500,5 @@ fn apply_overrides_no_targets_keeps_existing() {
     assert_eq!(p.targets[0].address, "9.9.9.9:514");
 }
 
-// === v10.6.0 (Usability ч.1): тесты subcommand'ов ===
-
-/// `Args::command()` создаёт корректный clap Command (без panic).
-#[test]
-fn v10_6_0_args_command_constructs() {
-    use clap::CommandFactory;
-    let _app = Args::command();
-}
-
-/// `Command` enum имеет 2 варианта: Completions и Man.
-#[test]
-fn v10_6_0_command_enum_variants() {
-    let c = Command::Completions {
-        shell: clap_complete::Shell::Bash,
-    };
-    let s = format!("{:?}", c);
-    assert!(s.contains("Completions"));
-    assert!(s.contains("Bash"));
-    let m = Command::Man;
-    let s = format!("{:?}", m);
-    assert!(s.contains("Man"));
-}
-
-/// `Args::parse_from(["binary", "completions", "bash"])` корректно
-/// dispatch'ит в subcommand.
-#[test]
-fn v10_6_0_args_parses_completions_subcommand() {
-    use clap::Parser;
-    let args = Args::parse_from(["syslog-generator", "completions", "bash"]);
-    match args.command {
-        Some(Command::Completions { shell }) => {
-            assert!(matches!(shell, clap_complete::Shell::Bash));
-        }
-        other => panic!("expected Completions(Bash), got {other:?}"),
-    }
-}
-
-/// `Args::parse_from(["binary", "man"])` корректно dispatch'ит.
-#[test]
-fn v10_6_0_args_parses_man_subcommand() {
-    use clap::Parser;
-    let args = Args::parse_from(["syslog-generator", "man"]);
-    assert!(matches!(args.command, Some(Command::Man)));
-}
-
-/// Без subcommand — `command` = None (default main run profile).
-#[test]
-fn v10_6_0_args_no_subcommand_means_main() {
-    use clap::Parser;
-    let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
-    assert!(args.command.is_none(), "default subcommand не задан");
-    assert_eq!(args.profile.as_deref(), Some("x.json"));
-}
+// === v10.6.0 (Usability ч.1): тесты subcommand'ов живут в `mod tests`
+//     выше (top-level дубликаты удалены в PR-Q.1). ===

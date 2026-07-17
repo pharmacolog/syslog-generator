@@ -993,6 +993,45 @@ mod tests {
     use super::*;
     use crate::config::{Phase, Profile, ShutdownConfig, TargetConfig};
 
+    /// Assert helper: проверяет наличие `ValidationError`, удовлетворяющего
+    /// `matcher`'у, который имеет доступ к **содержимому** варианта
+    /// (index, address, value, message, …) — а не только к варианту enum'а.
+    ///
+    /// Существующие тесты часто использовали
+    /// `errs.iter().any(|e| matches!(e, InvalidTransport { .. }))`,
+    /// что ловит **вариант**, но не его поля. Этот helper — переходный
+    /// API: вместо немедленного переписывания ~38 слабых assertions
+    /// в этом файле, даём им единый путь к усилению — добавь
+    /// `assert_validation_error(...)` рядом с существующим `.any(...)`
+    /// и замени matcher на closure с проверкой полей.
+    ///
+    /// Пример:
+    /// ```ignore
+    /// assert_validation_error(&errs, |e| match e {
+    ///     ValidationError::InvalidTransport { index, address, value, .. } => {
+    ///         assert_eq!(*index, 0);
+    ///         assert_eq!(address, "127.0.0.1:514");
+    ///         assert_eq!(value, "sctp");
+    ///         true
+    ///     }
+    ///     _ => false,
+    /// });
+    /// ```
+    /// PR-Q.1: helper используется в новых и постепенно мигрируемых тестах;
+    /// старые `errs.iter().any(|e| matches!(e, InvalidX { .. }))` остаются
+    /// на месте до полной миграции (Phase 6 — Coverage P1).
+    #[allow(dead_code)] // используется при поэтапной миграции assertions
+    fn assert_validation_error<F>(errs: &[ValidationError], matcher: F)
+    where
+        F: Fn(&ValidationError) -> bool,
+    {
+        assert!(
+            errs.iter().any(matcher),
+            "expected matching ValidationError not found in: {:?}",
+            errs
+        );
+    }
+
     fn valid_phase() -> Phase {
         Phase {
             name: "warmup".to_string(),

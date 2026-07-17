@@ -416,36 +416,176 @@ mod tests {
         assert_eq!(tpl, ":name");
     }
 
-    /// PR-16 (coverage): encode_field_all_pb_types.
-    /// Покрывает все arms `encode_field` для каждого `PbType`.
+    /// PR-Q.1 (test smell fix): encode_field_all_pb_types.
+    /// Проверяет, что каждый `PbType` записывается с **правильным wire-type**
+    /// в tag-byte (младшие 3 бита) и что длина буфера соответствует схеме
+    /// protobuf wire encoding для данного типа.
     #[test]
-    fn encode_field_all_pb_types() {
-        // Каждый тип должен корректно сериализоваться с varint/length-delimited/etc.
-        // Тестируем что encode_field возвращает non-empty buffer без panic.
-        let types_and_examples = [
-            ("hello", "str"),
-            ("world", "bytes"),
-            ("42", "int"),
-            ("100", "uint"),
-            ("-2", "sint"),
-            ("true", "bool"),
-            ("1.5", "double"),
-            ("2.5", "float"),
-        ];
-        for (val, type_str) in types_and_examples {
-            let mut m = crate::generator::config::ProtobufSchemaFieldMap::default();
-            m.fields
-                .insert("x".into(), format!("1:{type_str}:{{{{x}}}}"));
-            let mut h = std::collections::HashMap::new();
-            h.insert("x".to_string(), val.to_string());
-            let _ = crate::format::protobuf::serialize_protobuf(Some(&m), &h);
-            // Главное что encode_field не паникует на каждом типе.
-            // Если encoding упал — мы получим пустой буфер (через fallback в serialize).
-            if type_str == "bool" {
-                let mut buf2 = Vec::new();
-                crate::format::protobuf::write_varint(&mut buf2, 0);
-            }
-        }
+    fn encode_field_all_pb_types_writes_correct_wire_types() {
+        use super::{encode_field, PbType};
+
+        // varint (wire=0): uint
+        let mut buf = Vec::new();
+        encode_field(&mut buf, 1, PbType::Uint, "42");
+        assert!(!buf.is_empty());
+        assert_eq!(
+            buf[0] & 0x07,
+            0,
+            "field 1 should be varint (wire=0); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf[0] >> 3,
+            1,
+            "field number should be 1; tag byte = {:#010b}",
+            buf[0]
+        );
+
+        // LEN (wire=2): string
+        buf.clear();
+        encode_field(&mut buf, 2, PbType::Str, "abc");
+        assert_eq!(
+            buf[0] & 0x07,
+            2,
+            "field 2 should be LEN (wire=2); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf[0] >> 3,
+            2,
+            "field number should be 2; tag byte = {:#010b}",
+            buf[0]
+        );
+        // buf[1] = varint(3) (single byte, < 128), buf[2..5] = "abc"
+        assert_eq!(
+            buf.len(),
+            5,
+            "expected tag(1) + len(1) + 3 payload bytes = 5, got {} ({:?})",
+            buf.len(),
+            buf
+        );
+
+        // I64 (wire=1): double
+        buf.clear();
+        encode_field(&mut buf, 3, PbType::Double, "1.5");
+        assert_eq!(
+            buf[0] & 0x07,
+            1,
+            "field 3 should be I64 (wire=1); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf.len(),
+            9,
+            "expected tag(1) + 8 bytes for f64 = 9, got {} ({:?})",
+            buf.len(),
+            buf
+        );
+
+        // I32 (wire=5): float
+        buf.clear();
+        encode_field(&mut buf, 4, PbType::Float, "1.5");
+        assert_eq!(
+            buf[0] & 0x07,
+            5,
+            "field 4 should be I32 (wire=5); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf.len(),
+            5,
+            "expected tag(1) + 4 bytes for f32 = 5, got {} ({:?})",
+            buf.len(),
+            buf
+        );
+
+        // varint (wire=0): bool true → encodes as varint(1)
+        buf.clear();
+        encode_field(&mut buf, 5, PbType::Bool, "true");
+        assert_eq!(
+            buf[0] & 0x07,
+            0,
+            "bool should be varint (wire=0); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf[1], 1,
+            "true should encode as varint(1); got byte {:#010b}",
+            buf[1]
+        );
+
+        // varint (wire=0): bool false → encodes as varint(0)
+        buf.clear();
+        encode_field(&mut buf, 6, PbType::Bool, "false");
+        assert_eq!(
+            buf[0] & 0x07,
+            0,
+            "bool should be varint (wire=0); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf[1], 0,
+            "false should encode as varint(0); got byte {:#010b}",
+            buf[1]
+        );
+
+        // LEN (wire=2): bytes
+        buf.clear();
+        encode_field(&mut buf, 7, PbType::Bytes, "raw");
+        assert_eq!(
+            buf[0] & 0x07,
+            2,
+            "bytes should be LEN (wire=2); tag byte = {:#010b}",
+            buf[0]
+        );
+        assert_eq!(
+            buf.len(),
+            5,
+            "expected tag(1) + len(1) + 3 payload bytes = 5, got {} ({:?})",
+            buf.len(),
+            buf
+        );
+
+        // varint (wire=0): int (negative — 10-byte varint)
+        buf.clear();
+        encode_field(&mut buf, 8, PbType::Int, "-1");
+        assert_eq!(
+            buf[0] & 0x07,
+            0,
+            "int should be varint (wire=0); tag byte = {:#010b}",
+            buf[0]
+        );
+        // Negative -1 as u64 = u64::MAX → 10-byte varint for the value,
+        // tag adds 1 byte.
+        assert_eq!(
+            buf.len(),
+            11,
+            "int=-1 should produce 10-byte varint + tag = 11, got {} ({:?})",
+            buf.len(),
+            buf
+        );
+
+        // varint (wire=0): sint (zigzag)
+        buf.clear();
+        encode_field(&mut buf, 9, PbType::Sint, "-2");
+        assert_eq!(
+            buf[0] & 0x07,
+            0,
+            "sint should be varint (wire=0); tag byte = {:#010b}",
+            buf[0]
+        );
+        // -2 zigzag = 3 → single-byte varint, tag adds 1 byte.
+        assert_eq!(
+            buf.len(),
+            2,
+            "sint=-2 zigzag=3 should produce 1-byte varint + tag = 2, got {:?}",
+            buf
+        );
+        assert_eq!(
+            buf[1], 3,
+            "sint=-2 should zigzag-encode as 3; got byte {}",
+            buf[1]
+        );
     }
 
     /// PR-16 (coverage): apply_protobuf_schema_none_is_empty.

@@ -14,15 +14,18 @@ name: CI
 on:
   push:
     branches: [main, dev, "release/v*"]
+    # PR-15 (T6): docs-only commits не запускают CI.
+    # Экономит CI runner time.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
   pull_request:
     branches: [main]
-  # PR-15 (T6): docs-only commits не запускают CI.
-  # paths-ignore: коммиты только в docs/ или markdown не требуют CI.
-  # Экономит CI runner time.
-  paths-ignore:
-    - 'docs/**'
-    - '**.md'
-    - '.archived-releases/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
 
 # v10.7.1: явные permissions на уровне workflow (Code Scanning
 # actions/missing-workflow-permissions). Принцип least privilege.

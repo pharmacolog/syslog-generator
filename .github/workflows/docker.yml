@@ -27,29 +27,24 @@ on:
       - "release/v*.*.*"
     tags:
       - "v*.*.*"
+    # PR-15 (T6): docs-only commits не триггерят Docker build.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.archived-releases/**'
   workflow_dispatch:
     inputs:
       tag:
         description: "Docker image tag (default: dev-{short_sha})"
         required: false
         default: ""
-
-# PR-15 (T6): docs-only commits не триггерят Docker build (экономит
-# 5-30 мин CI time для image build).
-# PR-15 fix: paths-ignore должен быть на уровне trigger (после inputs).
-  pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.archived-releases/**'
-  push:
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.archived-releases/**'
 
 # PR-15 (T6): concurrency group (НЕ cancel-in-progress — отменённые jobs
 # приводят к "failure" report, что misleads).

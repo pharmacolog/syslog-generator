@@ -754,7 +754,6 @@ fn test_rfc5424_message_is_valid() {
         procid: "999".into(),
         msgid: "MSG01".into(),
         structured_data: "[ex@32473 k=\"v\"]".into(),
-        timestamp: "".into(),
         bom: false,
     };
     let phase = phase_with_format("rfc5424", syslog, "user login {{sequence}}");
@@ -824,7 +823,6 @@ fn test_rfc3164_message_is_valid() {
         procid: "1234".into(),
         msgid: "-".into(),
         structured_data: "-".into(),
-        timestamp: "".into(),
         bom: false,
     };
     let phase = phase_with_format("rfc3164", sc, "session opened");

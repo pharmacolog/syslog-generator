@@ -1,6 +1,6 @@
 # Branch Protection Rules — настройка и обслуживание
 
-**Версия документа:** v10.7.15+ (PR-15, PR-16).
+**Версия документа:** v10.7.16+ (PR-Q, Mandatory Git Flow + Coverage Tiers).
 **Назначение:** зафиксировать branch protection rules для `main` и `dev`,
 чтобы maintainer'ы могли восстановить их при необходимости
 (например, после reset в GitHub UI).
@@ -11,11 +11,17 @@
 
 | Branch | Strict checks | Reviews | Linear history | Admin enforce | Force push | Conversation |
 |---|---|---|---|---|---|---|
-| **`main`** | 7 blocking | 1 approval | ✅ required | ✅ yes | ❌ no | ✅ required |
-| **`dev`** | 7 blocking | none | ❌ no | ❌ no | ❌ no | ❌ no |
+| **`main`** | **9 blocking** | 1 approval | ✅ required | ✅ **yes** | ❌ no | ✅ required |
+| **`dev`** | **9 blocking** | none | ❌ no | ❌ no | ❌ no | ❌ no |
 
 Обе ветки требуют **обязательные status checks** (strict mode — нужны свежие
 checks для merge; устаревшие failed статусы не считаются success).
+
+**PR-Q изменения (v10.7.16+):**
+- 7 → **9** required checks (добавлены `cargo doc (-D warnings)` + `N7 invariant`)
+- `enforce_admins` для main: ✅ (admin owner обязан проходить через PR)
+- Coverage target: 87% → **90% global, 97% per Tier 1 module** (см. `codecov.yml`)
+- `continue-on-error: true` снят с coverage job — теперь blocking
 
 ---
 

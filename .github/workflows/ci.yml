@@ -418,13 +418,17 @@ jobs:
   # **Non-blocking** до PR-11 (≥ 97% gate). Документация: docs/COVERAGE.md.
   #
   # PR-9: добавлен upload в codecov.io для coverage badge в README.
-  # Требует CODECOV_TOKEN secret (опционально — если нет, badge покажет "unknown").
+  # PR-Q (v10.7.16, Фаза 0): убран `continue-on-error: true` — coverage
+  # теперь blocking required check. Если coverage падает ниже tier-based
+  # target (см. codecov.yml), job fail и блокирует merge.
+  # `--fail-under-lines` поднят с 87 до 90 (Tier 1 = 97% enforced
+  # per-module в codecov.yml, total = 90 — промежуточный target до
+  # завершения Фаз 6-9).
   coverage:
     name: Coverage (cargo-llvm-cov + codecov upload)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -450,6 +454,12 @@ jobs:
         # Текущее baseline (v10.7.15, PR-16 Coverage expansion): 89.65% lines.
         # При падении ниже 87% — job fails.
         run: |
+          # PR-Q (v10.7.16, Фаза 0): --fail-under-lines поэтапно повышается:
+          # - v10.7.16 (этот PR): 87% (текущий baseline, чтобы CI не сломался)
+          # - v10.7.16 PR-Q.1: 88% (после P1 тестов: format/mod.rs, generator/core.rs, transport/mod.rs)
+          # - v10.7.16 PR-Q.2: 90% (после P2: main.rs assert_cmd, shutdown.rs, validate.rs)
+          # - v10.7.16 PR-Q.3: 95% (после P3: transport/tcp.rs reconnect, observability/server.rs)
+          # - v10.7.17: 97% (Tier 1 enforcement, см. codecov.yml component_management)
           cargo llvm-cov \
             --features kafka,test-helpers \
             --workspace --all-targets \
@@ -459,7 +469,9 @@ jobs:
 
       - name: Upload coverage to codecov.io
         # Требует CODECOV_TOKEN secret (настраивается через codecov.io интеграцию).
-        # Если secret не настроен — job всё равно проходит (continue-on-error).
+        # PR-Q: token теперь явно указан в with.token — badge будет работать.
+        # step-level continue-on-error оставлен для graceful degradation при
+        # анонимных uploads (без secret).
         if: always()
         continue-on-error: true
         uses: codecov/codecov-action@v5
@@ -468,6 +480,7 @@ jobs:
           flags: unit
           fail_ci_if_error: false
           verbose: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload coverage artifacts
         if: always()
@@ -478,6 +491,41 @@ jobs:
             lcov.info
             coverage-summary.txt
           if-no-files-found: warn
+
+  # PR-Q (v10.7.16, Фаза 1): G2.1 (cargo doc) как blocking required check.
+  # Раньше был только в scripts/quality-gates.sh (G2.1) — gap в CI.
+  # Теперь warnings = errors через RUSTDOCFLAGS=-D warnings.
+  cargo-doc:
+    name: cargo doc (-D warnings)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-doc
+      - name: Build docs (--no-deps, warnings = errors)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --locked --features kafka,test-helpers
+
+  # PR-Q (v10.7.16, Фаза 1): G6.1 (N7 invariant) как blocking required check.
+  # Раньше был только в pre-commit + scripts/quality-gates.sh — gap в CI.
+  # Проверяет что в runtime коде (вне #[cfg(test)]) нет .unwrap()/.expect()
+  # /panic!()/unreachable!()/todo!()/unimplemented!().
+  n7-invariant:
+    name: N7 invariant (no unwrap/expect in runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run N7 invariant check
+        run: bash scripts/check-n7-invariant.sh
 
       # SBOM generation moved to separate workflow (.github/workflows/sbom.yml).
       # PR-15 (CI Failure Mitigation): cargo-cyclonedx 0.5/0.6 API mismatch

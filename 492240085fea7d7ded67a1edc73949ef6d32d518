@@ -1,0 +1,21 @@
+v10.7.21 (next minor) is RESERVED and will be cut from this commit.
+
+План трассировки:
+- v10.7.16 = current release (released 2026-07-17, hot-path optimization PR-17a..e + PGO pipeline)
+- v10.7.21 = следующий minor release. Будет создан как release/v10.7.21 branch от ЭТОГО commit
+  (fast-forward к новым коммитам при подготовке следующего релиза).
+- Trigger: после существенных изменений (PR-17f+ hand-written primitives,
+  coverage expansion до 97%, или новые PR-quality merges).
+
+Release-train v10.7.21 когда наступит:
+1. feature/X работы → squash в dev → merge в main
+2. После накопления: создать release/v10.7.21 от main HEAD (= fast-forward от v10.7.16)
+3. Bump Cargo.toml: 10.7.16 → 10.7.21
+4. PR release/v10.7.21 -> main (squash merge)
+5. Tag v10.7.21, GitHub Release
+
+Тех-заметка: v10.7.21 = следующий minor после v10.7.16. CHANGELOG имел v10.7.16..v10.7.20 как
+PR-17a..e patch-releases labels которые слились в release-train v10.7.16.
+
+ВАЖНО: НЕ создавать release/v10.7.21 branch заранее — это misleading. Branch
+создается когда release-train реально начинается.

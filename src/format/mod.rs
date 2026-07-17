@@ -40,6 +40,9 @@ pub(crate) const BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
 /// PRIVAL = facility*8 + severity (RFC 5424 §6.2.1).
 /// facility зажимается в 0..=23, severity в 0..=7.
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path.
+#[inline(always)]
 pub fn prival(facility: u8, severity: u8) -> u16 {
     let f = facility.min(23) as u16;
     let s = severity.min(7) as u16;
@@ -49,6 +52,9 @@ pub fn prival(facility: u8, severity: u8) -> u16 {
 /// Санитизация printable-US-ASCII поля заголовка: пустое → NILVALUE, пробелы и
 /// непечатаемые символы заменяются на '_', длина обрезается до `max` октетов.
 /// Пустое значение или явный "-" даёт NILVALUE.
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path (вызывается 4× per rfc5424 msg).
+#[inline(always)]
 pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
     if value.is_empty() || value == NILVALUE {
         return NILVALUE.to_string();
@@ -67,6 +73,9 @@ pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
 
 /// TIMESTAMP по RFC 5424: RFC3339, UTC, миллисекунды, суффикс Z.
 /// Пример: 2026-07-11T14:30:00.123Z
+///
+/// PR-17a (v10.7.16): `#[inline(always)]` — hot-path.
+#[inline(always)]
 pub(crate) fn rfc5424_timestamp() -> String {
     Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }

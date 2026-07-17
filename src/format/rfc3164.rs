@@ -1,42 +1,70 @@
 //! N10 (v8.8.0): реализация RFC 3164 (BSD) в слое format.
+//!
+//! PR-17a (v10.7.16): hot-path — пишем напрямую в `Vec<u8>` без
+//! промежуточных `String` через `format!`. `Vec<u8>` impl `std::io::Write`,
+//! поэтому `write!(&mut out, ...)` работает идентично.
 
 use super::{sanitize_header, Header, NILVALUE};
 use chrono::Local;
+use std::io::Write as _;
 
 /// Собрать сообщение RFC 3164 (BSD):
 /// `<PRI>Mmm dd hh:mm:ssHOSTNAME TAG: MSG`
 /// TIMESTAMP — локальное время; день с ведущим пробелом для 1..9.
 /// TAG формируется из app_name (+ `procid` в квадратных скобках, если не NILVALUE).
+#[inline]
 pub fn build(h: &Header, msg: &[u8]) -> Vec<u8> {
     let pri = super::prival(h.facility, h.severity);
+
+    // TS: 15 chars ("Mmm dd hh:mm:ss") — локальное время.
     let ts = Local::now().format("%b %e %H:%M:%S").to_string();
-    let hostname = {
-        // RFC3164 HOSTNAME без пробелов; NILVALUE неуместен — берём "localhost".
-        let s = sanitize_header(&h.hostname, 255);
-        if s == NILVALUE {
-            "localhost".to_string()
-        } else {
-            s
-        }
-    };
-    let app = sanitize_header(&h.app_name, 32);
-    let app = if app == NILVALUE {
-        "app".to_string()
+
+    // HOSTNAME: sanitized, NILVALUE → "localhost".
+    let hostname_raw = sanitize_header(&h.hostname, 255);
+    let hostname: &[u8] = if hostname_raw == NILVALUE {
+        b"localhost"
     } else {
-        app
-    };
-    let tag = if h.procid.is_empty() || h.procid == NILVALUE {
-        format!("{}:", app)
-    } else {
-        let pid = sanitize_header(&h.procid, 128);
-        format!("{}[{}]:", app, pid)
+        hostname_raw.as_bytes()
     };
 
-    let header = format!("<{}>{} {} {}", pri, ts, hostname, tag);
-    let mut out = Vec::with_capacity(header.len() + msg.len() + 2);
-    out.extend_from_slice(header.as_bytes());
+    // APP: sanitized, NILVALUE → "app".
+    let app_raw = sanitize_header(&h.app_name, 32);
+    let app: &[u8] = if app_raw == NILVALUE {
+        b"app"
+    } else {
+        app_raw.as_bytes()
+    };
+
+    // PID: sanitized (если есть и не NILVALUE).
+    let pid = sanitize_header(&h.procid, 128);
+    let has_pid = !pid.is_empty() && pid != NILVALUE;
+
+    // Оценка ёмкости: <pri>(4) + ts(15) + ' ' + hostname(≤255) + ' ' + app(≤32)
+    // + [pid](≤130) + ':' + ' ' + msg
+    let estimated = 4 + ts.len() + 1 + hostname.len() + 1 + app.len()
+        + if has_pid { pid.len() + 3 } else { 1 }
+        + 1 + msg.len();
+    let mut out = Vec::with_capacity(estimated);
+
+    // <PRI>TIMESTAMP HOSTNAME TAG MSG
+    let _ = write!(out, "<{}>{} ", pri, ts);
+
+    out.extend_from_slice(hostname);
+    out.push(b' ');
+
+    // TAG: "app:" или "app[pid]:"
+    out.extend_from_slice(app);
+    if has_pid {
+        out.push(b'[');
+        out.extend_from_slice(pid.as_bytes());
+        out.extend_from_slice(b"]:");
+    } else {
+        out.push(b':');
+    }
+
     out.push(b' ');
     out.extend_from_slice(msg);
+
     out
 }
 
@@ -76,7 +104,6 @@ mod tests {
     fn rfc3164_tag_with_procid() {
         let h = test_header();
         let out = build(&h, b"hello");
-        // Проверяем что в выводе есть "myapp[1234]:"
         let s = std::str::from_utf8(&out).unwrap();
         assert!(
             s.contains("myapp[1234]:"),
@@ -92,7 +119,6 @@ mod tests {
         h.procid = String::new();
         let out = build(&h, b"hello");
         let s = std::str::from_utf8(&out).unwrap();
-        // "myapp:" без []
         assert!(
             s.contains("myapp: "),
             "expected TAG without procid, got: {}",
@@ -129,22 +155,17 @@ mod tests {
     }
 
     /// Default app when sanitized to NILVALUE → "app".
-    /// sanitize_header НЕ превращает пустую в NILVALUE (только проверяет chars),
-    /// поэтому пустая app_name остаётся пустой → TAG будет ":".
-    /// Тест проверяет что пустая app_name не паникует.
     #[test]
     fn rfc3164_empty_app_name_does_not_panic() {
         let mut h = test_header();
         h.app_name = String::new();
         let out = build(&h, b"msg");
         let s = std::str::from_utf8(&out).unwrap();
-        // Не паникует, содержит hostname.
         assert!(s.contains("myhost"), "expected hostname, got: {}", s);
     }
 
-    /// Когда app_name = NILVALUE ("-"), sanitize_header возвращает "-"
-    /// (не превращает в NILVALUE), затем код rfc3164 видит app == NILVALUE
-    /// и подставляет дефолт "app" → TAG = "app[1234]:".
+    /// Когда app_name = NILVALUE ("-"), sanitize_header возвращает "-",
+    /// затем код rfc3164 видит app == NILVALUE и подставляет дефолт "app".
     #[test]
     fn rfc3164_nilvalue_app_becomes_app() {
         let mut h = test_header();
@@ -164,7 +185,6 @@ mod tests {
         let h = test_header();
         let out = build(&h, b"BODY");
         let s = std::str::from_utf8(&out).unwrap();
-        // Заканчивается на " BODY" (без trailing newline — BSD legacy).
         assert!(
             s.ends_with(" BODY"),
             "expected space-separated body, got: {}",

@@ -1056,6 +1056,16 @@ pub async fn run_phase_multi(
         None => metrics.target_rate.set(base_rate),
     }
 
+    // PR-17d (v10.7.19): cached IntCounter handles — устраняет HashMap lookup в hot loop.
+    // `with_label_values` стоит ~50-100 нс (HashMap probe + Arc<IntCounter> clone).
+    // С cached handle — только atomic increment (~5-10 нс). Экономия ~90-190 нс/msg.
+    let msg_counter = metrics
+        .messages_generated_total
+        .with_label_values(&[&phase.name]);
+    let by_format_counter = metrics
+        .messages_by_format_total
+        .with_label_values(&[phase.format_type()]);
+
     // Условия остановки: по времени (duration_secs) и/или по количеству (total_messages).
     let deadline = if phase.duration_secs > 0 {
         Some(Instant::now() + Duration::from_secs(phase.duration_secs))
@@ -1135,18 +1145,13 @@ pub async fn run_phase_multi(
         // per-message `phase.format_type()` парсинга.
         // PR-5: PhaseContext резолвится ОДИН раз вне loop, не per-message.
         let msg = generate_message_with_format(&ctx, phase, &format_kind, seq)?;
-        metrics
-            .messages_generated_total
-            .with_label_values(&[&phase.name])
-            .inc();
+        // PR-17d (v10.7.19): cached IntCounter handles — inc = atomic, no HashMap lookup.
+        msg_counter.inc();
         // N2 (v8.6.0): счётчик сообщений по формату. Инкрементируется
         // здесь (а не в generate_message), чтобы не зависеть от наличия
         // Metrics в чисто-функциональной generate_message (она используется
         // и в бенчмарках без Metrics).
-        metrics
-            .messages_by_format_total
-            .with_label_values(&[phase.format_type()])
-            .inc();
+        by_format_counter.inc();
 
         // F17: учёт применения rate-аномалий. Если multiplier != 1.0 —
         // хотя бы одна rate-аномалия активна. Считаем по каждой аномалии,
@@ -1448,10 +1453,12 @@ mod tests {
     /// pick_template_compiled: single template → always first.
     #[test]
     fn pick_template_compiled_single_returns_first() {
-        let templates: Vec<Arc<template::CompiledTemplate>> = vec![
-            Arc::new(template::CompiledTemplate::compile("a")),
-            Arc::new(template::CompiledTemplate::compile("b")),
-        ];
+        // PR-17d (v10.7.19): один template → всегда возвращается этот template
+        // (без RNG-зависимости). Тест упрощён по сравнению с оригиналом,
+        // который путал 'single' с 'first'.
+        let templates: Vec<Arc<template::CompiledTemplate>> = vec![Arc::new(
+            template::CompiledTemplate::compile("a"),
+        )];
         let mut rng = crate::payload::derive_rng(Some(42), 1);
         let picked = pick_template_compiled(&templates, None, &mut rng);
         assert!(picked.is_some());

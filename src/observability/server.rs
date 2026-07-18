@@ -658,4 +658,54 @@ mod tests {
         // Даём фоновой задаче время корректно завершиться.
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+
+    /// Phase 11 (Tier 1): `handle_conn` ветка `parse_request_line` → None →
+    /// 400 Bad Request. Покрывает L79-86 (`None =>` branch).
+        #[tokio::test]
+        async fn test_handle_conn_empty_request_returns_400() {
+            let metrics = create_metrics().expect("create_metrics ok in test");
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            tokio::spawn(handle_conn_oneshot(listener, metrics));
+
+            // Пустой байтовый буфер (валидный TCP connect, но без HTTP) → None →
+            // 400 Bad Request.
+            let mut client = TcpStream::connect(&addr).await.unwrap();
+            client.write_all(b"\n\n").await.unwrap(); // только пустые строки
+            let mut resp = Vec::new();
+            let _ = client.read_to_end(&mut resp).await;
+            let text = String::from_utf8_lossy(&resp);
+            assert!(
+                text.starts_with("HTTP/1.1 400 Bad Request"),
+                "expected 400 Bad Request, got: {text:?}"
+            );
+        }
+
+        /// Phase 11 (Tier 1): `handle_conn` ветка `Ok(0)` — peer closed без данных.
+        /// Покрывает L75 (`Ok(0) => return`).
+        #[tokio::test]
+        async fn test_handle_conn_zero_read_returns_silently() {
+            let metrics = create_metrics().expect("create_metrics ok in test");
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+
+            // Открываем соединение и сразу закрываем — peer closed.
+            let handle = tokio::spawn(async move {
+                handle_conn_oneshot(listener, metrics).await;
+            });
+            let client = TcpStream::connect(&addr).await.unwrap();
+            drop(client); // close immediately
+
+            // Ждём завершения handle_conn.
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
+        }
+
+    /// Хелпер: создать одноразовый listener + connection handler.
+    /// Вынесен на уровень mod tests (а не inline в тесте) — чтобы clippy
+    /// не ругался на "cannot test inner items".
+    async fn handle_conn_oneshot(listener: TcpListener, metrics: Metrics) {
+        if let Ok((stream, _)) = listener.accept().await {
+            handle_conn(stream, metrics).await;
+        }
+    }
 }

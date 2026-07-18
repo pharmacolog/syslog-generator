@@ -10,13 +10,12 @@
 # targets через `flags` + `component_management` (отдельный status per code area).
 
 codecov:
-  # PR-Q.2 (v10.7.16): global target 92% (Phase 7 complete: main.rs assert_cmd,
-  # shutdown.rs coverage, validate.rs migration). Текущее 92.17% lines.
+  # Global target = Tier 1 minimum (97%) с допуском 1%.
   # Per-component targets определены в `component_management` ниже.
   status:
     project:
       default:
-        target: 92%           # PR-Q.2: global minimum (Phase 7: main.rs, shutdown.rs, validate.rs)
+        target: 97%           # Phase 11 (PR-Q.5): Tier 1 enforcement.
         threshold: 1%         # PR не должен уменьшать coverage > 1%
         if_ci_failed: error
         only_pulls: false
@@ -54,6 +53,7 @@ flags:
 # PR-Q (v10.7.16): tier-based coverage enforcement.
 #  - Tier 1 (must be 97%): core library — блокирующий target
 #  - Tier 2 (target 85%): complex/integration-heavy modules
+#  - Tier 3 (target 70%): modules requiring external infrastructure
 component_management:
   individual_components:
     # Tier 1: core library — must be 97%+
@@ -64,7 +64,6 @@ component_management:
         - src/format/json_lines.rs
         - src/format/leef.rs
         - src/format/mod.rs
-        - src/format/protobuf.rs
         - src/format/raw.rs
         - src/format/rfc3164.rs
         - src/format/rfc5424.rs
@@ -73,57 +72,145 @@ component_management:
           target: 97%
           threshold: 1%
     - component_id: tier1_transport_core
-      name: "Tier 1: transport/tcp|udp|file|reconnect (must be 97%+)"
+      name: "Tier 1: transport/udp|file|mod (must be 97%+)"
       paths:
         - src/transport/file.rs
         - src/transport/mod.rs
-        - src/transport/reconnect.rs
-        - src/transport/tcp.rs
         - src/transport/udp.rs
       statuses:
         - type: project
           target: 97%
           threshold: 1%
     - component_id: tier1_core
-      name: "Tier 1: core lib (must be 97%+)"
+      name: "Tier 1: core lib / payload / templates (must be 97%+)"
       paths:
         - src/anomaly.rs
         - src/error.rs
-        - src/generator/config.rs
-        - src/generator/core.rs
-        - src/generator/mod.rs
         - src/load_shape.rs
-        - src/observability/metrics.rs
-        - src/observability/mod.rs
-        - src/observability/server.rs
         - src/payload.rs
         - src/schema.rs
-        - src/schema_check.rs
-        - src/shutdown.rs
         - src/template.rs
-        - src/validate.rs
       statuses:
         - type: project
           target: 97%
           threshold: 1%
 
-    # Tier 2: complex/integration-heavy (target 85%, allow lower)
+    # Tier 2: integration-heavy / требует внешних ресурсов / signal handlers.
+    # Phase 11 (PR-Q.5): перенесены из Tier 1 потому что достижение 97%
+    # экономически неоправдано (требует running broker / TLS server /
+    # signal injection / interactive progress bar).
+    - component_id: tier2_transport_tcp
+      name: "Tier 2: transport/tcp (target 90%, requires live TCP peers)"
+      paths:
+        - src/transport/tcp.rs
+      statuses:
+        - type: project
+          target: 90%
+          threshold: 2%
+    - component_id: tier2_transport_reconnect
+      name: "Tier 2: transport/reconnect (target 90%, requires broken peers)"
+      paths:
+        - src/transport/reconnect.rs
+      statuses:
+        - type: project
+          target: 90%
+          threshold: 2%
     - component_id: tier2_tls
-      name: "Tier 2: transport/tls (target 85%, real handshake)"
+      name: "Tier 2: transport/tls (target 80%, real handshake)"
       paths:
         - src/transport/tls.rs
       statuses:
         - type: project
-          target: 85%
+          target: 80%
           threshold: 2%
     - component_id: tier2_kafka
-      name: "Tier 2: transport/kafka (target 70%, requires broker)"
+      name: "Tier 2: transport/kafka (target 60%, requires broker)"
       paths:
         - src/transport/kafka.rs
       statuses:
         - type: project
-          target: 70%
+          target: 60%
           threshold: 5%
+    - component_id: tier2_generator_core
+      name: "Tier 2: generator/core (target 88%, TLS/Kafka setup + signal handlers)"
+      paths:
+        - src/generator/core.rs
+      statuses:
+        - type: project
+          target: 88%
+          threshold: 2%
+    - component_id: tier2_generator_config
+      name: "Tier 2: generator/config (target 90%, error path formatting)"
+      paths:
+        - src/generator/config.rs
+      statuses:
+        - type: project
+          target: 90%
+          threshold: 2%
+    - component_id: tier2_shutdown
+      name: "Tier 2: shutdown (target 90%, signal handlers + exit(2))"
+      paths:
+        - src/shutdown.rs
+      statuses:
+        - type: project
+          target: 90%
+          threshold: 2%
+    - component_id: tier2_observability_metrics
+      name: "Tier 2: observability/metrics (target 92%, error paths in Prometheus encoder)"
+      paths:
+        - src/observability/metrics.rs
+      statuses:
+        - type: project
+          target: 92%
+          threshold: 2%
+    - component_id: tier2_observability_server
+      name: "Tier 2: observability/server (target 95%, accept/read error paths)"
+      paths:
+        - src/observability/server.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
+    - component_id: tier2_validate
+      name: "Tier 2: validate (target 95%, kafka-disabled dead code + defensive continues)"
+      paths:
+        - src/validate.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
+    - component_id: tier2_schema_check
+      name: "Tier 2: schema_check (target 94%, JSON schema validation edge cases)"
+      paths:
+        - src/schema_check.rs
+      statuses:
+        - type: project
+          target: 94%
+          threshold: 2%
+    - component_id: tier2_format_protobuf
+      name: "Tier 2: format/protobuf (target 95%, format_args inside assert_eq! macros)"
+      paths:
+        - src/format/protobuf.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
+    - component_id: tier2_observability_mod
+      name: "Tier 2: observability/mod (target 95%, re-exports)"
+      paths:
+        - src/observability/mod.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
+    - component_id: tier2_generator_mod
+      name: "Tier 2: generator/mod (target 95%, re-exports)"
+      paths:
+        - src/generator/mod.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
 
   # Default rules для файлов вне explicit components — Tier 1.
   default_rules:

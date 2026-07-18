@@ -265,4 +265,28 @@ mod tests {
         let z_pos = s.find("z=1").unwrap();
         assert!(a_pos < m_pos && m_pos < z_pos, "got: {s}");
     }
+
+    /// Phase 11 (Tier 1): `push_u8_decimal` покрытие для n >= 10 ветки.
+    /// В production вызывается только с severity ∈ [0, 10], но функция
+    /// поддерживает 2-цифровой диапазон — тестируем ветку `n >= 10`.
+    #[test]
+    fn push_u8_decimal_handles_two_digit_numbers() {
+        let mut out = Vec::new();
+        // 1 цифра (severity 0..=9).
+        push_u8_decimal(&mut out, 0);
+        assert_eq!(out, b"0");
+        out.clear();
+        push_u8_decimal(&mut out, 5);
+        assert_eq!(out, b"5");
+        out.clear();
+        push_u8_decimal(&mut out, 9);
+        assert_eq!(out, b"9");
+        // 2 цифры (n >= 10 → покрывает if n >= 10 branch).
+        out.clear();
+        push_u8_decimal(&mut out, 10);
+        assert_eq!(out, b"10");
+        out.clear();
+        push_u8_decimal(&mut out, 99);
+        assert_eq!(out, b"99");
+    }
 }

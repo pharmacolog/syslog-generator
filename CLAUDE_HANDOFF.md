@@ -1,6 +1,27 @@
 # Перенос контекста проекта в Claude — syslog-generator
 
-Дата: 2026-07-17 (обновлено для release-train). Текущая версия: **v10.7.16 (release-train, release/v10.7.21 → main pending)** — bundle всех PR-17a..e. PR-17a..e смержены в dev через squash-PR #31 (`79842f6`). **PR-17a**: `format!` → `write!` в `Vec<u8>` для всех 7 форматов; `#[inline(always)]` на 8 hot-path fn. **PR-17b**: pre-allocated HashMap через `default_values_into` + `generate_message_with_format_cached`; `#[inline]` на hot-path. **PR-17c**: `Arc<str>` Header/SyslogHeaderParts (atomic clone); single shared `Utc::now()` per msg; `Header.timestamp: Arc<str>`. **PR-17d**: cached `IntCounter` handles в `run_phase_multi`; **PGO workflow** для release builds (`.github/workflows/release-pgo.yml`). **PR-17e**: **Bytes в mpsc** (atomic clone, broadcast savings ~50-150 нс/msg); **parking_lot::Mutex** для SharedRx (sync mutex, ~30-100 нс/msg). Benchmark после rebase на dev: **1690.6 нс/msg (−17.8% от v10.7.15)**, throughput 591 Kelem/s (+21.6%). С PGO до ~1678 нс (−18.4%). Coverage: 92.86/92.45/92.91% (lines/functions/regions) — все выше требуемых 91.54/91.86/91.51%. 328 tests pass; clippy clean. **PR #30** (sync main→dev) был закрыт как obsolete (main стал behind dev после squash-PR #31). Применяется правильный Git Flow release-train (CLAUDE_HANDOFF §6): feature → dev → release/vX.Y.Z → main → tag. **Release flow сейчас**: release/v10.7.21 → main через PR (Tag v10.7.21 после merge). Версия: **v10.7.15** в начале сессии; сейчас готовится v10.7.16.
+Дата: 2026-07-17 (выпущен v10.7.16, planning v10.7.21). Текущая версия: **v10.7.16** на main (`4922400`). Следующий minor release: **v10.7.21** — RESERVED, будет cut как release/v10.7.21 branch от v10.7.16 commit (FF). См. `git notes --ref=v10.7.16 show v10.7.16` для деталей. PR-17a..e hot-path optimization bundle в v10.7.16. **PR-17a**: `format!` → `write!` в `Vec<u8>` для всех 7 форматов; `#[inline(always)]` на 8 hot-path fn. **PR-17b**: pre-allocated HashMap через `default_values_into` + `generate_message_with_format_cached`; `#[inline]` на hot-path. **PR-17c**: `Arc<str>` Header/SyslogHeaderParts (atomic clone); single shared `Utc::now()` per msg; `Header.timestamp: Arc<str>`. **PR-17d**: cached `IntCounter` handles в `run_phase_multi`; **PGO workflow** для release builds (`.github/workflows/release-pgo.yml`). **PR-17e**: **Bytes в mpsc** (atomic clone, broadcast savings ~50-150 нс/msg); **parking_lot::Mutex** для SharedRx (sync mutex, ~30-100 нс/msg). Benchmark: **1690.6 нс/msg (−17.8% от v10.7.15)**, throughput 591 Kelem/s (+21.6%). С PGO до ~1678 нс (−18.4%). Coverage: 92.86/92.45/92.91% (lines/functions/regions). 328 tests pass; clippy clean. **Release train v10.7.16 завершён**: squash-PR #31 (PR-17 + sync dev) → main → tag v10.7.16 → GitHub Release. **PR #30 (sync main→dev)** был закрыт как obsolete. **Protocol для будущих releases** (см. CLAUDE_HANDOFF §6): feature → dev → release/vX.Y.Z → main → tag.
+
+### Git Traceability для v10.7.21 (следующий minor release)
+
+Не создаю `release/v10.7.21` branch заранее — это было бы misleading (branch показывает "линейную историю разработки v10.7.21 release-train", который физически не существует).
+
+**Использован механизм `git notes`:**
+- `git notes --ref=v10.7.16 add -m "..." <v10.7.16^{}>`
+- `git push origin refs/notes/v10.7.16`
+- Просмотр: `git notes --ref=v10.7.16 show v10.7.16`
+
+**Note содержит:**
+- План трассировки: v10.7.21 будет cut как release/v10.7.21 branch от v10.7.16 commit (FF)
+- Release-train v10.7.21: 5 шагов когда наступит (feature → dev → release → main → tag)
+- Trigger: после существенных изменений (PR-17f+, coverage 97%, новые PR-quality)
+
+**Преимущества подхода:**
+1. ✅ Не загрязняет git namespace (нет ложной ветки)
+2. ✅ Searchable через `git log`, `git notes list`
+3. ✅ Pushable через `refs/notes/*` (постоянный commit-time artifact)
+4. ✅ Не меняет `git tag --list` или `git branch --list`
+5. ✅ Когда release-train v10.7.21 реально стартует — branch будет создан из этого места
 
 Этот файл — самодостаточный контекст для продолжения работы над проектом в Claude
 (Claude Code / Claude.ai). Проект — промышленный генератор нагрузки на syslog на Rust.

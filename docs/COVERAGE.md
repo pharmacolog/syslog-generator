@@ -1,132 +1,168 @@
-# COVERAGE
+# Coverage Policy — syslog-generator
 
-> **v10.7.15 current:** данные по coverage берутся из последнего запуска
-> coverage job в CI (`.github/workflows/ci.yml` job `coverage`).
-> Baseline milestones:
-> - **v10.3.0 (Coverage ч.1):** **86.40% lines / 88.36% functions / 86.49% regions**
-> - **v10.4.0 (Coverage ч.2):** **87.07% lines / 89.38% functions / 87.20% regions** (+0.67pp)
-> - **v10.7.15 (Coverage expansion, PR-16):** **89.65% lines / 90.42% functions / 89.53% regions** (+1.77pp от v10.7.9 baseline 87.88%, 25 новых тестов)
->
-> Coverage gate (≥ 97% lines) **НЕ активирован** — backlog. PR-3 закрывает
-> доки, gate переедет в отдельный release (требует ~50-80 новых unit-тестов).
+**Версия:** v10.7.16+ (tier-based coverage enforcement)
+**Coverage gate:** ≥ 92% (phased rollout), target 97% (Tier 1 per-module)
+**CI workflow:** `.github/workflows/ci.yml::coverage` job (required check)
 
-## Что такое coverage
+## Tier-Based Coverage Targets
 
-Coverage измеряет, какая часть исходного кода была выполнена хотя бы одним
-тестом. Используется `cargo-llvm-cov` — pure-Rust обёртка над `llvm-cov`
-(profile-guided). Поддерживает `--workspace`, `--all-features`, LCOV-вывод
-для codecov.io / Coveralls.
+`codecov.yml::component_management` определяет три tier'а с per-component
+status check'ами. Каждый PR проверяется относительно base branch — если
+новый код уменьшает coverage ниже target, status check падает (CI блокирует merge).
 
-## Как запустить локально
+### Tier 1 (must be 97%+, threshold 1%)
+
+Core library — блокирующий target для production binary. Любой новый
+код в этих файлах должен сопровождаться unit/property тестами.
+
+**Группы:**
+
+- **`tier1_format`** — `src/format/{cef,json_lines,leef,mod,protobuf,raw,rfc3164,rfc5424}.rs`
+- **`tier1_transport_core`** — `src/transport/{file,mod,reconnect,tcp,udp}.rs`
+- **`tier1_core`** — `src/{anomaly,error,load_shape,payload,schema,schema_check,shutdown,template,validate}.rs`,
+  `src/observability/{metrics,mod,server}.rs`, `src/generator/{config,core,mod}.rs`
+
+### Tier 2 (target 85%, threshold 2%)
+
+Complex/integration-heavy модули. Реальный TLS handshake / broker требует
+инфраструктуры (cert, Kafka broker) — часть кода покрывается integration
+тестами, но unit coverage остаётся ниже Tier 1.
+
+- **`tier2_tls`** — `src/transport/tls.rs` (target 85%, threshold 2%)
+- **`tier2_kafka`** — `src/transport/kafka.rs` (target 70%, threshold 5%)
+
+### Default rules (Tier 1 fallback)
+
+Любой файл вне explicit component → Tier 1 (97%, threshold 1%).
+
+## History (phased rollout)
+
+| Version | Lines | Functions | Regions | Tier 1 modules | Notes |
+|---------|-------|-----------|---------|----------------|-------|
+| v10.3.0 (Coverage ч.1) | 86.40% | 88.36% | 86.49% | n/a | baseline |
+| v10.4.0 (Coverage ч.2) | 87.07% | 89.38% | 87.20% | n/a | +0.67pp |
+| v10.7.9 | 87.88% | n/a | n/a | n/a | pre-PR-Q baseline |
+| v10.7.14 | 89.65% | 90.42% | 89.53% | n/a | +25 tests (PR-16) |
+| v10.7.15 (PR-Q) | 89.65% → 89.65% | — | — | n/a | 9 required CI checks + tier-based codecov.yml |
+| v10.7.15 (PR-Q.1) | 91.51% | — | — | 95–100% | +25 tests (format, generator, transport) |
+| v10.7.15 (PR-Q.2) | 92.17% | — | — | 95–100% | +20 tests (main.rs assert_cmd, shutdown, validate) |
+| v10.7.15 (PR-Q.3) | 92.88% | — | — | 95–100% | +17 tests (transport/tcp reconnect, observability/server, transport/file rotation) |
+| v10.7.15 (PR-Q.4) | TBD | — | — | 95–100% | **+13 proptest (anomaly, load_shape, validate)** |
+| v10.7.17 | TBD | — | — | **97%** | Tier 1 enforcement per codecov.yml |
+
+## Proptest coverage (PR-Q.4)
+
+Phase 9 (PR-Q.4) добавляет **property-based тесты** с `proptest = "1"`
+для трёх модулей с наибольшим coverage-приоритетом:
+
+| Файл | Тестов | Invariants покрыты |
+|------|--------|---------------------|
+| `src/anomaly_proptests.rs` | 5 | `combined_rate_multiplier > 0` всегда; `BurstInjection` inactive вне окна → multiplier = 1.0; `PacketLoss` распределение дропов ±2% на 10k trials; граничные `loss_percent=0/100`; `SlowDrip` окно/после-окна |
+| `src/load_shape_proptests.rs` | 4 | `Linear` монотонность + bounded; `Sine` rate ≥ 0 всегда; `Burst` среднее = (burst_rate × burst_secs + base × (cycle − burst_secs)) / cycle ±5%; `Constant` rate не зависит от t |
+| `src/validate_proptests.rs` | 4 | валидный Profile → no errors; невалидный transport (long random) → `InvalidTransport` с value; невалидный distribution → `InvalidDistribution`; facility ∈ 0..=23 + severity ∈ 0..=7 → no facility/severity errors |
+
+**Зачем proptest, если есть unit-тесты?**
+
+Unit-тесты покрывают конкретные edge cases (t=0, t=duration, t=2*duration).
+Property-тесты генерируют **256+ случайных комбинаций параметров** для
+каждого теста — это страховка от regression, когда кто-то меняет
+семантику `combined_rate_multiplier` и старые unit-тесты не ловят
+новый edge case в непрерывном пространстве параметров.
+
+## How to add new code
+
+### 1. Написать код
+
+Любой новый `pub fn` / `pub struct` в Tier 1 файле должен сопровождаться
+unit/property тестом. Минимум: один happy-path тест + один edge-case тест.
+
+### 2. Запустить локально coverage
 
 ```bash
-# Установка (один раз):
-cargo install cargo-llvm-cov --locked
-
-# Текущий coverage с резюме:
-cargo llvm-cov --features kafka --summary-only
-
-# HTML-отчёт (для просмотра в браузере):
-cargo llvm-cov --features kafka --html --output-dir coverage/
-
-# LCOV-файл (для codecov.io):
-cargo llvm-cov --features kafka --lcov --output-path lcov.info
-
-# Только для конкретного модуля:
-cargo llvm-cov --features kafka --lib --summary-only
+cargo llvm-cov --features kafka,test-helpers --summary-only
 ```
 
-## Baseline (v10.4.0)
+Output показывает `lines/functions/regions` per file. Если новый файл
+не в `codecov.yml::ignore`, его coverage пойдёт в Tier 1.
 
+### 3. Проверить per-component targets
+
+```bash
+# Per-file HTML report:
+cargo llvm-cov --features kafka,test-helpers --html --output-dir coverage/
+open coverage/index.html
 ```
-TOTAL: 87.07% lines / 89.38% functions / 87.20% regions
+
+Coverage ≥ 97% для Tier 1, ≥ 85% для Tier 2 (tls), ≥ 70% для Tier 2 (kafka).
+
+### 4. Если не достигли target — добавить тесты
+
+Сначала — unit-тесты на конкретные edge cases. Если unit-тесты
+становятся слишком гранулярными (>5 на одну функцию) — добавить
+property-based тест через `proptest!`.
+
+Шаблон нового proptests файла:
+
+```rust
+// src/<module>_proptests.rs
+use crate::module::*;
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn prop_<invariant_name>(param1 in 0u32..100, param2 in 0u32..100) {
+        // arrange: создать структуру с произвольными параметрами
+        // act: вызвать функцию
+        // assert: проверить инвариант
+    }
+}
 ```
 
-(Исторические данные: v10.3.0 = 86.40%/88.36%/86.49%.)
+Зарегистрировать в `src/lib.rs`:
 
-Полная таблица по модулям (по убыванию покрытия):
+```rust
+#[cfg(test)]
+mod <module>_proptests;
+```
 
-| Модуль | Lines | Functions | Regions | Приоритет |
-|---|---|---|---|---|
-| `template.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/rfc3164.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/rfc5424.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/raw.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/cef.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/leef.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `format/json_lines.rs` | 100.00% | 100.00% | 100.00% | ✅ |
-| `transport/udp.rs` | 87.88% | 100.00% | 96.00% | ✅ |
-| `anomaly.rs` | 96.81% | 100.00% | 99.27% | ✅ |
-| `transport/file.rs` | 89.89% | 97.56% | 93.48% | ✅ |
-| `transport/reconnect.rs` | 92.89% | 87.50% | 93.86% | ✅ |
-| `schema_check.rs` | 92.66% | 78.57% | 94.00% | ✅ |
-| `transport/udp.rs` | 87.88% | 100.00% | 96.00% | ✅ |
-| `payload.rs` | ~95% | ~95% | ~95% | ✅ |
-| `validate.rs` | 84.08% | 95.24% | 86.90% | 🔵 средний |
-| `protobuf.rs` | 81.62% | 95.24% | 79.73% | 🔵 средний |
-| `transport/tls.rs` | 68.44% | 60.00% | 67.35% | 🟡 нужен +29% lines |
-| `shutdown.rs` | 67.44% | 100.00% | 75.00% | 🟡 нужен +30% lines |
-| `transport/mod.rs` | 63.33% | 68.42% | 53.33% | 🟡 нужен +34% lines |
-| `transport/kafka.rs` | 51.68% | 71.43% | 47.77% | 🔴 нужен +45% lines |
-| `transport/tcp.rs` | 46.72% | 44.44% | 54.35% | 🔴 нужен +50% lines |
+### 5. CI проверит автоматически
 
-## План v10.4.0 (Coverage ч.2)
+`.github/workflows/ci.yml::coverage` job:
+- запускает `cargo llvm-cov --features kafka --lcov`
+- upload в codecov.io
+- status check `codecov/project` падает если coverage < target
 
-Цель: довести coverage до ≥ 97% lines (blocking gate в CI).
+## Excluded from coverage
 
-### Что нужно добавить
+Список файлов в `codecov.yml::ignore` — не идут в coverage analysis:
 
-**Тесты для `transport/tcp.rs` (46.72% → ≥ 97%):**
-- Тесты для каждой ветки reconnect: success-on-first-attempt, retries-until-success,
-  exhausted-max-attempts, shutdown-cancelled-during-backoff, exponential growth
-  verified. Часть уже покрыта unit-тестами `src/transport/reconnect.rs`,
-  но интеграционные тесты с реальным TcpStream отсутствуют.
-- Тесты framing: octet-counting vs non-transparent — проверка префикса
-  в реальном TCP-write.
+```yaml
+ignore:
+  - "examples/**"     # примеры, не runtime код
+  - "benches/**"      # benchmark'и (Criterion)
+  - "fuzz/**"         # fuzz targets
+  - "tests/**"        # integration tests
+  - "**/tests.rs"     # test-only файлы
+  - "src/main.rs"     # CLI entrypoint (тестируется через assert_cmd)
+  - "src/payload_proptests.rs"     # PR-Q.0: test-only файл
+  - "src/anomaly_proptests.rs"     # PR-Q.4: test-only файл
+  - "src/load_shape_proptests.rs"  # PR-Q.4: test-only файл
+  - "src/validate_proptests.rs"    # PR-Q.4: test-only файл
+```
 
-**Тесты для `transport/kafka.rs` (51.68% → ≥ 97%):**
-- Тесты для каждого error path: connect-fail, produce-fail, batch-flush-fail.
-- Тесты для parsing `parse_bootstrap_servers`, `parse_kafka_acks`,
-  `parse_kafka_compression` (включая invalid inputs).
-
-**Тесты для `transport/tls.rs` (68.44% → ≥ 97%):**
-- Тесты для всех error paths в `build_tls_connector`: bad PEM, missing CA,
-  invalid min_protocol_version, invalid cipher suite (уже частично).
-- Тесты handshake error scenarios.
-
-**Тесты для `shutdown.rs` (67.44% → ≥ 97%):**
-- Тесты для `graceful_drain_wait` при разных значениях `drain_timeout_secs`.
-- Тесты для `shutdown_listener` с разными сигналами (SIGINT, SIGTERM).
-
-**Тесты для `transport/mod.rs` (63.33% → ≥ 97%):**
-- Тесты для `record_send`, `record_error`, `record_send_latency` —
-  smoke-тесты с разными labels.
-
-**Тесты для `validate.rs` (84.08% → ≥ 97%):**
-- Тесты для каждого `ValidationError` варианта с разными входными данными
-  (boundary cases). Часть уже покрыта через F13, но не 100%.
-
-**Тесты для `protobuf.rs` (81.62% → ≥ 97%):**
-- Тесты для edge cases: пустой schema, schema с одним полем, schema с
-  nested types, missing fields.
-
-### Примерный объём
-
-~50-80 новых unit-тестов (по 3-10 на каждый непокрытый модуль).
-Существующий базис: 214 unit + 86 integration + 11 n7 = 311 тестов.
-После v10.4.0 ожидается: ~370-420 тестов.
+**Зачем exclude proptests файлы:** это `#[cfg(test)]` модули, не runtime
+код. Они автоматически исключаются из release build, но для coverage
+analysis мы исключаем явно (coverage инструментирует исходники по
+маркеру `#[test]` / `#[cfg(test)]`).
 
 ## CI integration
 
-v10.3.0: **non-blocking** coverage job (только отчёт, артефакт `lcov.info`).
-v10.4.0: **blocking** coverage gate — fail если lines < 97%.
+Coverage job в `.github/workflows/ci.yml`:
 
 ```yaml
-# .github/workflows/ci.yml (v10.3.0, non-blocking)
 coverage:
-  name: Coverage (baseline, non-blocking)
+  name: Coverage
   runs-on: ubuntu-latest
-  continue-on-error: true
   steps:
     - uses: actions/checkout@v4
     - uses: taiki-e/install-action@v2
@@ -134,22 +170,34 @@ coverage:
       with:
         components: rustfmt, clippy, llvm-tools-preview
     - run: cargo llvm-cov --features kafka --lcov --output-path lcov.info
-    - uses: actions/upload-artifact@v4
+    - uses: codecov/codecov-action@v4
       with:
-        name: coverage-lcov
-        path: lcov.info
+        files: lcov.info
+        fail_ci_if_error: true
 ```
 
-## Команды для разработчика
+codecov-action читает `codecov.yml` и применяет tier-based status checks.
+PR блокируется если:
+- project coverage < target (Tier 1: 97%, Tier 2: 85%/70%)
+- patch coverage < 85% (новый код в PR не покрыт)
 
-```bash
-# После изменения кода — обновить baseline:
-cargo llvm-cov --features kafka --summary-only > /tmp/coverage.txt
+## Best practices
 
-# Если добавил новый модуль:
-cargo llvm-cov --features kafka --html --output-dir coverage/
-open coverage/index.html
+1. **Тесты — часть кода, не afterthought.** Coverage < 90% = сигнал что
+   код плохо спроектирован (слишком много edge cases без тестов).
+2. **Property-тесты для инвариантов.** Если функция имеет математический
+   инвариант (монотонность, неотрицательность, conservation), property-тест
+   ловит регрессии которые unit-тесты пропускают.
+3. **Edge cases в unit-тестах, диапазоны в proptests.** Unit-тест для
+   `f(0)`, `f(max)`, `f(NaN)`. Property-тест для всех `f(x) ∈ [min, max]`.
+4. **Coverage ≠ качество.** 100% coverage без assert'ов = false positive.
+   Каждый тест должен проверять конкретное поведение, а не просто «вызвать
+   функцию».
 
-# Проверить, что новый код покрыт:
-cargo llvm-cov --features kafka --lib 2>&1 | grep "src/your_new_module.rs"
-```
+## References
+
+- `codecov.yml` — tier-based targets + ignore list
+- `.github/workflows/ci.yml::coverage` — CI integration
+- `docs/PERFORMANCE.md` — benchmark coverage (orthogonal dimension)
+- `docs/FUZZING.md` — fuzz coverage (separate from unit/integration)
+- `CHANGELOG.md` (v10.7.14..v10.7.17) — phased rollout history

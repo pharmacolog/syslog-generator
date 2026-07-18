@@ -82,14 +82,21 @@ pub mod generator;
 pub mod load_shape;
 pub mod observability;
 pub mod payload;
-#[cfg(test)]
-mod payload_proptests;
 pub mod schema;
 pub mod schema_check;
 pub mod shutdown;
 pub mod template;
 pub mod transport;
 pub mod validate;
+
+#[cfg(test)]
+mod anomaly_proptests;
+#[cfg(test)]
+mod load_shape_proptests;
+#[cfg(test)]
+mod payload_proptests;
+#[cfg(test)]
+mod validate_proptests;
 
 // Backward-compat обёртки — старые имена модулей переэкспортируют API из
 // новых слоёв. Это сохраняет `syslog_generator::run_profile`, `Profile` и т.д.

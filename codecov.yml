@@ -39,8 +39,14 @@ ignore:
   - "**/tests.rs"
   # PR-11: CLI entrypoint (тестируется через integration tests).
   - "src/main.rs"
-  # PR-11: payload_proptests — test-only файл, не runtime код.
+  # PR-Q.0: payload_proptests — test-only файл, не runtime код.
   - "src/payload_proptests.rs"
+  # PR-Q.4: anomaly_proptests — test-only файл, не runtime код.
+  - "src/anomaly_proptests.rs"
+  # PR-Q.4: load_shape_proptests — test-only файл, не runtime код.
+  - "src/load_shape_proptests.rs"
+  # PR-Q.4: validate_proptests — test-only файл, не runtime код.
+  - "src/validate_proptests.rs"
 
 # Flags — для аннотаций в PR (раздельный coverage report per area).
 flags:

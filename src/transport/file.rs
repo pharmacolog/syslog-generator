@@ -543,4 +543,199 @@ mod tests {
         assert_eq!(r.effective_max_files(), 3);
         assert_eq!(r.size_threshold_bytes(), Some(50 * 1024 * 1024));
     }
+
+    #[tokio::test]
+    async fn rotation_by_size_triggers_fs_rename() {
+        // Phase 8c (PR-Q): покрытие size-триггера (`fs::rename`).
+        // size_mb=1 → threshold=1MiB. Один 1MiB msg превышает threshold
+        // ПОСЛЕ записи → do_rotate → rotate_file → fs::rename.
+        let path = temp_path("size_rot");
+        let metrics = make_metrics().await;
+        let (tx, rx) = mpsc::channel(16);
+        let shared_rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx));
+        let shutdown = CancellationToken::new();
+
+        let rotation = RotationConfig {
+            size_mb: Some(1),
+            interval_secs: None,
+            max_files: Some(5),
+        };
+        let h = tokio::spawn(target_sender_file_with_rotation(
+            path.clone(),
+            "test".to_string(),
+            rotation,
+            shared_rx,
+            metrics,
+            shutdown,
+        ));
+
+        // 1 MiB payload → bytes_written после write_all = 1MiB+1 ≥ threshold.
+        let big = vec![b'X'; 1024 * 1024];
+        tx.send(Bytes::from(big)).await.unwrap();
+        // Второй msg уходит уже в новый (после rename) файл.
+        tx.send(Bytes::from(b"after_rotate".to_vec()))
+            .await
+            .unwrap();
+        drop(tx);
+        h.await.unwrap().unwrap();
+
+        // Текущий файл должен содержать только второй msg.
+        let content = read_file(&path).await;
+        assert!(content.contains("after_rotate"));
+        assert!(!content.contains('X'));
+
+        // Должен быть как минимум 1 rotated файл с форматом `<stem>.<ts>.log`.
+        let parent = path.parent().unwrap();
+        let stem = path.file_stem().unwrap().to_str().unwrap();
+        let current_name = path.file_name().unwrap().to_string_lossy().to_string();
+        let mut rotated = 0;
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(&format!("{stem}.")) && n.ends_with(".log") && n != current_name {
+                rotated += 1;
+            }
+        }
+        assert!(rotated >= 1, "expected ≥1 rotated file, got {rotated}");
+
+        // Cleanup.
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(stem) {
+                let _ = fs::remove_file(e.path()).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn rotation_max_files_lru_via_sender() {
+        // Phase 8c (PR-Q): end-to-end проверка LRU cleanup через file sender.
+        // size_mb=1, max_files=2 → после каждой ротации остаётся ≤ 1 rotated + current.
+        // Три ротации по 1 MiB → должно остаться ровно 2 файла.
+        let path = temp_path("lru_rot");
+        let metrics = make_metrics().await;
+        let (tx, rx) = mpsc::channel(16);
+        let shared_rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx));
+        let shutdown = CancellationToken::new();
+
+        let rotation = RotationConfig {
+            size_mb: Some(1),
+            interval_secs: None,
+            max_files: Some(2),
+        };
+        let h = tokio::spawn(target_sender_file_with_rotation(
+            path.clone(),
+            "test".to_string(),
+            rotation,
+            shared_rx,
+            metrics,
+            shutdown,
+        ));
+
+        let big = vec![b'X'; 1024 * 1024];
+        for _ in 0..3 {
+            tx.send(Bytes::from(big.clone())).await.unwrap();
+        }
+        drop(tx);
+        h.await.unwrap().unwrap();
+
+        // Должно остаться ровно max_files=2 файла (1 current + 1 самый свежий rotated).
+        let parent = path.parent().unwrap();
+        let stem = path.file_stem().unwrap().to_str().unwrap();
+        let mut sg_files = 0;
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(stem) && n.ends_with(".log") {
+                sg_files += 1;
+            }
+        }
+        assert_eq!(
+            sg_files, 2,
+            "expected 2 files (1 current + 1 rotated after LRU), got {sg_files}"
+        );
+
+        // Cleanup.
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(stem) {
+                let _ = fs::remove_file(e.path()).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn rotate_file_uses_collision_counter_when_target_exists() {
+        // Phase 8c (PR-Q): покрытие counter-ветки в rotate_file.
+        // Если файл `<stem>.<ts>.log` уже существует (две ротации за <1с),
+        // rotate_file должен инкрементить counter и переименовать в
+        // `<stem>.<ts>.1.log`.
+        let path = temp_path("collision");
+        fs::write(&path, b"first").await.unwrap();
+
+        // Первая ротация: переименовывает в `<stem>.<ts>.log`.
+        let n1 = rotate_file(&path, 10).await.unwrap();
+        assert_eq!(n1, 1);
+
+        // Восстанавливаем исходный путь, чтобы вторая ротация была возможна.
+        fs::write(&path, b"second").await.unwrap();
+        // Вторая ротация — в той же секунде (высокая вероятность): rename
+        // в `<stem>.<ts>.log` упадёт (exists), counter → 1.
+        let n2 = rotate_file(&path, 10).await.unwrap();
+        assert_eq!(n2, 1);
+
+        // Cleanup.
+        let parent = path.parent().unwrap();
+        let stem = path.file_stem().unwrap().to_str().unwrap();
+        let mut entries = fs::read_dir(parent).await.unwrap();
+        while let Some(e) = entries.next_entry().await.unwrap() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with(stem) {
+                let _ = fs::remove_file(e.path()).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn file_sender_returns_err_when_parent_dir_unwritable() {
+        // Phase 8c (PR-Q): покрытие error path — `fs::create_dir_all(parent)`
+        // и `open_writer` возвращают Err.
+        // Трюк: parent пути является обычным файлом — create_dir_all
+        // падает с "Not a directory".
+        let blocker = temp_path("blocker");
+        fs::write(&blocker, b"i am a file, not a dir")
+            .await
+            .unwrap();
+
+        let metrics = make_metrics().await;
+        let (tx, rx) = mpsc::channel(16);
+        let shared_rx: SharedRx = Arc::new(parking_lot::Mutex::new(rx));
+        let shutdown = CancellationToken::new();
+
+        let bad_path = blocker.join("subdir").join("log.log");
+        let h = tokio::spawn(target_sender_file_with_rotation(
+            bad_path.clone(),
+            "test".to_string(),
+            RotationConfig::default(),
+            shared_rx,
+            metrics,
+            shutdown,
+        ));
+
+        tx.send(Bytes::from(b"never_written".to_vec()))
+            .await
+            .unwrap();
+        drop(tx);
+
+        let result = h.await.unwrap();
+        assert!(
+            result.is_err(),
+            "expected Err when parent path is a regular file"
+        );
+
+        // Cleanup.
+        let _ = fs::remove_file(&blocker).await;
+    }
 }

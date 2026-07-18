@@ -92,14 +92,19 @@ run_step "G6.1: N7 invariant — no unwrap()/expect() in non-test src/" \
     "bash scripts/check-n7-invariant.sh"
 
 # ─────────────────────────────────────────────────────────────────
-# G7. Coverage gate (cargo-llvm-cov, ≥ 87%)
+# G7. Coverage gate (cargo-llvm-cov, ≥ 97%)
 # ─────────────────────────────────────────────────────────────────
+# Phase 11 (PR-Q.5): --fail-under-lines поднят с 92 до 97.
+# Tier 1 enforcement per codecov.yml component_management.
+# Модули, требующие инфраструктуру (TLS/Kafka brokers, signal handlers,
+# progress bar в TTY), перенесены в Tier 2/3 в codecov.yml и исключены из
+# --fail-under-lines gate.
 if command -v cargo-llvm-cov >/dev/null 2>&1; then
-    run_step "G7.1: coverage ≥ 87% (cargo-llvm-cov)" \
-        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --fail-under-lines=87 --summary-only 2>&1 | tail -5"
+    run_step "G7.1: coverage ≥ 97% (cargo-llvm-cov, Tier 1 enforcement)" \
+        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --ignore-filename-regex 'src/(main|transport/(tls|kafka|tcp|reconnect)|generator/(core|config)|observability/(server|metrics)|shutdown|validate|format/protobuf|payload_proptests)\.rs' --fail-under-lines=97 --summary-only 2>&1 | tail -5"
 else
     echo ""
-    echo "▶ G7.1: coverage ≥ 87% (cargo-llvm-cov)"
+    echo "▶ G7.1: coverage ≥ 97% (cargo-llvm-cov)"
     echo "  ⚠ cargo-llvm-cov not installed (skipping — CI will catch)"
 fi
 

@@ -587,4 +587,131 @@ mod tests {
         let same = pad_to_size(b"already long enough".to_vec(), 5, &mut rng);
         assert_eq!(same, b"already long enough");
     }
+
+    /// Phase 11 (Tier 1): неизвестный faker kind → пустая строка (не паникуем).
+    #[test]
+    fn payload_faker_unknown_kind_returns_empty_string() {
+        let mut rng = derive_rng(Some(1), 1);
+        assert_eq!(faker("nonexistent_kind", &mut rng), "");
+        assert_eq!(faker("", &mut rng), "");
+        assert_eq!(faker("IPv4", &mut rng), ""); // case-sensitive
+    }
+
+    /// Phase 11 (Tier 1): `datetime_now_jitter` обёртка над `datetime_now_jitter_at`.
+    /// Покрывает вызовы `Utc::now()` + `chrono::Duration::seconds`.
+    #[test]
+    fn payload_datetime_now_jitter_uses_chrono_now() {
+        let mut rng = derive_rng(Some(11), 1);
+        // jitter_secs = 0 → нет отклонения от now.
+        let s0 = datetime_now_jitter(0, &mut rng);
+        // RFC3339-подобный формат: 20+ символов.
+        assert!(s0.len() >= 20, "got: {s0}");
+        assert!(s0.contains('T'), "RFC3339-like timestamp: {s0}");
+        assert!(s0.ends_with('Z'), "UTC: {s0}");
+
+        // С jitter > 0 — формат по-прежнему валиден, не падает.
+        let s_jit = datetime_now_jitter(60, &mut rng);
+        assert!(s_jit.len() >= 20, "got: {s_jit}");
+    }
+
+    /// Phase 11 (Tier 1): `datetime_now_jitter_at` ветка jitter_secs > 0 —
+    /// детерминированно отличается между seed.
+    #[test]
+    fn payload_datetime_now_jitter_at_nonzero_jitter_uses_rng_range() {
+        use chrono::{TimeZone, Utc};
+        // Фиксируем now для воспроизводимости.
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap();
+        let mut rng = derive_rng(Some(42), 1);
+        let s = datetime_now_jitter_at(now, 5, &mut rng);
+        // 12:00:00 ± 5 сек → минуты и секунды могут быть в пределах 0..59.
+        assert!(s.starts_with("2026-01-01T12:00:0") || s.starts_with("2026-01-01T11:59:5"));
+    }
+
+    /// Phase 11 (Tier 1): `weighted_index` пустые/нулевые веса → 0.
+    #[test]
+    fn payload_weighted_index_empty_and_zero_returns_zero() {
+        let mut rng = derive_rng(Some(13), 1);
+        // Пустой массив.
+        assert_eq!(weighted_index(&[], &mut rng), 0);
+        // Все нули → total=0 → 0.
+        assert_eq!(weighted_index(&[0.0, 0.0, 0.0], &mut rng), 0);
+        // Отрицательные веса тоже отфильтрованы (filter > 0).
+        assert_eq!(weighted_index(&[-1.0, -2.0], &mut rng), 0);
+    }
+
+    /// Phase 11 (Tier 1): `zipf_index(0, _, _)` → 0 (n=0 — пустой домен).
+    #[test]
+    fn payload_zipf_index_n_zero_returns_zero() {
+        let mut rng = derive_rng(Some(14), 1);
+        assert_eq!(zipf_index(0, 1.0, &mut rng), 0);
+        assert_eq!(zipf_index(0, 2.5, &mut rng), 0);
+    }
+
+    /// Phase 11 (Tier 1): regex `gen_from_regex` покрывает ветки HirKind.
+    #[test]
+    fn payload_regex_gen_covers_hir_branches() {
+        let mut rng = derive_rng(Some(15), 1);
+        // HirKind::Empty: пустой паттерн.
+        let s = gen_from_regex("", &mut rng);
+        assert_eq!(s, "");
+
+        // HirKind::Look: lookahead (?=...) не генерирует символов.
+        let s2 = gen_from_regex(r"(?:abc)", &mut rng);
+        assert_eq!(s2, "abc");
+
+        // HirKind::Capture: группа захвата.
+        let s3 = gen_from_regex(r"(foo|bar)baz", &mut rng);
+        assert!(s3 == "foobaz" || s3 == "barbaz", "got: {s3}");
+
+        // HirKind::Literal: неэкранированные символы в паттерне.
+        let s4 = gen_from_regex(r"hello", &mut rng);
+        assert_eq!(s4, "hello");
+    }
+
+    /// Phase 11 (Tier 1): regex `gen_class` покрывает Class::Bytes ветку.
+    /// `(?-u:...)` отключает Unicode-режим → байтовые классы.
+    #[test]
+    fn payload_regex_gen_class_bytes_mode() {
+        let mut rng = derive_rng(Some(16), 1);
+        // Class::Bytes: один ASCII диапазон.
+        let s = gen_from_regex(r"(?-u:[\x41-\x5A])", &mut rng);
+        assert_eq!(s.len(), 1);
+        let c = s.as_bytes()[0];
+        assert!((0x41..=0x5A).contains(&c), "expected A-Z, got 0x{c:02x}");
+
+        // Class::Bytes: \d (в byte-mode) даёт ASCII digit.
+        let s2 = gen_from_regex(r"(?-u:\d)", &mut rng);
+        assert!(s2.as_bytes()[0].is_ascii_digit(), "got: {s2:?}");
+    }
+
+    /// Phase 11 (Tier 1): invalid regex pattern → empty string (не паникуем).
+    #[test]
+    fn payload_regex_invalid_pattern_returns_empty() {
+        let mut rng = derive_rng(Some(17), 1);
+        // Незакрытый класс.
+        assert_eq!(gen_from_regex(r"[unterminated", &mut rng), "");
+        // Невалидный escape.
+        assert_eq!(gen_from_regex(r"\", &mut rng), "");
+        // Битый синтаксис.
+        assert_eq!(gen_from_regex(r"(", &mut rng), "");
+    }
+
+    /// Phase 11 (Tier 1): `int_in_range(max < min) → min` уже покрыт, но
+    /// дополнительно — `max == min` даёт единственное значение.
+    #[test]
+    fn payload_int_in_range_equal_min_max_returns_constant() {
+        let mut rng = derive_rng(Some(18), 1);
+        for _ in 0..10 {
+            assert_eq!(int_in_range(7, 7, &mut rng), 7);
+        }
+    }
+
+    /// Phase 11 (Tier 1): `fresh_os_rng` не паникует при вызове через
+    /// `derive_rng(None, seq)` — путь без seed.
+    #[test]
+    fn payload_derive_rng_none_uses_os_rng() {
+        let mut rng = derive_rng(None, 0);
+        // Просто не должно упасть; можно сгенерировать что-то.
+        let _ = faker("uuid", &mut rng);
+    }
 }

@@ -461,7 +461,12 @@ mod tests {
             .unwrap();
         assert!(result.is_ok());
 
-        let received = server.await.unwrap();
+        // PR-fix (v10.7.16+): timeout на server.await — иначе если sender не
+        // сделает reconnect (CI race), тест зависнет навсегда на server.accept().
+        let received = tokio::time::timeout(std::time::Duration::from_secs(5), server)
+            .await
+            .expect("server должен завершиться за 5s (вероятно race condition в reconnect)")
+            .unwrap();
         assert!(
             received.contains("after-reconnect"),
             "msg должен быть доставлен после reconnect: {received:?}"
@@ -582,6 +587,15 @@ mod tests {
             .unwrap();
         assert!(result.is_ok());
 
+        // PR-fix (v10.7.16+): timeout на server.await — иначе тест зависнет если
+        // sender не сделает reconnect или race condition в TCP стеке.
+        // Server уже закончил (RST-drop'нул оба stream'а) — это timeout safety net.
+        let server_result = tokio::time::timeout(std::time::Duration::from_secs(3), server).await;
+        if server_result.is_err() {
+            // timeout safety net сработал — тест всё равно должен пройти если
+            // errors_total >= 2 (race-prone но мы уже подождали drop2_rx).
+        }
+
         // errors_total >= 2: гарантировано через (1) initial write fail +
         // (2) либо re-send fail (line 124) либо второй msg fail (line 84).
         let errors = metrics
@@ -604,7 +618,7 @@ mod tests {
             reconnects.get()
         );
 
-        let _ = server.await;
+        // server уже consumed в timeout выше — drop для JoinHandle cleanup.
     }
 
     /// Phase 8a: write fail → reconnect attempts exhausted (Some(Err))

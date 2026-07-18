@@ -297,4 +297,147 @@ mod tests {
         assert_eq!(shape.rate_at(10.0, 0.0, 0.0), 100.0);
         assert_eq!(shape.rate_at(11.5, 0.0, 0.0), 100.0);
     }
+
+    /// Phase 11 (Tier 1): serde defaults вызываются при отсутствии полей в JSON.
+    /// Phase: для Sine без period_secs, Burst без every_secs/burst_secs.
+    #[test]
+    fn load_shape_serde_defaults_applied_when_field_absent() {
+        // Sine без period_secs → default_period() = 60.0.
+        let s: LoadShape = serde_json::from_str(r#"{"type":"sine","min_rate":0,"max_rate":100}"#)
+            .expect("parse sine");
+        match s {
+            LoadShape::Sine { period_secs, .. } => {
+                assert!((period_secs - 60.0).abs() < 1e-9);
+            }
+            _ => panic!("expected Sine"),
+        }
+
+        // Burst без every_secs → default_every() = 10.0.
+        let s2: LoadShape = serde_json::from_str(
+            r#"{"type":"burst","base_rate":1,"burst_rate":2,"burst_secs":0.5}"#,
+        )
+        .expect("parse burst");
+        match s2 {
+            LoadShape::Burst {
+                every_secs,
+                burst_secs,
+                ..
+            } => {
+                assert!((every_secs - 10.0).abs() < 1e-9);
+                assert!((burst_secs - 0.5).abs() < 1e-9);
+            }
+            _ => panic!("expected Burst"),
+        }
+
+        // Burst без burst_secs → default_burst() = 1.0.
+        let s3: LoadShape =
+            serde_json::from_str(r#"{"type":"burst","base_rate":1,"burst_rate":2,"every_secs":5}"#)
+                .expect("parse burst 2");
+        match s3 {
+            LoadShape::Burst {
+                every_secs,
+                burst_secs,
+                ..
+            } => {
+                assert!((every_secs - 5.0).abs() < 1e-9);
+                assert!((burst_secs - 1.0).abs() < 1e-9);
+            }
+            _ => panic!("expected Burst"),
+        }
+    }
+
+    /// Phase 11 (Tier 1): Sine c period_secs <= 0 использует fallback period = 1.0.
+    /// Защита от деления на ноль в `rate_at`.
+    #[test]
+    fn load_shape_sine_zero_or_negative_period_falls_back_to_one() {
+        let s_zero = LoadShape::Sine {
+            min_rate: 0.0,
+            max_rate: 100.0,
+            period_secs: 0.0,
+        };
+        let s_neg = LoadShape::Sine {
+            min_rate: 0.0,
+            max_rate: 100.0,
+            period_secs: -5.0,
+        };
+        // Для period=1: t=0 → cos(0) = 1 → mid - amp*1 = min_rate.
+        approx(s_zero.rate_at(0.0, 0.0, 0.0), 0.0);
+        // Для period=1: t=0.5 → cos(pi) = -1 → mid + amp = max_rate.
+        approx(s_zero.rate_at(0.5, 0.0, 0.0), 100.0);
+        // Отрицательный период также сводится к 1.0.
+        approx(s_neg.rate_at(0.0, 0.0, 0.0), 0.0);
+        approx(s_neg.rate_at(0.5, 0.0, 0.0), 100.0);
+    }
+
+    /// Phase 11 (Tier 1): Burst c every_secs <= 0 использует fallback cycle = 1.0.
+    /// Без защиты был бы деление на ноль в `t % cycle`.
+    #[test]
+    fn load_shape_burst_zero_or_negative_every_secs_falls_back_to_one() {
+        let s_zero = LoadShape::Burst {
+            base_rate: 10.0,
+            burst_rate: 1000.0,
+            every_secs: 0.0,
+            burst_secs: 0.4,
+        };
+        let s_neg = LoadShape::Burst {
+            base_rate: 10.0,
+            burst_rate: 1000.0,
+            every_secs: -3.0,
+            burst_secs: 0.4,
+        };
+        // cycle=1.0, burst_secs=0.4: t%1 < 0.4 → burst; иначе base.
+        approx(s_zero.rate_at(0.0, 0.0, 0.0), 1000.0);
+        approx(s_zero.rate_at(0.3, 0.0, 0.0), 1000.0);
+        approx(s_zero.rate_at(0.5, 0.0, 0.0), 10.0);
+        approx(s_zero.rate_at(0.99, 0.0, 0.0), 10.0);
+        approx(s_neg.rate_at(0.0, 0.0, 0.0), 1000.0);
+        approx(s_neg.rate_at(0.5, 0.0, 0.0), 10.0);
+    }
+
+    /// Phase 11 (Tier 1): rate_at с t<0 клэмпится к 0 (защита от отрицательного t).
+    #[test]
+    fn load_shape_negative_t_is_clamped_to_zero() {
+        let s = LoadShape::Burst {
+            base_rate: 1.0,
+            burst_rate: 50.0,
+            every_secs: 10.0,
+            burst_secs: 1.0,
+        };
+        // t=-5 → clamp к 0 → pos=0 < burst_secs=1 → burst_rate.
+        approx(s.rate_at(-5.0, 0.0, 0.0), 50.0);
+        approx(s.rate_at(-1.0, 0.0, 0.0), 50.0);
+    }
+
+    /// Phase 11 (Tier 1): effective_base для Constant { None } → base_rate.
+    /// Phase 11 (Tier 1): effective_base для Constant { Some(r) } → r.
+    #[test]
+    fn load_shape_effective_base_constant_branches() {
+        approx(
+            LoadShape::Constant { rate: None }.effective_base(500.0),
+            500.0,
+        );
+        approx(
+            LoadShape::Constant { rate: Some(123.0) }.effective_base(500.0),
+            123.0,
+        );
+        // Linear: max(start, end).
+        approx(
+            LoadShape::Linear {
+                start_rate: 50.0,
+                end_rate: 30.0,
+            }
+            .effective_base(0.0),
+            50.0,
+        );
+        // Sine: max_rate.
+        approx(
+            LoadShape::Sine {
+                min_rate: 0.0,
+                max_rate: 999.0,
+                period_secs: 5.0,
+            }
+            .effective_base(0.0),
+            999.0,
+        );
+    }
 }

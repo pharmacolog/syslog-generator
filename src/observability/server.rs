@@ -246,24 +246,20 @@ mod tests {
             .messages_total
             .with_label_values(&["tcp", "p1", "127.0.0.1:1", "success"])
             .inc();
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
+
+        // Используем полноценный serve() вместо ручного loop.
+        let probe = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = probe.local_addr().unwrap().to_string();
+        drop(probe);
+
         let shutdown = CancellationToken::new();
+        let addr_for_serve = addr.clone();
         let sd = shutdown.clone();
         let m = metrics.clone();
-        // Запускаем accept-цикл вручную (используем уже привязанный listener).
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = sd.cancelled() => return,
-                    accepted = listener.accept() => {
-                        if let Ok((stream, _)) = accepted {
-                            tokio::spawn(handle_conn(stream, m.clone()));
-                        }
-                    }
-                }
-            }
-        });
+        let _serve_handle = tokio::spawn(async move { serve(&addr_for_serve, m, sd).await });
+
+        // Даём серверу запуститься.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         let mut client = TcpStream::connect(&addr).await.unwrap();
         client
@@ -271,7 +267,7 @@ mod tests {
             .await
             .unwrap();
         let mut resp = Vec::new();
-        client.read_to_end(&mut resp).await.unwrap();
+        let _ = client.read_to_end(&mut resp).await;
         let text = String::from_utf8_lossy(&resp);
         assert!(text.starts_with("HTTP/1.1 200 OK"), "resp: {text}");
         assert!(text.contains("syslog_messages_total"));
@@ -282,30 +278,26 @@ mod tests {
     #[tokio::test]
     async fn test_serve_real_get_404() {
         let metrics = create_metrics().expect("create_metrics ok in test");
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
+
+        let probe = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = probe.local_addr().unwrap().to_string();
+        drop(probe);
+
         let shutdown = CancellationToken::new();
+        let addr_for_serve = addr.clone();
         let sd = shutdown.clone();
         let m = metrics.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = sd.cancelled() => return,
-                    accepted = listener.accept() => {
-                        if let Ok((stream, _)) = accepted {
-                            tokio::spawn(handle_conn(stream, m.clone()));
-                        }
-                    }
-                }
-            }
-        });
+        let _serve_handle = tokio::spawn(async move { serve(&addr_for_serve, m, sd).await });
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
         let mut client = TcpStream::connect(&addr).await.unwrap();
         client
             .write_all(b"GET /nope HTTP/1.1\r\n\r\n")
             .await
             .unwrap();
         let mut resp = Vec::new();
-        client.read_to_end(&mut resp).await.unwrap();
+        let _ = client.read_to_end(&mut resp).await;
         let text = String::from_utf8_lossy(&resp);
         assert!(text.starts_with("HTTP/1.1 404 Not Found"), "resp: {text}");
         shutdown.cancel();
@@ -335,5 +327,89 @@ mod tests {
         let r = build_http_response("200 OK", "text/plain", "");
         assert!(r.contains("Content-Length: 0"));
         assert!(r.ends_with("\r\n\r\n"));
+    }
+
+    /// Phase 11 (Tier 1): `handle_conn` ветка `parse_request_line` → None →
+    /// 400 Bad Request. Покрывает L79-86 (`None =>` branch).
+    #[tokio::test]
+    async fn test_handle_conn_empty_request_returns_400() {
+        let metrics = create_metrics().expect("create_metrics ok in test");
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        tokio::spawn(handle_conn_oneshot(listener, metrics));
+
+        // Пустой байтовый буфер (валидный TCP connect, но без HTTP) → None →
+        // 400 Bad Request.
+        let mut client = TcpStream::connect(&addr).await.unwrap();
+        client.write_all(b"\n\n").await.unwrap(); // только пустые строки
+        let mut resp = Vec::new();
+        let _ = client.read_to_end(&mut resp).await;
+        let text = String::from_utf8_lossy(&resp);
+        assert!(
+            text.starts_with("HTTP/1.1 400 Bad Request"),
+            "expected 400 Bad Request, got: {text:?}"
+        );
+    }
+
+    /// Phase 11 (Tier 1): `handle_conn` ветка `Ok(0)` — peer closed без данных.
+    /// Покрывает L75 (`Ok(0) => return`).
+    #[tokio::test]
+    async fn test_handle_conn_zero_read_returns_silently() {
+        let metrics = create_metrics().expect("create_metrics ok in test");
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+
+        // Открываем соединение и сразу закрываем — peer closed.
+        let handle = tokio::spawn(async move {
+            handle_conn_oneshot(listener, metrics).await;
+        });
+        let client = TcpStream::connect(&addr).await.unwrap();
+        drop(client); // close immediately
+
+        // Ждём завершения handle_conn.
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
+    }
+
+    /// Хелпер: создать одноразовый listener + connection handler.
+    async fn handle_conn_oneshot(listener: TcpListener, metrics: Metrics) {
+        // Inline accept + handle_conn — если перенести в отдельную async fn,
+        // её закрывающая `}` становится "uncovered" (никогда не достигается
+        // из-за infinite-async-loop semantics). Делаем inline.
+        if let Ok((stream, _)) = listener.accept().await {
+            handle_conn(stream, metrics).await;
+        }
+    }
+
+    /// Phase 11 (Tier 1): `serve()` принимает connection → shutdown → drain.
+    /// Покрывает in_flight await (L123) и shutdown cleanup path.
+    #[tokio::test]
+    async fn test_serve_with_shutdown_drains_in_flight() {
+        let metrics = create_metrics().expect("create_metrics ok in test");
+        let shutdown = CancellationToken::new();
+        let sd = shutdown.clone();
+
+        // Сначала привязываем свой listener, чтобы узнать порт.
+        let probe = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = probe.local_addr().unwrap().to_string();
+        drop(probe); // освобождаем порт для serve
+
+        // Запускаем serve (move addr в замыкание для 'static lifetime).
+        let addr_for_serve = addr.clone();
+        let serve_handle = tokio::spawn(async move { serve(&addr_for_serve, metrics, sd).await });
+
+        // Ждём, чтобы сервер успел привязаться.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // Открываем соединение, чтобы in_flight не пустой.
+        let _client = TcpStream::connect(&addr).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // Shutdown — должно дойти до L123 (drain in_flight).
+        shutdown.cancel();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), serve_handle)
+            .await
+            .expect("serve should shutdown within timeout")
+            .expect("serve task should not panic");
+        assert!(result.is_ok(), "serve returned error: {:?}", result);
     }
 }

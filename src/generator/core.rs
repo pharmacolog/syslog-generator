@@ -1813,4 +1813,213 @@ phases:
         assert!(body.contains("hello seq=2"), "got: {body}");
         let _ = std::fs::remove_file(&tmp);
     }
+
+    /// Phase 11 (Tier 1): schema-driven path в `generate_message_with_format_cached`
+    /// когда schema задан + format = protobuf. Покрывает ветки L299-325
+    /// (schema path) + L341-346 (protobuf serialize).
+    #[test]
+    fn phase11_schema_with_protobuf_format_renders_via_schema() {
+        use crate::schema::{Schema, SchemaField};
+        use std::collections::HashMap;
+
+        // Пишем schema во временный файл.
+        let mut fields = HashMap::new();
+        fields.insert(
+            "user_id".to_string(),
+            SchemaField {
+                field_type: "int".to_string(),
+                min: Some(1),
+                max: Some(1000),
+                ..Default::default()
+            },
+        );
+        let schema = Schema {
+            fields,
+            template: None,
+            output: None,
+        };
+        let schema_json = serde_json::to_string(&schema).expect("serialize schema");
+        let schema_path =
+            std::env::temp_dir().join(format!("sg_phase11_schema_{}.json", std::process::id()));
+        std::fs::write(&schema_path, schema_json).expect("write schema file");
+
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["fallback".to_string()],
+            format: Some("protobuf".to_string()),
+            protobuf_schema: None,
+            schema_file: Some(schema_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let format_kind = FormatKind::Protobuf(None);
+        let msg = generate_message_with_format(&ctx, &phase, &format_kind, 1).expect("generate ok");
+        // Protobuf с None protobuf_schema → пустой bytes (serialize_protobuf_like).
+        assert!(msg.is_empty(), "protobuf None schema → empty: {:?}", msg);
+
+        let _ = std::fs::remove_file(&schema_path);
+    }
+
+    /// Phase 11 (Tier 1): schema-driven path с template. Покрывает L314-325.
+    #[test]
+    fn phase11_schema_with_template_renders_template() {
+        use crate::schema::{Schema, SchemaField};
+        use std::collections::HashMap;
+
+        let mut fields = HashMap::new();
+        fields.insert(
+            "x".to_string(),
+            SchemaField {
+                field_type: "int".to_string(),
+                min: Some(42),
+                max: Some(42),
+                ..Default::default()
+            },
+        );
+        let schema = Schema {
+            fields,
+            template: Some("x is {{x}}".to_string()),
+            output: None,
+        };
+        let schema_path =
+            std::env::temp_dir().join(format!("sg_phase11_schema_tpl_{}.json", std::process::id()));
+        std::fs::write(
+            &schema_path,
+            serde_json::to_string(&schema).expect("serialize"),
+        )
+        .expect("write schema");
+
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["fallback".to_string()],
+            schema_file: Some(schema_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let format_kind = FormatKind::Raw;
+        let msg = generate_message_with_format(&ctx, &phase, &format_kind, 1).expect("generate ok");
+        let s = std::str::from_utf8(&msg).expect("utf8");
+        // Body = "x is 42", без syslog обёртки (Raw format).
+        assert!(s.contains("x is 42"), "got: {s}");
+
+        let _ = std::fs::remove_file(&schema_path);
+    }
+
+    /// Phase 11 (Tier 1): schema-driven path с depends_on корреляцией.
+    /// Покрывает L308-313 (resolve_correlated_field с mapping_default).
+    #[test]
+    fn phase11_schema_with_depends_on_uses_mapping_default() {
+        use crate::schema::{Schema, SchemaField};
+        use std::collections::HashMap;
+
+        let mut fields = HashMap::new();
+        fields.insert(
+            "parent".to_string(),
+            SchemaField {
+                field_type: "enum".to_string(),
+                values: Some(vec!["A".to_string(), "B".to_string()]),
+                ..Default::default()
+            },
+        );
+        fields.insert(
+            "child".to_string(),
+            SchemaField {
+                field_type: "enum".to_string(),
+                values: Some(vec!["C".to_string(), "D".to_string()]),
+                depends_on: Some("parent".to_string()),
+                mapping_default: Some("fallback_child".to_string()),
+                ..Default::default()
+            },
+        );
+        let schema = Schema {
+            fields,
+            template: Some("{{parent}}/{{child}}".to_string()),
+            output: None,
+        };
+        let schema_path = std::env::temp_dir().join(format!(
+            "sg_phase11_schema_corr_{}.json",
+            std::process::id()
+        ));
+        std::fs::write(
+            &schema_path,
+            serde_json::to_string(&schema).expect("serialize"),
+        )
+        .expect("write schema");
+
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["fallback".to_string()],
+            schema_file: Some(schema_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let format_kind = FormatKind::Raw;
+        let msg = generate_message_with_format(&ctx, &phase, &format_kind, 1).expect("generate ok");
+        let s = std::str::from_utf8(&msg).expect("utf8");
+        // child = mapping_default = "fallback_child" (нет mapping для A/B).
+        assert!(s.contains("/fallback_child"), "got: {s}");
+
+        let _ = std::fs::remove_file(&schema_path);
+    }
+
+    /// Phase 11 (Tier 1): generate_message_with_format_cached с schema + template.
+    /// Покрывает hot-path версию L299-325.
+    #[test]
+    fn phase11_cached_schema_template_path() {
+        use crate::schema::{Schema, SchemaField};
+        use std::collections::HashMap;
+
+        let mut fields = HashMap::new();
+        fields.insert(
+            "k".to_string(),
+            SchemaField {
+                field_type: "int".to_string(),
+                min: Some(7),
+                max: Some(7),
+                ..Default::default()
+            },
+        );
+        let schema = Schema {
+            fields,
+            template: Some("k={{k}}".to_string()),
+            output: None,
+        };
+        let schema_path = std::env::temp_dir().join(format!(
+            "sg_phase11_schema_cached_{}.json",
+            std::process::id()
+        ));
+        std::fs::write(
+            &schema_path,
+            serde_json::to_string(&schema).expect("serialize"),
+        )
+        .expect("write schema");
+
+        let phase = Phase {
+            name: "t".into(),
+            total_messages: Some(1),
+            messages_per_second: 1,
+            duration_secs: 1,
+            templates: vec!["fallback".to_string()],
+            schema_file: Some(schema_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let format_kind = FormatKind::Raw;
+        let mut values = HashMap::with_capacity(16);
+        let msg = generate_message_with_format_cached(&ctx, &phase, &format_kind, 1, &mut values)
+            .expect("cached generate ok");
+        let s = std::str::from_utf8(&msg).expect("utf8");
+        assert!(s.contains("k=7"), "got: {s}");
+
+        let _ = std::fs::remove_file(&schema_path);
+    }
 }

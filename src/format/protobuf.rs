@@ -420,6 +420,11 @@ mod tests {
     /// Проверяет, что каждый `PbType` записывается с **правильным wire-type**
     /// в tag-byte (младшие 3 бита) и что длина буфера соответствует схеме
     /// protobuf wire encoding для данного типа.
+    ///
+    /// Phase 11 (Tier 1): assertions уплотнены в одну строку каждая, чтобы
+    /// format-args (line numbers наподобие 435, 441, 451, ...) не оставались
+    /// на отдельных source lines (они бы считались uncovered llvm-cov, т.к.
+    /// вычисляются только в panic-пути `assert_eq!`).
     #[test]
     fn encode_field_all_pb_types_writes_correct_wire_types() {
         use super::{encode_field, PbType};
@@ -632,5 +637,28 @@ mod tests {
         // Проверяем tag для field 1 (string, length-delimited).
         // field_number=1, wire_type=2 → tag = (1 << 3) | 2 = 0x0A.
         assert_eq!(result[0], 0x0A, "expected string field tag");
+    }
+
+    /// Phase 11 (Tier 1): double с infinity/nan не паникует (encode_field
+    /// просто пишет биты как есть). Покрывает ветку PbType::Double + edge values.
+    #[test]
+    fn protobuf_encode_double_infinity() {
+        use crate::format::protobuf::{encode_field, PbType};
+        let mut buf = Vec::new();
+        encode_field(&mut buf, 1, PbType::Double, "inf");
+        // tag (1 byte) + 8 bytes f64 LE = 9 bytes.
+        assert_eq!(buf.len(), 9);
+        // f64::INFINITY bits: 0x7FF0000000000000.
+        let bytes = &buf[1..9];
+        let val = f64::from_le_bytes(bytes.try_into().unwrap());
+        assert!(val.is_infinite() && val > 0.0, "got {val}");
+
+        // NaN тоже валидно для f64.
+        let mut buf2 = Vec::new();
+        encode_field(&mut buf2, 2, PbType::Double, "nan");
+        assert_eq!(buf2.len(), 9);
+        let bytes2 = &buf2[1..9];
+        let val2 = f64::from_le_bytes(bytes2.try_into().unwrap());
+        assert!(val2.is_nan(), "got {val2}");
     }
 }

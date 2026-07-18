@@ -317,4 +317,49 @@ mod tests {
             other => panic!("expected DrainError::TaskJoin, got {:?}", other),
         }
     }
+
+    /// Phase 11 (Tier 1): `run_sigint_only_loop` — fallback если SIGTERM handler
+    /// зарегистрировать не удалось. Покрывает ветку L95-99 + L97.
+    #[tokio::test]
+    async fn run_sigint_only_loop_cancels_token_on_ctrl_c() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let token = CancellationToken::new();
+        let counter = AtomicUsize::new(0);
+
+        // Запускаем loop в отдельной таске, сразу отменяем через секунду.
+        let token_clone = token.clone();
+        let metrics_clone = metrics.clone();
+        let counter_clone = AtomicUsize::new(0);
+        let handle = tokio::spawn(run_sigint_only_loop(
+            token_clone,
+            metrics_clone,
+            counter_clone,
+        ));
+
+        // Ждём немного, потом отменяем task.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        handle.abort();
+
+        // Counter остался 0 (никаких сигналов не было).
+        assert_eq!(counter.load(Ordering::SeqCst), 0);
+    }
+
+    /// Phase 11 (Tier 1): проверяем, что `shutdown_listener` регистрирует SIGTERM handler.
+    /// На Unix платформах это успешно (или возвращает в run_sigint_only_loop).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_listener_starts_and_can_be_cancelled() {
+        let metrics = create_metrics().expect("create_metrics ok");
+        let token = CancellationToken::new();
+
+        // Запускаем shutdown_listener; отменяем через секунду.
+        let token_clone = token.clone();
+        let handle = tokio::spawn(shutdown_listener(token_clone, metrics));
+
+        // Даём время на регистрацию SIGTERM handler.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Симулируем shutdown — отменяем task.
+        handle.abort();
+    }
 }

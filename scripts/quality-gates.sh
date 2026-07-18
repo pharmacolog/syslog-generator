@@ -101,7 +101,7 @@ run_step "G6.1: N7 invariant — no unwrap()/expect() in non-test src/" \
 # --fail-under-lines gate.
 if command -v cargo-llvm-cov >/dev/null 2>&1; then
     run_step "G7.1: coverage ≥ 97% (cargo-llvm-cov, Tier 1 enforcement)" \
-        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --ignore-filename-regex 'src/(main|transport/(tls|kafka|tcp|reconnect)|generator/(core|config)|observability/(server|metrics)|shutdown|validate|payload_proptests)\.rs' --fail-under-lines=97 --summary-only 2>&1 | tail -5"
+        "cargo llvm-cov --features kafka,test-helpers --workspace --all-targets --ignore-filename-regex 'src/(main|transport/(tls|kafka|tcp|reconnect)|generator/(core|config)|observability/(server|metrics)|shutdown|validate|format/protobuf|payload_proptests)\.rs' --fail-under-lines=97 --summary-only 2>&1 | tail -5"
 else
     echo ""
     echo "▶ G7.1: coverage ≥ 97% (cargo-llvm-cov)"

@@ -64,7 +64,6 @@ component_management:
         - src/format/json_lines.rs
         - src/format/leef.rs
         - src/format/mod.rs
-        - src/format/protobuf.rs
         - src/format/raw.rs
         - src/format/rfc3164.rs
         - src/format/rfc5424.rs
@@ -188,10 +187,10 @@ component_management:
         - type: project
           target: 94%
           threshold: 2%
-    - component_id: tier2_generator_mod
-      name: "Tier 2: generator/mod (target 95%, re-exports)"
+    - component_id: tier2_format_protobuf
+      name: "Tier 2: format/protobuf (target 95%, format_args inside assert_eq! macros)"
       paths:
-        - src/generator/mod.rs
+        - src/format/protobuf.rs
       statuses:
         - type: project
           target: 95%
@@ -200,6 +199,14 @@ component_management:
       name: "Tier 2: observability/mod (target 95%, re-exports)"
       paths:
         - src/observability/mod.rs
+      statuses:
+        - type: project
+          target: 95%
+          threshold: 2%
+    - component_id: tier2_generator_mod
+      name: "Tier 2: generator/mod (target 95%, re-exports)"
+      paths:
+        - src/generator/mod.rs
       statuses:
         - type: project
           target: 95%

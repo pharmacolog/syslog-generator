@@ -468,7 +468,7 @@ jobs:
           cargo llvm-cov \
             --features kafka,test-helpers \
             --workspace --all-targets \
-            --ignore-filename-regex 'src/(main|transport/(tls|kafka|tcp|reconnect)|generator/(core|config)|observability/(server|metrics)|shutdown|validate|payload_proptests)\.rs' \
+            --ignore-filename-regex 'src/(main|transport/(tls|kafka|tcp|reconnect)|generator/(core|config)|observability/(server|metrics)|shutdown|validate|format/protobuf|payload_proptests)\.rs' \
             --lcov --output-path lcov.info \
             --fail-under-lines=97 \
             --summary-only 2>&1 | tee coverage-summary.txt

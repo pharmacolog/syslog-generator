@@ -583,3 +583,4 @@ jobs:
             exit 1
           fi
           echo "✅ Public API matches baseline"
+# CI re-trigger 1784384305

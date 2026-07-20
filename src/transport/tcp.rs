@@ -346,49 +346,50 @@ mod tests {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        // Bind + drop → гарантированный connection refused.
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        drop(listener);
+            // Bind + drop → гарантированный connection refused.
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            drop(listener);
 
-        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
-        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
-        let metrics = create_metrics().unwrap();
-        let shutdown = CancellationToken::new();
+            let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+            let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
+            let metrics = create_metrics().unwrap();
+            let shutdown = CancellationToken::new();
 
-        let sender_handle = tokio::spawn(target_sender_tcp(
-            addr.clone(),
-            "phase8a-init".to_string(),
-            rx.clone(),
-            metrics.clone(),
-            shutdown,
-            Framing::NonTransparent,
-            None,
-        ));
+            let sender_handle = tokio::spawn(target_sender_tcp(
+                addr.clone(),
+                "phase8a-init".to_string(),
+                rx.clone(),
+                metrics.clone(),
+                shutdown,
+                Framing::NonTransparent,
+                None,
+            ));
 
-        // Сообщения попадут в drain_as_errors (initial connect failed).
-        tx.send(Bytes::from_static(b"orphan-1\n")).await.unwrap();
-        tx.send(Bytes::from_static(b"orphan-2\n")).await.unwrap();
-        drop(tx);
+            // Сообщения попадут в drain_as_errors (initial connect failed).
+            tx.send(Bytes::from_static(b"orphan-1\n")).await.unwrap();
+            tx.send(Bytes::from_static(b"orphan-2\n")).await.unwrap();
+            drop(tx);
 
-        // Sender должен корректно завершиться после drain.
-        let result = tokio::time::timeout(std::time::Duration::from_secs(2), sender_handle)
-            .await
-            .expect("sender должен завершиться после initial connect failure")
-            .unwrap();
-        assert!(result.is_ok(), "initial connect failure → Ok(_), не Err");
+            // Sender должен корректно завершиться после drain.
+            let result = tokio::time::timeout(std::time::Duration::from_secs(2), sender_handle)
+                .await
+                .expect("sender должен завершиться после initial connect failure")
+                .unwrap();
+            assert!(result.is_ok(), "initial connect failure → Ok(_), не Err");
 
-        // Initial connect fail: record_error + drain_as_errors → 1 + 2 = 3 errors.
-        let errors = metrics
-            .errors_total
-            .get_metric_with_label_values(&[&addr])
-            .unwrap();
-        assert_eq!(
-            errors.get(),
-            3.0,
-            "1 (initial connect error) + 2 (drained) = 3 errors"
-        );
-            }).await;
+            // Initial connect fail: record_error + drain_as_errors → 1 + 2 = 3 errors.
+            let errors = metrics
+                .errors_total
+                .get_metric_with_label_values(&[&addr])
+                .unwrap();
+            assert_eq!(
+                errors.get(),
+                3.0,
+                "1 (initial connect error) + 2 (drained) = 3 errors"
+            );
+        })
+        .await;
     }
 
     /// Phase 8a: write fail на успешно-установленном соединении → reconnect
@@ -403,101 +404,102 @@ mod tests {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        use socket2::Socket;
-        use tokio::io::AsyncBufReadExt;
+            use socket2::Socket;
+            use tokio::io::AsyncBufReadExt;
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // Server: первый accept → RST drop (linger=0) — sender's write
-        // получит ECONNRESET. Второй accept (sender's reconnect) — читаем
-        // сообщение до newline.
-        let server = tokio::spawn(async move {
-            // First connection: RST drop.
-            if let Ok((stream1, _)) = listener.accept().await {
-                let std_stream = stream1.into_std().unwrap();
-                let sock = Socket::from(std_stream);
-                sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                    .unwrap();
-                drop(sock); // → RST sent immediately.
-                let _ = first_drop_tx.send(());
-            }
-            // Second connection: reconnected sender.
-            let (stream2, _) = listener.accept().await.unwrap();
-            let mut reader = tokio::io::BufReader::new(stream2);
-            let mut line = Vec::new();
-            let _ = reader.read_until(b'\n', &mut line).await;
-            String::from_utf8_lossy(&line).to_string()
-        });
+            // Server: первый accept → RST drop (linger=0) — sender's write
+            // получит ECONNRESET. Второй accept (sender's reconnect) — читаем
+            // сообщение до newline.
+            let server = tokio::spawn(async move {
+                // First connection: RST drop.
+                if let Ok((stream1, _)) = listener.accept().await {
+                    let std_stream = stream1.into_std().unwrap();
+                    let sock = Socket::from(std_stream);
+                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                        .unwrap();
+                    drop(sock); // → RST sent immediately.
+                    let _ = first_drop_tx.send(());
+                }
+                // Second connection: reconnected sender.
+                let (stream2, _) = listener.accept().await.unwrap();
+                let mut reader = tokio::io::BufReader::new(stream2);
+                let mut line = Vec::new();
+                let _ = reader.read_until(b'\n', &mut line).await;
+                String::from_utf8_lossy(&line).to_string()
+            });
 
-        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
-        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
-        let metrics = create_metrics().unwrap();
-        let shutdown = CancellationToken::new();
+            let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+            let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
+            let metrics = create_metrics().unwrap();
+            let shutdown = CancellationToken::new();
 
-        let sender_handle = tokio::spawn(target_sender_tcp(
-            addr.clone(),
-            "phase8a-reconnect-ok".to_string(),
-            rx.clone(),
-            metrics.clone(),
-            shutdown,
-            Framing::NonTransparent,
-            Some(ReconnectConfig {
-                max_attempts: Some(3),
-                initial_backoff_ms: 10,
-                max_backoff_ms: 100,
-                multiplier: 2.0,
-            }),
-        ));
+            let sender_handle = tokio::spawn(target_sender_tcp(
+                addr.clone(),
+                "phase8a-reconnect-ok".to_string(),
+                rx.clone(),
+                metrics.clone(),
+                shutdown,
+                Framing::NonTransparent,
+                Some(ReconnectConfig {
+                    max_attempts: Some(3),
+                    initial_backoff_ms: 10,
+                    max_backoff_ms: 100,
+                    multiplier: 2.0,
+                }),
+            ));
 
-        // Ждём, пока server RST-dropнет stream1 — гарантирует что RST уже
-        // в flight к моменту sender's first write.
-        first_drop_rx.await.unwrap();
-        // Дополнительный grace для обработки RST в sender kernel.
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        // Теперь msg: первый write fail → reconnect → re-send success.
-        tx.send(Bytes::from_static(b"after-reconnect\n"))
-            .await
-            .unwrap();
-        drop(tx);
+            // Ждём, пока server RST-dropнет stream1 — гарантирует что RST уже
+            // в flight к моменту sender's first write.
+            first_drop_rx.await.unwrap();
+            // Дополнительный grace для обработки RST в sender kernel.
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            // Теперь msg: первый write fail → reconnect → re-send success.
+            tx.send(Bytes::from_static(b"after-reconnect\n"))
+                .await
+                .unwrap();
+            drop(tx);
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(2), sender_handle)
-            .await
-            .expect("sender должен завершиться")
-            .unwrap();
-        assert!(result.is_ok());
+            let result = tokio::time::timeout(std::time::Duration::from_secs(2), sender_handle)
+                .await
+                .expect("sender должен завершиться")
+                .unwrap();
+            assert!(result.is_ok());
 
-        // PR-fix (v10.7.16+): timeout на server.await — иначе если sender не
-        // сделает reconnect (CI race), тест зависнет навсегда на server.accept().
-        let received = tokio::time::timeout(std::time::Duration::from_secs(5), server)
-            .await
-            .expect("server должен завершиться за 5s (вероятно race condition в reconnect)")
-            .unwrap();
-        assert!(
-            received.contains("after-reconnect"),
-            "msg должен быть доставлен после reconnect: {received:?}"
-        );
+            // PR-fix (v10.7.16+): timeout на server.await — иначе если sender не
+            // сделает reconnect (CI race), тест зависнет навсегда на server.accept().
+            let received = tokio::time::timeout(std::time::Duration::from_secs(5), server)
+                .await
+                .expect("server должен завершиться за 5s (вероятно race condition в reconnect)")
+                .unwrap();
+            assert!(
+                received.contains("after-reconnect"),
+                "msg должен быть доставлен после reconnect: {received:?}"
+            );
 
-        // verify reconnect path: record_reconnect был вызван хотя бы 1 раз.
-        let reconnects = metrics
-            .reconnects_total
-            .get_metric_with_label_values(&["tcp", &addr])
-            .unwrap();
-        assert!(
-            reconnects.get() >= 1.0,
-            "reconnects_total должен быть >= 1, got {}",
-            reconnects.get()
-        );
+            // verify reconnect path: record_reconnect был вызван хотя бы 1 раз.
+            let reconnects = metrics
+                .reconnects_total
+                .get_metric_with_label_values(&["tcp", &addr])
+                .unwrap();
+            assert!(
+                reconnects.get() >= 1.0,
+                "reconnects_total должен быть >= 1, got {}",
+                reconnects.get()
+            );
 
-        // verify re-send success: errors_total = 1 (initial write fail).
-        // messages_total (success) должен инкрементиться при re-send.
-        let errors = metrics
-            .errors_total
-            .get_metric_with_label_values(&[&addr])
-            .unwrap();
-        assert_eq!(errors.get(), 1.0, "1 error: initial write fail");
-            }).await;
+            // verify re-send success: errors_total = 1 (initial write fail).
+            // messages_total (success) должен инкрементиться при re-send.
+            let errors = metrics
+                .errors_total
+                .get_metric_with_label_values(&[&addr])
+                .unwrap();
+            assert_eq!(errors.get(), 1.0, "1 error: initial write fail");
+        })
+        .await;
     }
 
     /// Phase 8a: write fail → reconnect success → re-send FAILURE
@@ -519,118 +521,120 @@ mod tests {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        use socket2::Socket;
-        use tokio::io::AsyncReadExt;
+            use socket2::Socket;
+            use tokio::io::AsyncReadExt;
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        let (drop1_tx, drop1_rx) = tokio::sync::oneshot::channel::<()>();
-        let (drop2_tx, drop2_rx) = tokio::sync::oneshot::channel::<()>();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let (drop1_tx, drop1_rx) = tokio::sync::oneshot::channel::<()>();
+            let (drop2_tx, drop2_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // Server: stream1 → RST-drop, signal. Stream2 (sender's reconnect) →
-        // read 4 KiB → RST-drop, signal. Listener dropped в конце closure
-        // → последующие reconnects (если sender loops again) будут refused.
-        let server = tokio::spawn(async move {
-            // Stream1: RST-drop immediately.
-            if let Ok((stream1, _)) = listener.accept().await {
-                let std_stream = stream1.into_std().unwrap();
-                let sock = Socket::from(std_stream);
-                sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                    .unwrap();
-                drop(sock);
-                let _ = drop1_tx.send(());
+            // Server: stream1 → RST-drop, signal. Stream2 (sender's reconnect) →
+            // read 4 KiB → RST-drop, signal. Listener dropped в конце closure
+            // → последующие reconnects (если sender loops again) будут refused.
+            let server = tokio::spawn(async move {
+                // Stream1: RST-drop immediately.
+                if let Ok((stream1, _)) = listener.accept().await {
+                    let std_stream = stream1.into_std().unwrap();
+                    let sock = Socket::from(std_stream);
+                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                        .unwrap();
+                    drop(sock);
+                    let _ = drop1_tx.send(());
+                }
+                // Stream2: sender's reconnect. Read exactly 4 KiB → RST-drop.
+                if let Ok((mut stream2, _)) = listener.accept().await {
+                    let mut buf = vec![0u8; 4096];
+                    let _ = stream2.read_exact(&mut buf).await;
+                    let std_stream = stream2.into_std().unwrap();
+                    let sock = Socket::from(std_stream);
+                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                        .unwrap();
+                    drop(sock);
+                    let _ = drop2_tx.send(());
+                }
+            });
+
+            let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+            let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
+            let metrics = create_metrics().unwrap();
+            let shutdown = CancellationToken::new();
+
+            let sender_handle = tokio::spawn(target_sender_tcp(
+                addr.clone(),
+                "phase8a-reconnect-write-fail".to_string(),
+                rx.clone(),
+                metrics.clone(),
+                shutdown,
+                Framing::NonTransparent,
+                Some(ReconnectConfig {
+                    max_attempts: Some(5),
+                    initial_backoff_ms: 10,
+                    max_backoff_ms: 100,
+                    multiplier: 2.0,
+                }),
+            ));
+
+            // Ждём RST на stream1 → sender's first write fail.
+            drop1_rx.await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            // Huge msg (512 KiB) → sender's write_all блокируется на kernel
+            // TCP send buffer → затем RST → write fail. Тест гонко-зависимый,
+            // но errors_total >= 2 гарантирован благодаря второму msg ниже.
+            let huge = vec![b'X'; 512 * 1024];
+            tx.send(Bytes::from(huge.clone())).await.unwrap();
+            // Второй msg гарантирует что после re-write (success или fail)
+            // будет ещё write attempt, который fail'нет на RST'd stream.
+            tx.send(Bytes::from(huge)).await.unwrap();
+
+            // Ждём RST на stream2 → sender's re-write должен fail (или быть
+            // близок к fail).
+            drop2_rx.await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            drop(tx);
+
+            let result = tokio::time::timeout(std::time::Duration::from_secs(10), sender_handle)
+                .await
+                .expect("sender должен завершиться")
+                .unwrap();
+            assert!(result.is_ok());
+
+            // PR-fix (v10.7.16+): timeout на server.await — иначе тест зависнет если
+            // sender не сделает reconnect или race condition в TCP стеке.
+            // Server уже закончил (RST-drop'нул оба stream'а) — это timeout safety net.
+            let server_result =
+                tokio::time::timeout(std::time::Duration::from_secs(3), server).await;
+            if server_result.is_err() {
+                // timeout safety net сработал — тест всё равно должен пройти если
+                // errors_total >= 2 (race-prone но мы уже подождали drop2_rx).
             }
-            // Stream2: sender's reconnect. Read exactly 4 KiB → RST-drop.
-            if let Ok((mut stream2, _)) = listener.accept().await {
-                let mut buf = vec![0u8; 4096];
-                let _ = stream2.read_exact(&mut buf).await;
-                let std_stream = stream2.into_std().unwrap();
-                let sock = Socket::from(std_stream);
-                sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                    .unwrap();
-                drop(sock);
-                let _ = drop2_tx.send(());
-            }
-        });
 
-        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
-        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
-        let metrics = create_metrics().unwrap();
-        let shutdown = CancellationToken::new();
+            // errors_total >= 2: гарантировано через (1) initial write fail +
+            // (2) либо re-send fail (line 124) либо второй msg fail (line 84).
+            let errors = metrics
+                .errors_total
+                .get_metric_with_label_values(&[&addr])
+                .unwrap();
+            assert!(
+                errors.get() >= 2.0,
+                "errors_total должен быть >= 2, got {}",
+                errors.get()
+            );
 
-        let sender_handle = tokio::spawn(target_sender_tcp(
-            addr.clone(),
-            "phase8a-reconnect-write-fail".to_string(),
-            rx.clone(),
-            metrics.clone(),
-            shutdown,
-            Framing::NonTransparent,
-            Some(ReconnectConfig {
-                max_attempts: Some(5),
-                initial_backoff_ms: 10,
-                max_backoff_ms: 100,
-                multiplier: 2.0,
-            }),
-        ));
+            let reconnects = metrics
+                .reconnects_total
+                .get_metric_with_label_values(&["tcp", &addr])
+                .unwrap();
+            assert!(
+                reconnects.get() >= 1.0,
+                "reconnects_total должен быть >= 1, got {}",
+                reconnects.get()
+            );
 
-        // Ждём RST на stream1 → sender's first write fail.
-        drop1_rx.await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-
-        // Huge msg (512 KiB) → sender's write_all блокируется на kernel
-        // TCP send buffer → затем RST → write fail. Тест гонко-зависимый,
-        // но errors_total >= 2 гарантирован благодаря второму msg ниже.
-        let huge = vec![b'X'; 512 * 1024];
-        tx.send(Bytes::from(huge.clone())).await.unwrap();
-        // Второй msg гарантирует что после re-write (success или fail)
-        // будет ещё write attempt, который fail'нет на RST'd stream.
-        tx.send(Bytes::from(huge)).await.unwrap();
-
-        // Ждём RST на stream2 → sender's re-write должен fail (или быть
-        // близок к fail).
-        drop2_rx.await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        drop(tx);
-
-        let result = tokio::time::timeout(std::time::Duration::from_secs(10), sender_handle)
-            .await
-            .expect("sender должен завершиться")
-            .unwrap();
-        assert!(result.is_ok());
-
-        // PR-fix (v10.7.16+): timeout на server.await — иначе тест зависнет если
-        // sender не сделает reconnect или race condition в TCP стеке.
-        // Server уже закончил (RST-drop'нул оба stream'а) — это timeout safety net.
-        let server_result = tokio::time::timeout(std::time::Duration::from_secs(3), server).await;
-        if server_result.is_err() {
-            // timeout safety net сработал — тест всё равно должен пройти если
-            // errors_total >= 2 (race-prone но мы уже подождали drop2_rx).
-        }
-
-        // errors_total >= 2: гарантировано через (1) initial write fail +
-        // (2) либо re-send fail (line 124) либо второй msg fail (line 84).
-        let errors = metrics
-            .errors_total
-            .get_metric_with_label_values(&[&addr])
-            .unwrap();
-        assert!(
-            errors.get() >= 2.0,
-            "errors_total должен быть >= 2, got {}",
-            errors.get()
-        );
-
-        let reconnects = metrics
-            .reconnects_total
-            .get_metric_with_label_values(&["tcp", &addr])
-            .unwrap();
-        assert!(
-            reconnects.get() >= 1.0,
-            "reconnects_total должен быть >= 1, got {}",
-            reconnects.get()
-        );
-
-        // server уже consumed в timeout выше — drop для JoinHandle cleanup.
-            }).await;
+            // server уже consumed в timeout выше — drop для JoinHandle cleanup.
+        })
+        .await;
     }
 
     /// Phase 8a: write fail → reconnect attempts exhausted (Some(Err))
@@ -642,83 +646,84 @@ mod tests {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // Accept первый connect + RST drop + signal. Listener dropped в конце
-        // closure → reconnect attempts все будут connection refused.
-        tokio::spawn(async move {
-            if let Ok((stream, _)) = listener.accept().await {
-                let std_stream = stream.into_std().unwrap();
-                let sock = socket2::Socket::from(std_stream);
-                sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                    .unwrap();
-                drop(sock);
-                let _ = first_drop_tx.send(());
-            }
-            // listener dropped at end of closure.
-        });
+            // Accept первый connect + RST drop + signal. Listener dropped в конце
+            // closure → reconnect attempts все будут connection refused.
+            tokio::spawn(async move {
+                if let Ok((stream, _)) = listener.accept().await {
+                    let std_stream = stream.into_std().unwrap();
+                    let sock = socket2::Socket::from(std_stream);
+                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                        .unwrap();
+                    drop(sock);
+                    let _ = first_drop_tx.send(());
+                }
+                // listener dropped at end of closure.
+            });
 
-        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
-        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
-        let metrics = create_metrics().unwrap();
-        let shutdown = CancellationToken::new();
+            let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+            let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
+            let metrics = create_metrics().unwrap();
+            let shutdown = CancellationToken::new();
 
-        let sender_handle = tokio::spawn(target_sender_tcp(
-            addr.clone(),
-            "phase8a-exhausted".to_string(),
-            rx.clone(),
-            metrics.clone(),
-            shutdown,
-            Framing::NonTransparent,
-            Some(ReconnectConfig {
-                max_attempts: Some(2), // ровно 2 попытки reconnect.
-                initial_backoff_ms: 10,
-                max_backoff_ms: 50,
-                multiplier: 2.0,
-            }),
-        ));
+            let sender_handle = tokio::spawn(target_sender_tcp(
+                addr.clone(),
+                "phase8a-exhausted".to_string(),
+                rx.clone(),
+                metrics.clone(),
+                shutdown,
+                Framing::NonTransparent,
+                Some(ReconnectConfig {
+                    max_attempts: Some(2), // ровно 2 попытки reconnect.
+                    initial_backoff_ms: 10,
+                    max_backoff_ms: 50,
+                    multiplier: 2.0,
+                }),
+            ));
 
-        // Ждём RST на stream1 → sender's first write гарантированно fail.
-        first_drop_rx.await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            // Ждём RST на stream1 → sender's first write гарантированно fail.
+            first_drop_rx.await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        // 3 сообщения: msg1 → initial write fail → reconnect exhaust → drain msg2 + msg3.
-        tx.send(Bytes::from_static(b"drain-1\n")).await.unwrap();
-        tx.send(Bytes::from_static(b"drain-2\n")).await.unwrap();
-        tx.send(Bytes::from_static(b"drain-3\n")).await.unwrap();
-        drop(tx);
+            // 3 сообщения: msg1 → initial write fail → reconnect exhaust → drain msg2 + msg3.
+            tx.send(Bytes::from_static(b"drain-1\n")).await.unwrap();
+            tx.send(Bytes::from_static(b"drain-2\n")).await.unwrap();
+            tx.send(Bytes::from_static(b"drain-3\n")).await.unwrap();
+            drop(tx);
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(3), sender_handle)
-            .await
-            .expect("sender должен завершиться после drain")
-            .unwrap();
-        assert!(result.is_ok());
+            let result = tokio::time::timeout(std::time::Duration::from_secs(3), sender_handle)
+                .await
+                .expect("sender должен завершиться после drain")
+                .unwrap();
+            assert!(result.is_ok());
 
-        // errors_total: 1 (initial write fail) + 2 (drained: drain-2 + drain-3) = 3.
-        let errors = metrics
-            .errors_total
-            .get_metric_with_label_values(&[&addr])
-            .unwrap();
-        assert_eq!(
-            errors.get(),
-            3.0,
-            "1 initial write fail + 2 drained = 3 errors, got {}",
-            errors.get()
-        );
+            // errors_total: 1 (initial write fail) + 2 (drained: drain-2 + drain-3) = 3.
+            let errors = metrics
+                .errors_total
+                .get_metric_with_label_values(&[&addr])
+                .unwrap();
+            assert_eq!(
+                errors.get(),
+                3.0,
+                "1 initial write fail + 2 drained = 3 errors, got {}",
+                errors.get()
+            );
 
-        // reconnects_total: 2 попытки reconnect.
-        let reconnects = metrics
-            .reconnects_total
-            .get_metric_with_label_values(&["tcp", &addr])
-            .unwrap();
-        assert_eq!(
-            reconnects.get(),
-            2.0,
-            "max_attempts=2 → 2 reconnect attempts recorded"
-        );
-            }).await;
+            // reconnects_total: 2 попытки reconnect.
+            let reconnects = metrics
+                .reconnects_total
+                .get_metric_with_label_values(&["tcp", &addr])
+                .unwrap();
+            assert_eq!(
+                reconnects.get(),
+                2.0,
+                "max_attempts=2 → 2 reconnect attempts recorded"
+            );
+        })
+        .await;
     }
 
     /// Phase 8a: write fail → reconnect attempts cancelled by shutdown
@@ -729,86 +734,87 @@ mod tests {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
 
-        // Accept + RST drop + signal. Listener dropped → reconnect attempts
-        // все будут refused, sender зависнет в backoff до cancel.
-        tokio::spawn(async move {
-            if let Ok((stream, _)) = listener.accept().await {
-                let std_stream = stream.into_std().unwrap();
-                let sock = socket2::Socket::from(std_stream);
-                sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                    .unwrap();
-                drop(sock);
-                let _ = first_drop_tx.send(());
-            }
-        });
+            // Accept + RST drop + signal. Listener dropped → reconnect attempts
+            // все будут refused, sender зависнет в backoff до cancel.
+            tokio::spawn(async move {
+                if let Ok((stream, _)) = listener.accept().await {
+                    let std_stream = stream.into_std().unwrap();
+                    let sock = socket2::Socket::from(std_stream);
+                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                        .unwrap();
+                    drop(sock);
+                    let _ = first_drop_tx.send(());
+                }
+            });
 
-        let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
-        let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
-        let metrics = create_metrics().unwrap();
-        let shutdown = CancellationToken::new();
-        let shutdown_signal = shutdown.clone();
+            let (tx, rx_inner) = mpsc::channel::<Bytes>(16);
+            let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
+            let metrics = create_metrics().unwrap();
+            let shutdown = CancellationToken::new();
+            let shutdown_signal = shutdown.clone();
 
-        let sender_handle = tokio::spawn(target_sender_tcp(
-            addr.clone(),
-            "phase8a-cancel".to_string(),
-            rx.clone(),
-            metrics.clone(),
-            shutdown,
-            Framing::NonTransparent,
-            Some(ReconnectConfig {
-                max_attempts: None, // infinite retries — без cancel зависнет.
-                initial_backoff_ms: 100,
-                max_backoff_ms: 1000,
-                multiplier: 2.0,
-            }),
-        ));
+            let sender_handle = tokio::spawn(target_sender_tcp(
+                addr.clone(),
+                "phase8a-cancel".to_string(),
+                rx.clone(),
+                metrics.clone(),
+                shutdown,
+                Framing::NonTransparent,
+                Some(ReconnectConfig {
+                    max_attempts: None, // infinite retries — без cancel зависнет.
+                    initial_backoff_ms: 100,
+                    max_backoff_ms: 1000,
+                    multiplier: 2.0,
+                }),
+            ));
 
-        // Ждём RST, отправляем msg → sender writes → fails → reconnect loop.
-        first_drop_rx.await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        tx.send(Bytes::from_static(b"before-cancel\n"))
-            .await
-            .unwrap();
-        tx.send(Bytes::from_static(b"orphan\n")).await.unwrap();
-        drop(tx);
+            // Ждём RST, отправляем msg → sender writes → fails → reconnect loop.
+            first_drop_rx.await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            tx.send(Bytes::from_static(b"before-cancel\n"))
+                .await
+                .unwrap();
+            tx.send(Bytes::from_static(b"orphan\n")).await.unwrap();
+            drop(tx);
 
-        // Дать sender войти в reconnect-loop (attempt 1 connect fails, sleep ~50-150ms).
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-        // Cancel shutdown → reconnect_with_backoff returns None → drain.
-        shutdown_signal.cancel();
+            // Дать sender войти в reconnect-loop (attempt 1 connect fails, sleep ~50-150ms).
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            // Cancel shutdown → reconnect_with_backoff returns None → drain.
+            shutdown_signal.cancel();
 
-        let result = tokio::time::timeout(std::time::Duration::from_secs(3), sender_handle)
-            .await
-            .expect("sender должен завершиться после shutdown cancel")
-            .unwrap();
-        assert!(result.is_ok());
+            let result = tokio::time::timeout(std::time::Duration::from_secs(3), sender_handle)
+                .await
+                .expect("sender должен завершиться после shutdown cancel")
+                .unwrap();
+            assert!(result.is_ok());
 
-        // errors_total: 1 (initial write fail) + 1 (drained: orphan) = 2.
-        // before-cancel — это тот msg что ушёл в write_all → fail → record_error.
-        let errors = metrics
-            .errors_total
-            .get_metric_with_label_values(&[&addr])
-            .unwrap();
-        assert!(
-            errors.get() >= 2.0,
-            "initial write fail + drained >= 2 errors, got {}",
-            errors.get()
-        );
+            // errors_total: 1 (initial write fail) + 1 (drained: orphan) = 2.
+            // before-cancel — это тот msg что ушёл в write_all → fail → record_error.
+            let errors = metrics
+                .errors_total
+                .get_metric_with_label_values(&[&addr])
+                .unwrap();
+            assert!(
+                errors.get() >= 2.0,
+                "initial write fail + drained >= 2 errors, got {}",
+                errors.get()
+            );
 
-        // Хотя бы 1 reconnect attempt был сделан.
-        let reconnects = metrics
-            .reconnects_total
-            .get_metric_with_label_values(&["tcp", &addr])
-            .unwrap();
-        assert!(
-            reconnects.get() >= 1.0,
-            "reconnects_total должен быть >= 1, got {}",
-            reconnects.get()
-        );
-            }).await;
+            // Хотя бы 1 reconnect attempt был сделан.
+            let reconnects = metrics
+                .reconnects_total
+                .get_metric_with_label_values(&["tcp", &addr])
+                .unwrap();
+            assert!(
+                reconnects.get() >= 1.0,
+                "reconnects_total должен быть >= 1, got {}",
+                reconnects.get()
+            );
+        })
+        .await;
     }
 }

@@ -468,7 +468,6 @@ mod tests {
             // в flight к моменту sender's first write.
             first_drop_rx.await.unwrap();
             // Дополнительный grace для обработки RST в sender kernel.
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             // Теперь msg: первый write fail → reconnect → re-send success.
             tx.send(Bytes::from_static(b"after-reconnect\n"))
                 .await
@@ -592,7 +591,6 @@ mod tests {
 
             // Ждём RST на stream1 → sender's first write fail.
             drop1_rx.await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
             // Huge msg (512 KiB) → sender's write_all блокируется на kernel
             // TCP send buffer → затем RST → write fail. Тест гонко-зависимый,
@@ -712,7 +710,6 @@ mod tests {
 
             // Ждём RST на stream1 → sender's first write гарантированно fail.
             first_drop_rx.await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
             // 3 сообщения: msg1 → initial write fail → reconnect exhaust → drain msg2 + msg3.
             tx.send(Bytes::from_static(b"drain-1\n")).await.unwrap();
@@ -814,7 +811,6 @@ mod tests {
 
             // Ждём RST, отправляем msg → sender writes → fails → reconnect loop.
             first_drop_rx.await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             tx.send(Bytes::from_static(b"before-cancel\n"))
                 .await
                 .unwrap();

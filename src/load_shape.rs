@@ -441,3 +441,88 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_proptest {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Constant load shape всегда возвращает заданный rate.
+        #[test]
+        fn prop_constant_rate_equals_base(
+            base in 1u64..1000,
+            t in 0u64..10000,
+        ) {
+            let shape = LoadShape::Constant {
+                rate: Some(base as f64),
+            };
+            prop_assert_eq!(shape.rate_at(t as f64, 60.0, 0.0), base as f64);
+        }
+
+        /// Linear ramp всегда остаётся между начальным и конечным rate.
+        #[test]
+        fn prop_linear_rate_within_bounds(
+            start_rate in 0u64..500,
+            end_rate in 0u64..500,
+            duration in 1u64..1000,
+            t in 0u64..2000,
+        ) {
+            let shape = LoadShape::Linear {
+                start_rate: start_rate as f64,
+                end_rate: end_rate as f64,
+            };
+            let rate = shape.rate_at(t as f64, duration as f64, 0.0);
+            let min_rate = start_rate.min(end_rate) as f64;
+            let max_rate = start_rate.max(end_rate) as f64;
+            prop_assert!(rate >= min_rate, "rate {} < min {} at t={}", rate, min_rate, t);
+            prop_assert!(rate <= max_rate, "rate {} > max {} at t={}", rate, max_rate, t);
+        }
+
+        /// Sine load shape всегда возвращает неотрицательный rate.
+        #[test]
+        fn prop_sine_rate_non_negative(
+            base in 1u64..1000,
+            amplitude in 0u64..500,
+            period in 1u64..3600,
+            t in 0u64..10000,
+        ) {
+            let shape = LoadShape::Sine {
+                min_rate: base.saturating_sub(amplitude) as f64,
+                max_rate: (base + amplitude) as f64,
+                period_secs: period as f64,
+            };
+            let rate = shape.rate_at(t as f64, 0.0, 0.0);
+            prop_assert!(rate >= 0.0, "rate must be >= 0, got {} at t={}", rate, t);
+        }
+
+        /// Burst average соответствует duty-cycle weighted average.
+        #[test]
+        fn prop_burst_average_matches_duty_cycle(
+            base in 10u64..1000,
+            burst_rate in 100u64..10000,
+            burst_secs in 1u64..10,
+            every_secs in 10u64..100,
+        ) {
+            let shape = LoadShape::Burst {
+                base_rate: base as f64,
+                burst_rate: burst_rate as f64,
+                burst_secs: burst_secs as f64,
+                every_secs: every_secs as f64,
+            };
+            let total = 100 * every_secs;
+            let sum: f64 = (0..total)
+                .map(|t| shape.rate_at(t as f64, 0.0, 0.0))
+                .sum();
+            let avg = sum / total as f64;
+            let duty_cycle = burst_secs as f64 / every_secs as f64;
+            let expected = burst_rate as f64 * duty_cycle + base as f64 * (1.0 - duty_cycle);
+            prop_assert!(
+                (avg - expected).abs() < 1e-9,
+                "avg {} differs from expected {}",
+                avg,
+                expected
+            );
+        }
+    }
+}

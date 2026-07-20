@@ -622,3 +622,103 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod tests_proptest {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// `AnomalyPlanner::combined_rate_multiplier` всегда > 0.
+        #[test]
+        fn prop_combined_rate_multiplier_positive(
+            burst_interval_secs in 1u64..1000,
+            burst_duration_secs in 1u64..100,
+            burst_multiplier in 0.5f64..10.0,
+        ) {
+            let anomalies = vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: burst_multiplier,
+                    interval_secs: burst_interval_secs as f64,
+                    duration_secs: burst_duration_secs as f64,
+                },
+            }];
+            let planner = AnomalyPlanner::new(&anomalies);
+            for t in 0..2000u64 {
+                let rate = planner.combined_rate_multiplier(t as f64);
+                prop_assert!(rate > 0.0, "rate must be positive, got {} at t={}", rate, t);
+            }
+        }
+
+        /// Burst injection не изменяет rate вне burst window.
+        #[test]
+        fn prop_burst_no_effect_outside_window(
+            burst_interval in 1u64..100,
+            burst_duration in 1u64..50,
+            seed in 0u64..1000,
+        ) {
+            prop_assume!(burst_duration < burst_interval);
+            let anomalies = vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: 5.0,
+                    interval_secs: burst_interval as f64,
+                    duration_secs: burst_duration as f64,
+                },
+            }];
+            let planner = AnomalyPlanner::new(&anomalies);
+            let t = seed * burst_interval + burst_duration;
+            prop_assert_eq!(planner.combined_rate_multiplier(t as f64), 1.0);
+        }
+
+        /// Пустой список аномалий даёт единичный множитель rate.
+        #[test]
+        fn prop_empty_anomalies_yields_unit_rate(t in any::<u64>()) {
+            let planner = AnomalyPlanner::new(&[]);
+            prop_assert_eq!(planner.combined_rate_multiplier(t as f64), 1.0);
+        }
+
+        /// Packet loss детерминирован для одного `(seed, packet_number)`.
+        #[test]
+        fn prop_packet_loss_deterministic(
+            seed in 0u64..1000,
+            loss_percent in 1u32..50,
+            packet_number in 0usize..1000,
+        ) {
+            let anomalies = vec![Anomaly {
+                kind: AnomalyKind::PacketLoss {
+                    loss_percent: loss_percent as f64,
+                },
+            }];
+            let planner = AnomalyPlanner::new(&anomalies);
+            let result1 = planner.should_drop(Some(seed), packet_number);
+            let result2 = planner.should_drop(Some(seed), packet_number);
+            prop_assert_eq!(result1, result2, "should_drop must be deterministic");
+        }
+
+        /// Доля packet loss на большой выборке близка к заданному проценту.
+        #[test]
+        fn prop_packet_loss_distribution(
+            loss_percent in 5u32..50,
+            seed in 0u64..100,
+        ) {
+            let anomalies = vec![Anomaly {
+                kind: AnomalyKind::PacketLoss {
+                    loss_percent: loss_percent as f64,
+                },
+            }];
+            let planner = AnomalyPlanner::new(&anomalies);
+            let trials = 5000usize;
+            let drops = (0..trials)
+                .filter(|&seq| planner.should_drop(Some(seed), seq))
+                .count();
+            let actual_percent = drops as f64 / trials as f64 * 100.0;
+            let target = loss_percent as f64;
+            prop_assert!(
+                (actual_percent - target).abs() < 3.0,
+                "expected ~{}% drops, got {:.2}%",
+                target,
+                actual_percent
+            );
+        }
+    }
+}

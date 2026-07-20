@@ -1872,3 +1872,73 @@ mod tests {
         });
     }
 }
+
+#[cfg(test)]
+mod tests_proptest {
+    use super::*;
+    use crate::config::{Phase, Profile, ShutdownConfig, TargetConfig};
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Произвольный структурно валидный TCP profile проходит validation.
+        #[test]
+        fn prop_valid_profile_has_no_errors(
+            port in 1u16..65535,
+            rate in 1u32..100_000,
+        ) {
+            let profile = Profile {
+                targets: vec![TargetConfig {
+                    address: format!("127.0.0.1:{}", port),
+                    transport: "tcp".into(),
+                    ..Default::default()
+                }],
+                phases: vec![Phase {
+                    name: "test".into(),
+                    messages_per_second: rate as u64,
+                    duration_secs: 60,
+                    templates: vec!["msg {{n}}".into()],
+                    ..Default::default()
+                }],
+                distribution: "round-robin".into(),
+                shutdown: ShutdownConfig::default(),
+                metrics_addr: None,
+            };
+            let errors = validate_profile(&profile);
+            prop_assert!(errors.is_empty(), "valid profile has errors: {:?}", errors);
+        }
+
+        /// Произвольный неизвестный transport всегда даёт InvalidTransport.
+        #[test]
+        fn prop_invalid_transport_always_errors(
+            port in 1u16..65535,
+            bad_transport in "[a-z]{15,30}",
+        ) {
+            let profile = Profile {
+                targets: vec![TargetConfig {
+                    address: format!("127.0.0.1:{}", port),
+                    transport: bad_transport.clone(),
+                    ..Default::default()
+                }],
+                phases: vec![Phase {
+                    name: "test".into(),
+                    duration_secs: 60,
+                    templates: vec!["msg {{n}}".into()],
+                    ..Default::default()
+                }],
+                distribution: "round-robin".into(),
+                shutdown: ShutdownConfig::default(),
+                metrics_addr: None,
+            };
+            let errors = validate_profile(&profile);
+            prop_assert!(
+                errors.iter().any(|error| matches!(
+                    error,
+                    ValidationError::InvalidTransport { value, .. } if value == &bad_transport
+                )),
+                "expected InvalidTransport for {:?}, got: {:?}",
+                bad_transport,
+                errors
+            );
+        }
+    }
+}

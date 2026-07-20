@@ -405,7 +405,6 @@ mod tests {
         // CI race conditions в reconnect path (Phase 8a deadlock).
         let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
             use socket2::Socket;
-            use tokio::io::AsyncBufReadExt;
 
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap().to_string();
@@ -431,8 +430,8 @@ mod tests {
                 // 3. Accept sender's reconnect (2nd attempt) — read msg, return.
                 let (stream2, _) = listener.accept().await.unwrap();
                 let mut reader = tokio::io::BufReader::new(stream2);
-                let mut line = Vec::new();
                 use tokio::io::AsyncBufReadExt;
+                let mut line = Vec::new();
                 let _ = reader.read_until(b'\n', &mut line).await;
                 String::from_utf8_lossy(&line).to_string()
             });

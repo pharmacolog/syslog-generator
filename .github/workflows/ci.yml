@@ -480,7 +480,7 @@ jobs:
         # анонимных uploads (без secret).
         if: always()
         continue-on-error: true
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./lcov.info
           flags: unit

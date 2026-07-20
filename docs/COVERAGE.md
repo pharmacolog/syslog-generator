@@ -1,14 +1,34 @@
 # COVERAGE
 
-> **v10.7.15 current:** данные по coverage берутся из последнего запуска
+> **v10.7.18 current:** данные по coverage берутся из последнего запуска
 > coverage job в CI (`.github/workflows/ci.yml` job `coverage`).
-> Baseline milestones:
-> - **v10.3.0 (Coverage ч.1):** **86.40% lines / 88.36% functions / 86.49% regions**
-> - **v10.4.0 (Coverage ч.2):** **87.07% lines / 89.38% functions / 87.20% regions** (+0.67pp)
-> - **v10.7.15 (Coverage expansion, PR-16):** **89.65% lines / 90.42% functions / 89.53% regions** (+1.77pp от v10.7.9 baseline 87.88%, 25 новых тестов)
 >
-> Coverage gate (≥ 97% lines) **НЕ активирован** — backlog. PR-3 закрывает
-> доки, gate переедет в отдельный release (требует ~50-80 новых unit-тестов).
+> ## Phased rollout history
+>
+> - **v10.3.0 (Coverage ч.1):** 86.40% lines / 88.36% functions / 86.49% regions
+> - **v10.4.0 (Coverage ч.2):** 87.07% lines / 89.38% functions / 87.20% regions (+0.67pp)
+> - **v10.7.15 (PR-16):** 89.65% lines / 90.42% functions / 89.53% regions (+1.77pp)
+> - **v10.7.15 (PR-Q.0/.1):** 91.51% lines (gates ≥ 90% global)
+> - **v10.7.15 (PR-Q.2):** 92.17% lines (gates ≥ 92% global)
+> - **v10.7.15 (PR-Q.3 Phase 8):** 92.88% lines (Phase 8 race tests, partly `#[ignore]`)
+> - **v10.7.15 (PR-Q.4 Phase 9):** 94.16% lines (added proptest in anomaly, load_shape, validate)
+> - **v10.7.18 (Phase 10+11 — current PR):** **94.49% lines** / 94.47% functions / 94.13% regions
+>
+> ## Tier-Based Coverage Targets (codecov component_management)
+>
+> | Tier | Modules | Target | Current | Status |
+> |------|---------|--------|----------|--------|
+> | **Tier 1** (core) | format/* (excl. protobuf), transport/tcp\|udp\|file\|reconnect, payload, validate, anomaly, shutdown, etc. | **97%** | 97–100% | ✅ |
+> | **Tier 2** (complex) | transport/tls, generator/core (TLS/Kafka paths) | **85%** | 89% | ✅ |
+> | **Tier 2** (kafka) | transport/kafka | **70%** | 53% | ⚠️ (requires broker) |
+> | **Tier 2** (protobuf) | format/protobuf (dead code in assert_eq! macros) | **85%** | 95% | ✅ |
+> | **Tier 3** (excluded) | main.rs (CLI entrypoint), payload_proptests.rs (test-only) | n/a | n/a | n/a |
+>
+> **Global gate: ≥ 90%** (`--fail-under-lines=90` in CI).
+> **Tier 1 enforced via codecov component_management (PR-Q Phase 0+1).**
+>
+> Phase 12 (future): increase Tier 2 (tls/kafka) to 80%+ via mock-broker
+> for kafka + rustls mock for tls.
 
 ## Что такое coverage
 

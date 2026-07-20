@@ -409,6 +409,7 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap().to_string();
             let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            let (server_started_tx, server_started_rx) = tokio::sync::oneshot::channel::<()>();
 
             // PR-fix (v10.7.16+): keep listener alive ДО sender's first connect (CI race).
             // CI fast runners: server task spawn'ится → сразу exits → listener dropped
@@ -417,6 +418,8 @@ mod tests {
             // 3) accept sender's reconnect, read msg, 4) return msg (НЕ drop listener).
             let server = tokio::spawn(async move {
                 // 1. Accept sender's first connect (sender initial — успех).
+                // PR-fix: signal server started → sender waits for us.
+                let _ = server_started_tx.send(());
                 let (mut stream1, _) = listener.accept().await.unwrap();
                 // 2. RST drop — sender's write() fail.
                 use tokio::io::AsyncReadExt;
@@ -440,6 +443,11 @@ mod tests {
             let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
             let metrics = create_metrics().unwrap();
             let shutdown = CancellationToken::new();
+
+            // PR-fix (v10.7.16+): wait for server task started.
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(200), server_started_rx)
+                .await
+                .expect("server task did not start in 200ms");
 
             let sender_handle = tokio::spawn(target_sender_tcp(
                 addr.clone(),
@@ -539,6 +547,7 @@ mod tests {
             // read 4 KiB → RST-drop, signal. Listener dropped в конце closure
             // → последующие reconnects (если sender loops again) будут refused.
             let server = tokio::spawn(async move {
+                // PR-fix: signal server started → sender waits for us.
                 // Stream1: RST-drop immediately.
                 if let Ok((stream1, _)) = listener.accept().await {
                     let std_stream = stream1.into_std().unwrap();
@@ -655,12 +664,17 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap().to_string();
             let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            // PR-fix: explicit sync server↔sender (no sleep) — server signal'it server_started
+            // when accept() starts, sender waits before connect → no CI race.
+            let (server_started_tx, server_started_rx) = tokio::sync::oneshot::channel::<()>();
 
             // PR-fix (v10.7.16+): keep listener alive для sender's reconnect attempts
             // (CI fast runners: sender initial connect ДО listener accept → ECONNREFUSED
             // → reconnects_total = 0 → assertion fails. Server должен accept sender,
             // RST, sleep 2s (sender делает max_attempts reconnect attempts), потом drop).
             tokio::spawn(async move {
+                // PR-fix: signal server started → sender waits for us.
+                let _ = server_started_tx.send(());
                 if let Ok((stream, _)) = listener.accept().await {
                     let std_stream = stream.into_std().unwrap();
                     let sock = socket2::Socket::from(std_stream);
@@ -675,6 +689,11 @@ mod tests {
             let rx = Arc::new(parking_lot::Mutex::new(rx_inner));
             let metrics = create_metrics().unwrap();
             let shutdown = CancellationToken::new();
+
+            // PR-fix (v10.7.16+): wait for server task started before sender connects.
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(200), server_started_rx)
+                .await
+                .expect("server task did not start in 200ms");
 
             let sender_handle = tokio::spawn(target_sender_tcp(
                 addr.clone(),
@@ -750,10 +769,13 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap().to_string();
             let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
+            let (server_started_tx, server_started_rx) = tokio::sync::oneshot::channel::<()>();
 
             // Accept + RST drop + signal. Listener dropped → reconnect attempts
             // все будут refused, sender зависнет в backoff до cancel.
             tokio::spawn(async move {
+                // PR-fix: signal server started → sender waits for us.
+                let _ = server_started_tx.send(());
                 if let Ok((stream, _)) = listener.accept().await {
                     let std_stream = stream.into_std().unwrap();
                     let sock = socket2::Socket::from(std_stream);
@@ -769,6 +791,11 @@ mod tests {
             let metrics = create_metrics().unwrap();
             let shutdown = CancellationToken::new();
             let shutdown_signal = shutdown.clone();
+
+            // PR-fix (v10.7.16+): wait for server task started.
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(200), server_started_rx)
+                .await
+                .expect("server task did not start in 200ms");
 
             let sender_handle = tokio::spawn(target_sender_tcp(
                 addr.clone(),

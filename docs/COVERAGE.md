@@ -152,4 +152,4 @@ open coverage/index.html
 
 # Проверить, что новый код покрыт:
 cargo llvm-cov --features kafka --lib 2>&1 | grep "src/your_new_module.rs"
-```
+```# CI re-trigger 1784541258

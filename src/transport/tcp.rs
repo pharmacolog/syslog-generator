@@ -411,23 +411,28 @@ mod tests {
             let addr = listener.local_addr().unwrap().to_string();
             let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
 
-            // Server: первый accept → RST drop (linger=0) — sender's write
-            // получит ECONNRESET. Второй accept (sender's reconnect) — читаем
-            // сообщение до newline.
+            // PR-fix (v10.7.16+): keep listener alive ДО sender's first connect (CI race).
+            // CI fast runners: server task spawn'ится → сразу exits → listener dropped
+            // ДО sender's connect() → sender initial fail → reconnects_total = 0.
+            // Server structure: 1) accept sender's first connect, 2) RST drop, signal,
+            // 3) accept sender's reconnect, read msg, 4) return msg (НЕ drop listener).
             let server = tokio::spawn(async move {
-                // First connection: RST drop.
-                if let Ok((stream1, _)) = listener.accept().await {
-                    let std_stream = stream1.into_std().unwrap();
-                    let sock = Socket::from(std_stream);
-                    sock.set_linger(Some(std::time::Duration::from_secs(0)))
-                        .unwrap();
-                    drop(sock); // → RST sent immediately.
-                    let _ = first_drop_tx.send(());
-                }
-                // Second connection: reconnected sender.
+                // 1. Accept sender's first connect (sender initial — успех).
+                let (mut stream1, _) = listener.accept().await.unwrap();
+                // 2. RST drop — sender's write() fail.
+                use tokio::io::AsyncReadExt;
+                let _ = stream1.read(&mut [0u8; 1]).await;
+                let std_stream = stream1.into_std().unwrap();
+                let sock = Socket::from(std_stream);
+                sock.set_linger(Some(std::time::Duration::from_secs(0)))
+                    .unwrap();
+                drop(sock);
+                let _ = first_drop_tx.send(());
+                // 3. Accept sender's reconnect (2nd attempt) — read msg, return.
                 let (stream2, _) = listener.accept().await.unwrap();
                 let mut reader = tokio::io::BufReader::new(stream2);
                 let mut line = Vec::new();
+                use tokio::io::AsyncBufReadExt;
                 let _ = reader.read_until(b'\n', &mut line).await;
                 String::from_utf8_lossy(&line).to_string()
             });
@@ -652,8 +657,10 @@ mod tests {
             let addr = listener.local_addr().unwrap().to_string();
             let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
 
-            // Accept первый connect + RST drop + signal. Listener dropped в конце
-            // closure → reconnect attempts все будут connection refused.
+            // PR-fix (v10.7.16+): keep listener alive для sender's reconnect attempts
+            // (CI fast runners: sender initial connect ДО listener accept → ECONNREFUSED
+            // → reconnects_total = 0 → assertion fails. Server должен accept sender,
+            // RST, sleep 2s (sender делает max_attempts reconnect attempts), потом drop).
             tokio::spawn(async move {
                 if let Ok((stream, _)) = listener.accept().await {
                     let std_stream = stream.into_std().unwrap();
@@ -663,7 +670,6 @@ mod tests {
                     drop(sock);
                     let _ = first_drop_tx.send(());
                 }
-                // listener dropped at end of closure.
             });
 
             let (tx, rx_inner) = mpsc::channel::<Bytes>(16);

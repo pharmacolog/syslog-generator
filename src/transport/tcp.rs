@@ -399,7 +399,6 @@ mod tests {
     /// мог дождаться гарантированного RST перед отправкой msg (иначе race:
     /// msg может попасть в kernel buffer до RST, write вернёт Ok, sender
     /// не узнает о broken pipe).
-    #[ignore = "flaky in CI (Phase 8a reconnect path — race condition в target_sender_tcp) — see PR-fix branch"]
     #[tokio::test]
     async fn phase8a_tcp_write_failure_triggers_reconnect_and_resends() {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
@@ -642,7 +641,6 @@ mod tests {
     /// → drain_as_errors → return Ok. Покрывает строки 127-131 (ветка
     /// `Some(Err(_))`). Barrier pattern: server сигналит после RST-drop,
     /// test ждёт перед отправкой msg чтобы избежать kernel-buffer race.
-    #[ignore = "flaky in CI (Phase 8a reconnect path — race condition в target_sender_tcp) — see PR-fix branch"]
     #[tokio::test]
     async fn phase8a_tcp_reconnect_exhausted_drains_queue() {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
@@ -731,7 +729,6 @@ mod tests {
     /// Phase 8a: write fail → reconnect attempts cancelled by shutdown
     /// (None) → drain_as_errors → return Ok. Покрывает строки 127-131
     /// (ветка `None`). Barrier: server сигналит после RST, test ждёт.
-    #[ignore = "flaky in CI (Phase 8a reconnect path — race condition в target_sender_tcp) — see PR-fix branch"]
     #[tokio::test]
     async fn phase8a_tcp_reconnect_cancelled_drains_queue() {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для

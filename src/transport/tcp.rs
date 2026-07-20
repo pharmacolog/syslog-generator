@@ -343,6 +343,9 @@ mod tests {
     /// и завершается. Покрывает строки 47-58.
     #[tokio::test]
     async fn phase8a_tcp_initial_connect_failure_drains_and_exits() {
+        // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
+        // CI race conditions в reconnect path (Phase 8a deadlock).
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         // Bind + drop → гарантированный connection refused.
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
@@ -385,6 +388,7 @@ mod tests {
             3.0,
             "1 (initial connect error) + 2 (drained) = 3 errors"
         );
+            }).await;
     }
 
     /// Phase 8a: write fail на успешно-установленном соединении → reconnect
@@ -396,6 +400,9 @@ mod tests {
     /// не узнает о broken pipe).
     #[tokio::test]
     async fn phase8a_tcp_write_failure_triggers_reconnect_and_resends() {
+        // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
+        // CI race conditions в reconnect path (Phase 8a deadlock).
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         use socket2::Socket;
         use tokio::io::AsyncBufReadExt;
 
@@ -490,6 +497,7 @@ mod tests {
             .get_metric_with_label_values(&[&addr])
             .unwrap();
         assert_eq!(errors.get(), 1.0, "1 error: initial write fail");
+            }).await;
     }
 
     /// Phase 8a: write fail → reconnect success → re-send FAILURE
@@ -508,6 +516,9 @@ mod tests {
     /// 107-125), независимо от того, success или fail был re-send.
     #[tokio::test]
     async fn phase8a_tcp_write_failure_after_reconnect_records_error() {
+        // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
+        // CI race conditions в reconnect path (Phase 8a deadlock).
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         use socket2::Socket;
         use tokio::io::AsyncReadExt;
 
@@ -619,6 +630,7 @@ mod tests {
         );
 
         // server уже consumed в timeout выше — drop для JoinHandle cleanup.
+            }).await;
     }
 
     /// Phase 8a: write fail → reconnect attempts exhausted (Some(Err))
@@ -627,6 +639,9 @@ mod tests {
     /// test ждёт перед отправкой msg чтобы избежать kernel-buffer race.
     #[tokio::test]
     async fn phase8a_tcp_reconnect_exhausted_drains_queue() {
+        // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
+        // CI race conditions в reconnect path (Phase 8a deadlock).
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -703,6 +718,7 @@ mod tests {
             2.0,
             "max_attempts=2 → 2 reconnect attempts recorded"
         );
+            }).await;
     }
 
     /// Phase 8a: write fail → reconnect attempts cancelled by shutdown
@@ -710,6 +726,9 @@ mod tests {
     /// (ветка `None`). Barrier: server сигналит после RST, test ждёт.
     #[tokio::test]
     async fn phase8a_tcp_reconnect_cancelled_drains_queue() {
+        // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
+        // CI race conditions в reconnect path (Phase 8a deadlock).
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let (first_drop_tx, first_drop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -790,5 +809,6 @@ mod tests {
             "reconnects_total должен быть >= 1, got {}",
             reconnects.get()
         );
+            }).await;
     }
 }

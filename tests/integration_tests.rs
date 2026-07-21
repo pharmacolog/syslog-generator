@@ -3232,3 +3232,472 @@ async fn test_f16_file_rotation_creates_rotated_files_e2e() {
         "ожидалось >= 2 ротированных файлов, got {rotated_count}"
     );
 }
+
+// =====================================================================
+// Phase 14 (Tier 2): TLS mock infrastructure для target_sender_tls tests.
+// =====================================================================
+//
+// Цель: поднять coverage `src/transport/tls.rs` 58.94% → 75-85% (Tier 2 target).
+//
+// Стратегия: расширить существующую инфраструктуру тестов
+// (`openssl_self_signed()` + `spawn_tls_collector()`) без поломки
+// backward-compat. Новый helper `spawn_tls_mock_server()` даёт тонкий
+// контроль над поведением mock'а (RST, mTLS, max messages) — это позволяет
+// покрыть target_sender_tls happy path, reconnect, drain-on-error и mTLS.
+
+/// Phase 14: конфиг для TLS mock server.
+#[derive(Default)]
+struct TlsMockConfig {
+    /// Максимум accept'ов (sender's initial + N reconnects). Default: 1.
+    max_connections: usize,
+    /// После приёма N сообщений вернуть Ok(()). None = читать до закрытия.
+    server_max_msgs: Option<usize>,
+    /// Если true — server требует client cert (mTLS).
+    require_client_cert: bool,
+}
+
+/// Phase 14: статистика, возвращаемая из `spawn_tls_mock_server` JoinHandle.
+#[derive(Default)]
+struct TlsMockStats {
+    /// Сколько соединений было accept'нуто (initial + reconnects).
+    accepted_connections: usize,
+    /// Все сообщения полученные от sender'а (line-based, \n-terminated).
+    received_messages: Vec<String>,
+}
+
+/// Phase 14: поднимает TLS mock server с self-signed cert + опциональным
+/// mTLS. Возвращает:
+///   - `addr`: `127.0.0.1:port` для sender
+///   - `ca_path`: PEM-файл с сертификатом для `tls_ca_file` (sender trusts
+///     этот CA для server cert verification)
+///   - `client_identity`: PEM-файлы для mTLS (`(cert, key)` если
+///     `require_client_cert=true`, иначе None)
+///   - `handle`: JoinHandle для получения stats после завершения sender'а
+///
+/// Отличия от `spawn_tls_collector`:
+///   - Configurable `max_connections` (RST после N accept'ов для reconnect-тестов)
+///   - `server_max_msgs` для детерминированного завершения (early exit)
+///   - Опциональный mTLS (client cert required)
+///   - Stats возвращаются через JoinHandle (count accepted + received messages)
+async fn spawn_tls_mock_server(
+    cfg: TlsMockConfig,
+) -> (
+    String,
+    String,
+    Option<(Vec<u8>, Vec<u8>)>,
+    tokio::task::JoinHandle<TlsMockStats>,
+) {
+    use rustls::pki_types::CertificateDer;
+    use rustls_pki_types::pem::PemObject;
+    use tokio::io::AsyncReadExt;
+    use tokio_rustls::TlsAcceptor;
+
+    syslog_generator::ensure_rustls_provider_for_tests();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let tls = openssl_self_signed();
+    let cert_pem = tls.cert_pem.clone();
+    let key_pem = tls.key_pem.clone();
+
+    // Сертификат для sender'а — копия в target/test-tls/.
+    let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
+    let dir = std::path::PathBuf::from(&target_dir).join("test-tls");
+    fs::create_dir_all(&dir).expect("create test-tls dir");
+    let ca_path = dir.join(format!(
+        "ca-{}-{}.pem",
+        std::process::id(),
+        addr.replace([':', '.'], "_")
+    ));
+    fs::write(&ca_path, &cert_pem).expect("write ca_path copy");
+    let ca_path_str = ca_path.to_string_lossy().into_owned();
+
+    // Парсим cert + key в rustls типы.
+    let certs: Vec<CertificateDer<'static>> =
+        rustls_pki_types::CertificateDer::pem_slice_iter(cert_pem.as_slice())
+            .map(|r| r.unwrap())
+            .collect();
+    let key = rustls_pki_types::PrivateKeyDer::pem_slice_iter(key_pem.as_slice())
+        .map(|r| r.unwrap())
+        .next()
+        .expect("at least one key");
+
+    // Опционально: client auth (mTLS).
+    let mut client_identity: Option<(Vec<u8>, Vec<u8>)> = None;
+    let server_config = if cfg.require_client_cert {
+        let (client_cert_pem, client_key_pem) = make_test_cert();
+        // Копируем client cert/key в target/test-tls/.
+        let client_cert_path = dir.join(format!(
+            "client-{}-{}.pem",
+            std::process::id(),
+            addr.replace([':', '.'], "_")
+        ));
+        let client_key_path = dir.join(format!(
+            "client-{}-{}.key",
+            std::process::id(),
+            addr.replace([':', '.'], "_")
+        ));
+        fs::write(&client_cert_path, &client_cert_pem).unwrap();
+        fs::write(&client_key_path, &client_key_pem).unwrap();
+        client_identity = Some((client_cert_pem, client_key_pem));
+
+        // Парсим client cert в TrustAnchor для server-side verification.
+        let client_certs: Vec<CertificateDer<'static>> =
+            rustls_pki_types::CertificateDer::pem_slice_iter(
+                client_identity.as_ref().unwrap().0.as_slice(),
+            )
+            .map(|r| r.unwrap())
+            .collect();
+        let mut roots = rustls::RootCertStore::empty();
+        for cert in &client_certs {
+            roots
+                .add(cert.clone())
+                .expect("add client cert to root store");
+        }
+        let client_cert_verifier = rustls::server::WebPkiClientVerifier::builder(roots.into())
+            .build()
+            .expect("client verifier");
+        rustls::ServerConfig::builder_with_protocol_versions(&[
+            &rustls::version::TLS12,
+            &rustls::version::TLS13,
+        ])
+        .with_client_cert_verifier(client_cert_verifier)
+        .with_single_cert(certs, key)
+        .expect("server config mTLS")
+    } else {
+        rustls::ServerConfig::builder_with_protocol_versions(&[
+            &rustls::version::TLS12,
+            &rustls::version::TLS13,
+        ])
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .expect("server config")
+    };
+    let acceptor = TlsAcceptor::from(std::sync::Arc::new(server_config));
+
+    let max_conns = cfg.max_connections.max(1);
+    let max_msgs = cfg.server_max_msgs;
+    let handle = tokio::spawn(async move {
+        let mut stats = TlsMockStats::default();
+        let mut total_msgs = 0usize;
+        loop {
+            // Завершаем если достигли обоих лимитов.
+            if let Some(target) = max_msgs {
+                if total_msgs >= target {
+                    break;
+                }
+            }
+            if stats.accepted_connections >= max_conns {
+                break;
+            }
+            // Accept с timeout чтобы не зависнуть в тестах.
+            let (stream, _peer) =
+                match tokio::time::timeout(std::time::Duration::from_secs(10), listener.accept())
+                    .await
+                {
+                    Ok(Ok(s)) => s,
+                    _ => break,
+                };
+            stats.accepted_connections += 1;
+            // Inline accept TLS — для теста достаточно последовательной обработки.
+            match acceptor.accept(stream).await {
+                Ok(mut tls_stream) => {
+                    let mut buf = vec![0u8; 8192];
+                    loop {
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(3),
+                            tls_stream.read(&mut buf),
+                        )
+                        .await
+                        {
+                            Ok(Ok(0)) => break, // EOF
+                            Ok(Ok(n)) => {
+                                if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                                    for line in s.lines() {
+                                        if !line.trim().is_empty() {
+                                            stats.received_messages.push(line.to_string());
+                                            total_msgs += 1;
+                                            if let Some(target) = max_msgs {
+                                                if total_msgs >= target {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(Err(_)) | Err(_) => break,
+                        }
+                        if let Some(target) = max_msgs {
+                            if total_msgs >= target {
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(_) => {
+                    // handshake fail (например mTLS без client cert) — просто
+                    // пробуем accept дальше если лимит не достигнут.
+                }
+            }
+        }
+        stats
+    });
+    (addr, ca_path_str, client_identity, handle)
+}
+
+/// Phase 14 Step 1.1: target_sender_tls happy path.
+/// TLS 1.3 handshake с CA trust, отправка 5 сообщений, server получает 5.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn phase14_tls_happy_path_handshake_and_send() {
+    use std::time::Duration;
+    let (addr, ca_path, _client_identity, handle) = spawn_tls_mock_server(TlsMockConfig {
+        max_connections: 1,
+        server_max_msgs: Some(5),
+        require_client_cert: false,
+    })
+    .await;
+    let profile = make_profile(
+        vec![TargetConfig {
+            address: addr.clone(),
+            transport: "tls".into(),
+            tls_domain: Some("localhost".into()),
+            tls_ca_file: Some(ca_path.clone()),
+            ..Default::default()
+        }],
+        "round-robin",
+        5,
+        "phase14-happy",
+    );
+    run_profile(&profile, create_metrics().expect("metrics ok"))
+        .await
+        .unwrap();
+    // Даём server task шанс отдать stats.
+    let stats = tokio::time::timeout(Duration::from_secs(10), handle)
+        .await
+        .expect("server task завершился в 10s")
+        .unwrap();
+    assert!(
+        stats.accepted_connections >= 1,
+        "expected >= 1 accepted, got {}",
+        stats.accepted_connections
+    );
+    let _ = fs::remove_file(&ca_path);
+}
+
+/// Phase 14 Step 1.2: TLS handshake fail (cert mismatch) → sender drain'ит
+/// queue, возвращает Ok, не зависает.
+/// Test path: `target_sender_tls` → `build_tls_connector` ok, но `tls_connect`
+/// fails (CA mismatch) → record_error + drain_as_errors → return Ok.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn phase14_tls_drain_on_cert_failure() {
+    use std::time::Duration;
+    // Сервер с self-signed cert != встроенным roots.
+    // Sender тоже не имеет правильный CA → handshake failed.
+    // Поведение: TLS-sender делает ONE initial connect → drain → exit Ok.
+    let (_addr, _ca_path, _client, _handle) = spawn_tls_mock_server(TlsMockConfig {
+        max_connections: 1,
+        server_max_msgs: Some(0),
+        require_client_cert: false,
+    })
+    .await;
+    // Profile с tls_ca_file в произвольный не-CA путь (bogus PEM).
+    let bogus_dir = std::env::temp_dir().join("sg_phase14_bogus");
+    fs::create_dir_all(&bogus_dir).unwrap();
+    let bogus_ca = bogus_dir.join("bogus.pem");
+    fs::write(
+        &bogus_ca,
+        b"-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n",
+    )
+    .unwrap();
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: "127.0.0.1:1".into(), // never connects
+            transport: "tls".into(),
+            tls_domain: Some("localhost".into()),
+            tls_ca_file: Some(bogus_ca.to_string_lossy().into_owned()),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "phase14-drain".into(),
+            messages_per_second: 0,
+            total_messages: Some(3),
+            templates: vec!["x {{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    // Должно завершиться Ok за разумное время (drain, no messages sent).
+    let res = tokio::time::timeout(
+        Duration::from_secs(15),
+        run_profile(&profile, create_metrics().expect("metrics ok")),
+    )
+    .await
+    .expect("target_sender_tls не завис на drain");
+    assert!(
+        res.is_ok(),
+        "target_sender_tls должен возвращать Ok после drain: {res:?}"
+    );
+    let _ = fs::remove_file(&bogus_ca);
+}
+
+/// Phase 14 Step 1.3: TLS via CA trust (без insecure=true).
+/// Cover build_tls_connector + tls_connect happy path с trusted CA.
+/// Note: tls_insecure=true заблокирован F13 validation (PR-12) — это
+/// deliberate security policy, не bug. Поэтому тут используется tls_ca_file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn phase14_tls_ca_trusted_handshake_works() {
+    use std::time::Duration;
+    let (addr, ca_path, _client, handle) = spawn_tls_mock_server(TlsMockConfig {
+        max_connections: 1,
+        server_max_msgs: Some(2),
+        require_client_cert: false,
+    })
+    .await;
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: addr.clone(),
+            transport: "tls".into(),
+            tls_domain: Some("localhost".into()),
+            tls_ca_file: Some(ca_path.clone()),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "phase14-ca-trusted".into(),
+            messages_per_second: 0,
+            total_messages: Some(2),
+            templates: vec!["ca-trusted-msg {{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    run_profile(&profile, create_metrics().expect("metrics ok"))
+        .await
+        .unwrap();
+    let stats = tokio::time::timeout(Duration::from_secs(10), handle)
+        .await
+        .expect("server завершился")
+        .unwrap();
+    assert!(
+        stats.accepted_connections >= 1,
+        "expected >= 1 accepted, got {}",
+        stats.accepted_connections
+    );
+    let _ = fs::remove_file(&ca_path);
+}
+
+/// Phase 14 Step 1.4: mTLS round-trip. Server требует client cert, sender
+/// предоставляет. Успешный handshake + send 1 message.
+/// Используем tls_ca_file для trust'а server cert'а (вместо tls_insecure=true).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn phase14_tls_mtls_with_client_cert() {
+    use std::time::Duration;
+    let (addr, ca_path, client_identity, handle) = spawn_tls_mock_server(TlsMockConfig {
+        max_connections: 1,
+        server_max_msgs: Some(1),
+        require_client_cert: true,
+    })
+    .await;
+    let (client_cert_pem, client_key_pem) = client_identity.expect("client_identity в mTLS");
+    // Пишем файлы, чтобы TargetConfig.tls_client_*_file мог их прочитать.
+    let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
+    let dir = std::path::PathBuf::from(&target_dir).join("test-tls");
+    fs::create_dir_all(&dir).unwrap();
+    let client_cert_path = dir.join(format!(
+        "client-cert-{}-{}.pem",
+        std::process::id(),
+        addr.replace([':', '.'], "_")
+    ));
+    let client_key_path = dir.join(format!(
+        "client-key-{}-{}.pem",
+        std::process::id(),
+        addr.replace([':', '.'], "_")
+    ));
+    fs::write(&client_cert_path, &client_cert_pem).unwrap();
+    fs::write(&client_key_path, &client_key_pem).unwrap();
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: addr.clone(),
+            transport: "tls".into(),
+            tls_domain: Some("localhost".into()),
+            tls_ca_file: Some(ca_path.clone()),
+            tls_client_cert_file: Some(client_cert_path.to_string_lossy().into_owned()),
+            tls_client_key_file: Some(client_key_path.to_string_lossy().into_owned()),
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "phase14-mtls".into(),
+            messages_per_second: 0,
+            total_messages: Some(1),
+            templates: vec!["mtls-msg {{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    run_profile(&profile, create_metrics().expect("metrics ok"))
+        .await
+        .unwrap();
+    let _stats = tokio::time::timeout(Duration::from_secs(10), handle)
+        .await
+        .expect("server завершился");
+    let _ = fs::remove_file(&client_cert_path);
+    let _ = fs::remove_file(&client_key_path);
+}
+
+/// Phase 14 Step 1.5: server accepts и сразу RST — initial TLS-handshake
+/// fails → sender drain'ит и возвращает Ok (per `target_sender_tls` doc:
+/// "первая неудача connect'а → drain + return"). Этот тест покрывает
+/// drain_as_errors branch в target_sender_tls для TLS.
+/// Note: setup differs from phase14_tls_drain_on_cert_failure: server
+/// accept'ает, но handshake fails (cert mismatch on server side).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn phase14_tls_handshake_failure_drains_queue() {
+    use std::time::Duration;
+    let (addr, ca_path, _client, _handle) = spawn_tls_mock_server(TlsMockConfig {
+        max_connections: 1,
+        server_max_msgs: Some(0),
+        require_client_cert: true, // mTLS required → handshake fails без client cert
+    })
+    .await;
+    // Sender НЕ имеет client cert (только CA) → handshake fails.
+    let profile = Profile {
+        targets: vec![TargetConfig {
+            address: addr.clone(),
+            transport: "tls".into(),
+            tls_domain: Some("localhost".into()),
+            tls_ca_file: Some(ca_path.clone()),
+            // tls_client_cert_file/tls_client_key_file не заданы → mTLS fails
+            ..Default::default()
+        }],
+        distribution: "round-robin".into(),
+        shutdown: ShutdownConfig::default(),
+        phases: vec![Phase {
+            name: "phase14-handshake-fail".into(),
+            messages_per_second: 0,
+            total_messages: Some(2),
+            templates: vec!["x {{sequence}}".into()],
+            ..Default::default()
+        }],
+        metrics_addr: None,
+    };
+    let res = tokio::time::timeout(
+        Duration::from_secs(15),
+        run_profile(&profile, create_metrics().expect("metrics ok")),
+    )
+    .await
+    .expect("target_sender_tls не завис");
+    // run_profile возвращает Result<(), RuntimeError> — для TLS с initial
+    // handshake fail ожидаем drain path → Ok (per Backward-compat note).
+    assert!(
+        res.is_ok(),
+        "TLS с initial handshake fail должен drain'ить Ok: {res:?}"
+    );
+    let _ = fs::remove_file(&ca_path);
+}

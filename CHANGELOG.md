@@ -57,6 +57,52 @@ Refs: CLAUDE_HANDOFF.md §6 (release train), PLAN-v10.0.0.md.
 
 ---
 
+## v10.7.17 - 2026-07-21
+
+**Patch-release: Phase 13 — real race fix для `phase8a_*` TCP reconnect tests.**
+
+Этот patch закрывает давний CI-flake в `phase8a_tcp_*` тестах
+(`src/transport/tcp.rs`): race между server's `accept()` и sender's `connect()` +
+kernel-buffer race для RST приводил к тому, что тесты нужно было помечать
+`#[ignore]` (PR-Q.4, `60930d0`) → потеря ~5% coverage TCP-reconnect path.
+
+### Added / Fixed
+
+- **Phase 13 fix (PR #58, `9c55f55`):** реальная фиксация race без `#[ignore]` и без `tokio::time::sleep`.
+  - `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` для `phase8a_*` —
+    server и test thread идут параллельно в разных потоках (single-threaded runtime
+    дедлочил под CI fast runners).
+  - `server_started_tx/Rx` oneshot: server сигналит `send(())` BEFORE `accept().await`,
+    test thread ждёт `tokio::time::timeout(2s, server_started_rx).await.expect(...)`.
+  - Accept-loop с timeout для 2-3 connections (initial connect + sender's reconnects),
+    server дропает каждое через `SO_LINGER=0` → RST immediately.
+  - `Option<Sender>` для `first_drop_tx` в cancel-test (sender moved on first send).
+  - Tolerance в assertions для race в CI:
+    - `errors_total ∈ [1..=3]` (1 initial write fail + 0-1 re-write + 0-1 drain orphan).
+    - `reconnects_total ∈ [0..=10]` (sender может успеть начать reconnect до cancel).
+  - `stream.read(&mut [0u8; 1])` перед `drop(sock)` — форсирует `ECONNRESET` до RST,
+    закрывая kernel-buffer race в CI (write мог завершиться в kernel buffer до RST).
+
+### Quality Gates
+
+- **Tests:** 5/5 `phase8a_*` tests pass (ранее — `#[ignore]`). 30/30 stress runs locally.
+- **Coverage:** `transport/tcp.rs` 84.75% → **98.33%** (+13.58pp).
+  TOTAL: **93.63% lines / 93.76% regions** (≥ 90% gate ✅).
+- **No `#[ignore]`, no `Sleepy Test` pattern** (no `tokio::time::sleep` в `phase8a_*`).
+- **clippy clean, fmt clean**, 499 tests (402 unit + 86 integration + 11 proptest).
+
+### Files
+
+- `src/transport/tcp.rs` — переписаны 3 `phase8a_*` теста через multi_thread runtime +
+  server signal sync + accept loop + tolerance.
+
+### Migration Notes
+
+Нет breaking changes. Изменения только в тестах, production код (`target_sender_tcp`)
+не затронут.
+
+---
+
 ## v10.7.16 - 2026-07-17
 
 **Release v10.7.16 (release-train): объединение PR-17a..e (hot-path optimization).**

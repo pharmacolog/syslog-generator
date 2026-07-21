@@ -1,7 +1,7 @@
 # syslog-generator
 
 [![CI](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pharmacolog/syslog-generator/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver&v=v10.7.17)](https://github.com/pharmacolog/syslog-generator/releases)
+[![Release](https://img.shields.io/github/v/release/pharmacolog/syslog-generator?sort=semver&v=v10.7.18)](https://github.com/pharmacolog/syslog-generator/releases)
 [![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://github.com/pharmacolog/syslog-generator/blob/main/Cargo.toml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/syslog-generator)](https://crates.io/crates/syslog-generator)
@@ -89,7 +89,7 @@ cargo build --release
 ./target/release/syslog-generator --profile examples/multi_target_roundrobin.yaml
 
 # Docker (multi-arch, ~25 MB image)
-docker run --rm ghcr.io/pharmacolog/syslog-generator:v10.7.17 --version
+docker run --rm ghcr.io/pharmacolog/syslog-generator:v10.7.18 --version
 ```
 
 ---
@@ -115,12 +115,12 @@ cargo build --release --features test-helpers
 ### Docker
 ```bash
 # Pre-built images (multi-arch: linux/amd64, linux/arm64)
-docker pull ghcr.io/pharmacolog/syslog-generator:v10.7.17
+docker pull ghcr.io/pharmacolog/syslog-generator:v10.7.18
 
 # Запуск
 docker run --rm \
   -v $PWD/examples:/examples:ro \
-  ghcr.io/pharmacolog/syslog-generator:v10.7.17 \
+  ghcr.io/pharmacolog/syslog-generator:v10.7.18 \
   --profile /examples/multi_target_roundrobin.json
 
 # Полный стек (syslog-generator + syslog-ng + Prometheus + Grafana)

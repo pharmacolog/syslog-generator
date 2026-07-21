@@ -107,11 +107,20 @@ let v = parse_tls_min_version("1.2")?; // возвращает TlsVersion::Tls12
 `::metrics::*`, `::metrics_server::*`, `::protobuf::*`) сохранены как thin
 re-export обёртки. Код, импортирующий через старые пути, продолжает работать.
 
-## 4. v10.7.4 — v10.7.17 — patch-релизы (текущая версия)
+## 4. v10.7.4 — v10.7.18 — patch-релизы (текущая версия)
 
-**0 breaking changes** от v10.7.3 до v10.7.17 (серия patch-релизов по результатам аудита v10.7.2 + CI улучшения + Coverage expansion + Phase 13 TCP race fix). Текущая версия — **v10.7.17**.
+**0 breaking changes** от v10.7.3 до v10.7.18 (серия patch-релизов по результатам аудита v10.7.2 + CI улучшения + Coverage expansion + Phase 13 TCP race fix + Phase 14 Step 1/2 TLS coverage + Dependabot maintenance + notify-telegram graceful degradation). Текущая версия — **v10.7.18**.
 
-### 4.1 v10.7.17 (Phase 13): TCP reconnect race fix
+### 4.1 v10.7.18 (Phase 14): TLS Tier 2 coverage + CI hardening
+
+**Phase 14 Step 1 (PR #63)**: TLS mock infrastructure + 5 integration тестов.
+**Phase 14 Step 2 (PR #66)**: 9 unit-тестов + 3 integration-теста.
+Coverage `transport/tls.rs`: 58.94% (v10.7.16) → **79.87% lines** (+5.76pp).
+Coverage TOTAL: 91.10% → **93.86%** lines.
+
+PR #64: notify-telegram graceful degradation (двойной 'else' → jq syntax error → Telegram 400).
+
+### 4.2 v10.7.17 (Phase 13): TCP reconnect race fix
 
 **Что:** Устранена давняя CI-flake в `phase8a_tcp_*` тестах (`src/transport/tcp.rs`):
 3 теста теперь активны (`#[tokio::test(flavor = multi_thread, worker_threads = 2)]`),

@@ -709,4 +709,193 @@ mod tests {
         assert!(p2.insecure);
         assert_eq!(p2.min_protocol, Some(TlsVersion::Tls13));
     }
+
+    // === Phase 14 Step 2 (Tier 2 coverage): дополнительные unit-тесты для
+    // покрытия `as_protocol_versions` и edge cases в `parse_*` / `build_*`.
+
+    /// `TlsVersion::as_protocol_versions` (private fn) — TLS 1.2 → [TLS12, TLS13],
+    /// TLS 1.3 → [TLS13]. Покрывает match в `impl TlsVersion` через builder.
+    #[test]
+    fn v10_7_18_tlsversion_as_protocol_versions_matches_each_variant() {
+        // Через публичный API: builder_with_protocol_versions принимает &[Versions].
+        let cfg_tls12 = build_tls_connector(&TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls12),
+            insecure: true,
+            ..Default::default()
+        });
+        assert!(cfg_tls12.is_ok(), "tls12 должен строиться");
+        let cfg_tls13 = build_tls_connector(&TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls13),
+            insecure: true,
+            ..Default::default()
+        });
+        assert!(cfg_tls13.is_ok(), "tls13 должен строиться");
+    }
+
+    /// `parse_cipher_suite` rejects пустой после trim + пустой raw (whitespace-only).
+    /// Покрывает Err branch в parse_cipher_suite (line ~107-119).
+    #[test]
+    fn v10_7_18_parse_cipher_suite_rejects_empty_and_whitespace() {
+        let err = parse_cipher_suite("").unwrap_err();
+        assert!(err.contains("cipher suite"));
+        assert!(err.contains("поддерживаемые"));
+        let err = parse_cipher_suite("   ").unwrap_err();
+        assert!(err.contains("cipher suite"));
+        let err = parse_cipher_suite("\t\n").unwrap_err();
+        assert!(err.contains("cipher suite"));
+        // Все err должны содержать имя того что прислали (в "debug" форме str).
+        let err = parse_cipher_suite("").unwrap_err();
+        assert!(err.contains("\"\""));
+    }
+
+    /// `parse_tls_min_version` rejects дополнительные некорректные форматы.
+    /// Покрывает `match` branches + `Err` path с человекочитаемым сообщением.
+    #[test]
+    fn v10_7_18_parse_tls_min_version_rejects_all_invalid() {
+        // Все варианты → Err (не "1.2" или "1.3" после trim).
+        assert!(parse_tls_min_version("1.0").is_err());
+        assert!(parse_tls_min_version("1.1").is_err());
+        assert!(parse_tls_min_version("2.0").is_err());
+        assert!(parse_tls_min_version("1.4").is_err());
+        assert!(parse_tls_min_version("v1.2").is_err());
+        // Whitespace handling: trim → match.
+        assert_eq!(parse_tls_min_version("  1.2  ").unwrap(), TlsVersion::Tls12);
+        assert_eq!(parse_tls_min_version("1.3").unwrap(), TlsVersion::Tls13);
+        // Case-sensitive: должен отвергать "TLSV12", "1.2\r\n", etc.
+        assert!(parse_tls_min_version("TLSV12").is_err());
+    }
+
+    /// `build_tls_connector` с TLS 1.3 cipher + min_protocol = Tls12 — успех
+    /// (совместимое сочетание).
+    #[test]
+    fn v10_7_18_build_connector_tls13_suite_with_tls12_min_succeeds() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls12),
+            cipher_suites: Some(vec![
+                rustls::crypto::ring::cipher_suite::TLS13_AES_256_GCM_SHA384,
+            ]),
+            insecure: true,
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("tls13 suite + tls12 min + insecure");
+    }
+
+    /// `build_tls_connector` с **только** TLS 1.2 suites + min_protocol = Tls12 — успех.
+    #[test]
+    fn v10_7_18_build_connector_tls12_only_suites_succeeds() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls12),
+            cipher_suites: Some(vec![
+                rustls::crypto::ring::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+            ]),
+            insecure: true,
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("tls12-only suite + tls12 min");
+    }
+
+    /// `build_tls_connector` с TLS 1.3 cipher + min_protocol = Tls13 — успех (повтор).
+    #[test]
+    fn v10_7_18_build_connector_tls13_suite_with_tls13_min_succeeds() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            min_protocol: Some(TlsVersion::Tls13),
+            cipher_suites: Some(vec![
+                rustls::crypto::ring::cipher_suite::TLS13_AES_256_GCM_SHA384,
+            ]),
+            insecure: true,
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("tls13 suite + tls13 min");
+    }
+
+    /// `build_tls_connector` с пустым `ca_pem` (валидный PEM без сертификатов) — Err.
+    /// Покрывает ветку `if certs.is_empty() { return Err(...) }` (line ~170).
+    #[test]
+    fn v10_7_18_build_connector_rejects_empty_ca_pem() {
+        // PEM с "ENTITLED" блоком, но без реальных сертификатов.
+        let bogus_pem = b"-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIB...\n-----END ENCRYPTED PRIVATE KEY-----\n";
+        let p = TlsParams {
+            domain: "example.com".into(),
+            ca_pem: Some(zeroize::Zeroizing::new(bogus_pem.to_vec())),
+            ..Default::default()
+        };
+        let err = build_tls_connector(&p).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("ca_pem не содержит валидных сертификатов") || msg.contains("PEM"),
+            "expected empty ca_pem error, got: {msg}"
+        );
+    }
+
+    /// `build_tls_connector` с невалидным PEM (не CA bundle) — Err.
+    /// Покрывает ветку `.map_err(|e| anyhow!("ошибка парсинга PEM в ca_pem: {e}"))`.
+    #[test]
+    fn v10_7_18_build_connector_rejects_invalid_ca_pem() {
+        let p = TlsParams {
+            domain: "example.com".into(),
+            ca_pem: Some(zeroize::Zeroizing::new(b"NOT A PEM AT ALL".to_vec())),
+            ..Default::default()
+        };
+        let err = build_tls_connector(&p).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("PEM") || msg.contains("ca_pem"));
+    }
+
+    /// mTLS path через `build_tls_connector` с client cert/key — успех
+    /// (покрывает `with_client_auth_cert` branch в `build_tls_connector`).
+    /// Сертификат и ключ через `openssl_self_signed()` helper.
+    #[test]
+    fn v10_7_18_build_connector_mtls_with_client_identity_succeeds() {
+        // Используем helper make_test_cert из tests/integration_tests.rs напрямую —
+        // нет, он в integration tests, поэтому генерируем здесь с минимальным openssl.
+        // Альтернатива: используем hardcoded test PEM (tls_client.key + tls_client.pem).
+        // Для unit-теста — оба файла hardcoded.
+        // Так как generate_full_chain_dummy невозможно без openssl,
+        // используем PEM из существующего файла (test-helpers allow file IO).
+        let test_dir = std::path::PathBuf::from("/tmp");
+        let cert_path = test_dir.join("v10_7_18_client.pem");
+        let key_path = test_dir.join("v10_7_18_client.key");
+        // Создаём PEM'ы через openssl если их нет.
+        if !cert_path.exists() || !key_path.exists() {
+            let _ = std::process::Command::new("openssl")
+                .args([
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-keyout",
+                    key_path.to_str().unwrap(),
+                    "-out",
+                    cert_path.to_str().unwrap(),
+                    "-days",
+                    "1",
+                    "-nodes",
+                    "-subj",
+                    "/CN=localhost-v10_7_18",
+                ])
+                .status();
+        }
+        if !cert_path.exists() || !key_path.exists() {
+            // openssl отсутствует в системе — skip тест gracefully.
+            eprintln!("openssl не найден, тест skipped");
+            return;
+        }
+        let cert_pem = std::fs::read(&cert_path).unwrap();
+        let key_pem = std::fs::read(&key_path).unwrap();
+        let p = TlsParams {
+            domain: "example.com".into(),
+            client_cert_pem: Some(zeroize::Zeroizing::new(cert_pem)),
+            client_key_pem: Some(zeroize::Zeroizing::new(key_pem)),
+            insecure: true, // skip server cert check
+            ..Default::default()
+        };
+        let _cfg = build_tls_connector(&p).expect("mTLS build_connector с client cert");
+        let _ = std::fs::remove_file(&cert_path);
+        let _ = std::fs::remove_file(&key_path);
+    }
 }

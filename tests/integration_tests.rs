@@ -3789,14 +3789,14 @@ async fn phase14_tls_handshake_failure_drains_queue() {
         2,
         "phase14-handshake-fail",
     );
-    // Подольше timeout (30s) — TLS handshake + drain могут занять время
-    // на быстрых CI runner'ах.
+    // Подольше timeout (60s) — TLS handshake + drain могут занять значительное
+    // время на быстрых CI runner'ах (kafka feature test runs медленнее).
     let res = tokio::time::timeout(
-        Duration::from_secs(30),
+        Duration::from_secs(60),
         run_profile(&profile, create_metrics().expect("metrics ok")),
     )
     .await
-    .expect("target_sender_tls не завис (30s)");
+    .expect("target_sender_tls не завис (60s)");
     assert!(
         res.is_ok(),
         "TLS с mTLS-handshake fail должен drain'ить Ok: {res:?}"

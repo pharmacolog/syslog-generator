@@ -105,8 +105,6 @@ Refs: CLAUDE_HANDOFF.md §6 (release train), PLAN-v10.0.0.md.
 
 ## v10.7.17 - 2026-07-21
 
-## v10.7.17 - 2026-07-21
-
 **Patch-release: Phase 13 — real race fix для `phase8a_*` TCP reconnect tests.**
 
 Этот patch закрывает давний CI-flake в `phase8a_tcp_*` тестах

@@ -75,21 +75,41 @@ jobs:
             exit 0
           fi
 
-          # Markdown message (< 4096 chars).
-          TEXT="❌ *CI failed*\n\n*Workflow:* \`${WORKFLOW}\`\n*Branch:* \`${HEAD}\`\n*Commit:* \`${SHA}\`\n*Triggered by:* ${ACTOR}\n\n[View run](${HTML_URL})"
+          # Markdown message (< 4096 chars). Используем printf для корректных
+          # newlines (bash не интерпретирует \n в double-quoted strings).
+          TEXT=$(printf '❌ *CI failed*\n\n*Workflow:* `%s`\n*Branch:* `%s`\n*Commit:* `%s`\n*Triggered by:* %s\n\n[View run](%s)' \
+            "$WORKFLOW" "$HEAD" "$SHA" "$ACTOR" "$HTML_URL")
+
+          # Bail out early если TEXT пустой (защита от "message text is empty").
+          if [ -z "$TEXT" ]; then
+            echo "::warning::Empty notification text — nothing to send"
+            exit 0
+          fi
+
+          # jq payload: обязательный fields + опциональный message_thread_id.
+          # tonumber (не fromjson) конвертирует string→int для Telegram API.
+          # Двойной `else` убран (был syntax error → jq 2 compile errors →
+          # text became empty → Telegram 400 "message text is empty").
+          PAYLOAD=$(jq -n \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "$TEXT" \
+            --arg parse_mode 'Markdown' \
+            --arg message_thread_id "${TELEGRAM_THREAD_ID:-}" \
+            '{chat_id: $chat_id, text: $text, parse_mode: $parse_mode}
+            + (if $message_thread_id != "" then {message_thread_id: ($message_thread_id | tonumber)} else {} end)')
+
+          # Если jq всё-таки упал — log warning, не fail job.
+          if [ -z "$PAYLOAD" ]; then
+            echo "::warning::jq failed to build payload — notification skipped"
+            exit 0
+          fi
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg chat_id "$TELEGRAM_CHAT_ID" \
-              --arg text "$TEXT" \
-              --arg parse_mode 'Markdown' \
-              --arg message_thread_id "${TELEGRAM_THREAD_ID:-}" \
-              '{chat_id: $chat_id, text: $text, parse_mode: $parse_mode}
-              + (if $message_thread_id != "" then {message_thread_id: ($message_thread_id | fromjson)} else {} else {} end)')" \
+            -d "$PAYLOAD" \
             > /tmp/telegram-resp.json
 
-          # Если Telegram API вернул ok=false, log error (но не fail job — это best-effort).
+          # Если Telegram API вернул ok=false, log warning (но не fail job — best-effort).
           if ! jq -e '.ok == true' /tmp/telegram-resp.json >/dev/null 2>&1; then
             echo "::warning::Telegram API error: $(cat /tmp/telegram-resp.json)"
           fi

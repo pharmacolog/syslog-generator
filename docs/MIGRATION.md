@@ -107,11 +107,25 @@ let v = parse_tls_min_version("1.2")?; // возвращает TlsVersion::Tls12
 `::metrics::*`, `::metrics_server::*`, `::protobuf::*`) сохранены как thin
 re-export обёртки. Код, импортирующий через старые пути, продолжает работать.
 
-## 4. v10.7.4 — v10.7.18 — patch-релизы (текущая версия)
+## 4. v10.7.4 — v10.7.19 — patch-релизы (текущая версия)
 
-**0 breaking changes** от v10.7.3 до v10.7.18 (серия patch-релизов по результатам аудита v10.7.2 + CI улучшения + Coverage expansion + Phase 13 TCP race fix + Phase 14 Step 1/2 TLS coverage + Dependabot maintenance + notify-telegram graceful degradation). Текущая версия — **v10.7.18**.
+**0 breaking changes** от v10.7.3 до v10.7.19 (серия patch-релизов по результатам аудита v10.7.2 + CI улучшения + Coverage expansion + Phase 13 TCP race fix + Phase 14 Step 1/2/3 coverage + release-pgo.yml infra fix + Dependabot maintenance + notify-telegram graceful degradation). Текущая версия — **v10.7.19**.
 
-### 4.2 v10.7.18 (Phase 14): TLS Tier 2 coverage + CI hardening
+### 4.2 v10.7.19 (Phase 14 Step 3): Kafka coverage + release-pgo.yml infra fix
+
+**CI: release-pgo.yml infrastructure fix (PR #77).** Final fix PR-Q series
+(#70-#77): `dtolnay/rust-toolchain@stable` + download LLVM 20 tarball
+(~1.9 GB) с GitHub release. PGO build теперь работает на tag push —
+artifact `syslog-generator-pgo-v10.7.19` uploaded автоматически.
+
+PR-Q series history (8 PR'ов):
+- #70 (PATH fallback) ✅
+- #71-#76 (6 PR'ов) ❌ closed (wrong assumptions)
+- #77 (THIS) ✅ — stable rustc + LLVM 20 tarball (правильный URL)
+
+Phase 14 Step 1+2+3: см. v10.7.18 (Tier 2 coverage на tls.rs + kafka.rs).
+
+### 4.3 v10.7.18 (Phase 14): TLS Tier 2 coverage + CI hardening
 
 **Phase 14 Step 1 (PR #63)**: TLS mock infrastructure + 5 integration тестов.
 **Phase 14 Step 2 (PR #66)**: 9 unit-тестов + 3 integration-теста.
@@ -120,7 +134,7 @@ Coverage TOTAL: 91.10% → **93.86%** lines.
 
 PR #64: notify-telegram graceful degradation (двойной 'else' → jq syntax error → Telegram 400).
 
-### 4.3 v10.7.17 (Phase 13): TCP reconnect race fix
+### 4.4 v10.7.17 (Phase 13): TCP reconnect race fix
 
 **Что:** Устранена давняя CI-flake в `phase8a_tcp_*` тестах (`src/transport/tcp.rs`):
 3 теста теперь активны (`#[tokio::test(flavor = multi_thread, worker_threads = 2)]`),

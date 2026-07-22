@@ -57,6 +57,52 @@ Refs: CLAUDE_HANDOFF.md §6 (release train), PLAN-v10.0.0.md.
 
 ---
 
+## v10.7.18 - 2026-07-21
+
+**Patch-release: CI hardening + Phase 14 Step 1+2 (TLS Tier 2 coverage +5.76pp).**
+
+### Added / Fixed
+
+- **CI: notify-telegram graceful degradation** (PR #64): двойной 'else' в jq
+  expression → syntax error → `--data` пустой → Telegram 400 "message text
+  empty". Фикс: один `else {} end`, `fromjson → tonumber` (Telegram API
+  ожидает integer), `printf` для TEXT (bash не интерпретирует `\n` в
+  double-quoted strings), bail-out early на empty TEXT/PAYLOAD.
+  Никогда не блокирует CI (best-effort notification).
+- **Phase 14 Step 1 (PR #63): TLS mock infrastructure + 5 integration тестов.
+  helper `spawn_tls_mock_server` (rustls::ServerConfig + TlsAcceptor +
+  опциональный mTLS через WebPkiClientVerifier). Тесты: happy path,
+  CA-trusted handshake, drain-on-cert-failure, handshake-failure-drains,
+  mTLS-with-client-cert. Multi-thread runtime + timeouts. F13 compliant
+  (нет `tls_insecure=true`).
+- **Phase 14 Step 2 (PR #66): 9 unit-тестов + 3 integration-теста.
+  Покрывают `TlsVersion::as_protocol_versions`, `parse_cipher_suite`
+  edge cases (empty, whitespace), `parse_tls_min_version` invalid inputs,
+  `build_tls_connector` 5 paths (TLS 1.2/1.3 cipher × min combinations +
+  empty/invalid ca_pem + mTLS happy path). Integration: mTLS strict (loose
+  best-effort), reconnect after write fail, initial handshake fail drain.
+- **Dependabot bumps (PR #62, #48) merged**: 10-dep production batch
+  (anyhow 1.0.104, thiserror 2.0.19, clap 4.6.3, serde 1.0.229,
+  serde_json 1.0.151, ...) + jsonschema 0.47 → 0.48.2. Cargo.lock обновлён.
+- **Sync workflows**: PR #59 (main → dev post-Phase13), PR #61 (sync pre-Step1),
+  PR #65 (sync main → dev v10.7.17), PR #67 (sync main → dev post-Step2).
+
+### Quality Gates
+
+- ✅ **Tests:** 400/400 unit + 96/96 integration + 11 proptest — все зелёные.
+- ✅ **Coverage `transport/tls.rs`:** 58.94% (v10.7.16) → **79.87% lines** (Tier 2 target 85%, +5.13pp осталось для Step 3 kafka).
+- ✅ **Coverage TOTAL:** 91.10% → **93.86%** lines (+2.76pp).
+- ✅ **clippy clean, fmt clean** — throughout all CI runs.
+- ✅ **13/13 CI checks PASS** на PR #64, #66.
+- ✅ **No breaking changes** — patch-release.
+
+### Migration Notes
+
+Без изменений в публичном API. Никаких breaking changes. Migration только
+внутренних тестов (Test-helpers не нужны для downstream consumers).
+
+---
+
 ## v10.7.17 - 2026-07-21
 
 **Patch-release: Phase 13 — real race fix для `phase8a_*` TCP reconnect tests.**

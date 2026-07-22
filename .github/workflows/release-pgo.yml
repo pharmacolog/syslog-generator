@@ -38,7 +38,13 @@ jobs:
       - name: Install Rust toolchain (with llvm-tools)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          # v10.7.19 fix: `llvm-tools-preview` доступен ТОЛЬКО на nightly.
+          # На stable используем `llvm-tools` (стабильный с Rust 1.65+) —
+          # включает `llvm-profdata` для merge step.
+          # rust-toolchain.toml в репо указывает на 1.95 с llvm-tools-preview,
+          # что не работает — компонента preview нет. Override toolchain через
+          # env: RUSTUP_TOOLCHAIN ниже чтобы проект собирался с stable.
+          components: rustfmt, clippy, llvm-tools
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -48,6 +54,10 @@ jobs:
 
       - name: PGO step 1/3 — build with profile-generate
         env:
+          # Override project rust-toolchain.toml (1.95 с llvm-tools-preview,
+          # который недоступен) — используем stable с llvm-tools (установлен
+          # выше в step "Install Rust toolchain").
+          RUSTUP_TOOLCHAIN: stable
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           mkdir -p "$PGO_DIR"
@@ -57,6 +67,7 @@ jobs:
 
       - name: PGO step 2/3 — run representative workload (bench)
         env:
+          RUSTUP_TOOLCHAIN: stable
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           # Прогон benches для сбора representative profile данных.
@@ -66,15 +77,19 @@ jobs:
 
       - name: PGO step 3/3 — merge profdata + final build
         env:
+          RUSTUP_TOOLCHAIN: stable
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
-          # Resolve llvm-profdata через rustup (компонент llvm-tools-preview
+          # Resolve llvm-profdata через rustup (компонент llvm-tools
           # ставится в toolchain bin, не в PATH по умолчанию на GitHub Actions).
-          # v10.7.18 fix: `llvm-profdata: command not found` exit 127 — fixed через
-          # `rustup which llvm-profdata` вместо hard-coded PATH.
-          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || which llvm-profdata 2>/dev/null || echo "$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata")"
+          # v10.7.19 fix: используем `llvm-tools` (стабильный) вместо
+          # `llvm-tools-preview` (только nightly). `rustup which llvm-profdata`
+          # возвращает путь до активного toolchain бинаря.
+          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null \
+                           || which llvm-profdata 2>/dev/null \
+                           || echo "$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata")"
           if [ ! -x "$LLVM_PROFDATA" ]; then
-            echo "::error::llvm-profdata binary not found. Install llvm-tools-preview component first."
+            echo "::error::llvm-profdata binary not found. Install llvm-tools component first."
             exit 1
           fi
           echo "Using llvm-profdata: $LLVM_PROFDATA"

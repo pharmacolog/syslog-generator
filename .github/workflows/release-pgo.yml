@@ -5,6 +5,18 @@
 #
 # Улучшение: ~5% throughput на hot-path bench (1.74 µs → 1.65 µs/msg).
 # Полная процедура — см. docs/PERFORMANCE.md §6.
+#
+# v10.7.19 step 6 (PR-Q series #76):
+# Используем rustc 1.95 (MSRV) для PGO build вместо rustc 1.97/stable или
+# nightly. rustc 1.95 генерирует LLVM raw profile format v8, который совместим
+# с apt-installed `llvm-17` (raw format v8). Это избегает 1.9 GB LLVM tarball
+# download (PR #75) и nightly toolchain overhead.
+#
+# Преимущества:
+# - Production binary собирается на MSRV 1.95 (минимальная совместимая версия,
+#   зафиксировано в rust-toolchain.toml → enforced rustc).
+# - Проект использует только stable API (cargo-rustc 1.79+) → совместимо с 1.95.
+# - apt `llvm-17` (≈30 MB) единственная зависимость, доступна на ubuntu-22.04/24.04.
 
 name: Release PGO build
 
@@ -35,29 +47,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust nightly toolchain (matching llvm-tools-preview)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust 1.95 toolchain (MSRV — matches llvm-17 raw format v8)
+        uses: dtolnay/rust-toolchain@1.95
         with:
-          # v10.7.19 step 4: rustc 1.97 (stable) использует LLVM raw profile
-          # format v10 (LLVM 19+). apt repo на ubuntu-24.04+ имеет только
-          # llvm-{16,17,18} (formats v8/v9/v9) — none совместимы.
-          # Решение: переключиться на nightly toolchain с компонентом
-          # `llvm-tools-preview` который содержит matching LLVM profdata
-          # для nightly rustc. `--profile=minimal` экономит место.
+          # v10.7.19 step 6 (PR-Q series #76):
+          # Установил причину PR-Q series: rustc 1.97 (stable) генерирует raw
+          # profile format v10 (LLVM 19+), apt имеет только llvm-{16,17,18}
+          # (formats v8/v9/v9) — none совместимы. Rustc nightly 1.99 (format
+          # v10/11) тоже НЕ совместим с apt llvm-{16,17,18}.
           #
-          # Production build `cargo build --release` работает на nightly
-          # без regression (проект совместим — cargo-rustc 1.79+ API stable).
-          # Bench hot_path использует stable API (no nightly-only features).
-          components: rustfmt, clippy, llvm-tools-preview
-          profile: minimal
+          # **Final solution: использовать rustc 1.95 (MSRV)** — raw format v8.
+          # apt-installed `llvm-17` имеет raw format v8 → MATCH! Production
+          # binary собирается на 1.95 (MSRV policy enforced через
+          # rust-toolchain.toml в репо). Production code использует только
+          # stable API (no nightly-only), совместимо с 1.95.
+          #
+          # Никакого download tarball 1.9 GB не нужно. apt `llvm-17` (≈30 MB)
+          # — единственная зависимость.
+          components: rustfmt, clippy
 
-      - name: Install llvm-profdata (apt fallback)
+      - name: Install llvm-profdata (apt)
         if: always()
         run: |
-          # Safety net: если `llvm-tools-preview` бинарь не нашёлся в nightly
-          # toolchain (rare), fallback через apt. llvm-17 совместим с rustc
-          # 1.95 (MSRV) raw format v8 — НЕ с rustc 1.97 (format v10), но
-          # служит как **emergency** fallback only.
+          # На ubuntu-22.04/24.04 устанавливаем llvm-17 (raw format v8,
+          # совместим с rustc 1.95 MSRV). apt default `llvm` = llvm-18 (raw
+          # format v9) — НЕ совместим с rustc 1.95 (v8).
           sudo apt-get update -qq 2>&1 | tail -3 || true
           sudo apt-get install -y --no-install-recommends llvm-17 2>&1 | tail -3 || true
           echo "=== llvm-profdata location after install ==="
@@ -73,8 +87,8 @@ jobs:
 
       - name: PGO step 1/3 — build with profile-generate
         env:
-          # Используем nightly (установлен выше) для consistent LLVM version.
-          RUSTUP_TOOLCHAIN: nightly
+          # Используем rustc 1.95 (MSRV) для совместимости с llvm-17.
+          RUSTUP_TOOLCHAIN: 1.95
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           mkdir -p "$PGO_DIR"
@@ -84,7 +98,7 @@ jobs:
 
       - name: PGO step 2/3 — run representative workload (bench)
         env:
-          RUSTUP_TOOLCHAIN: nightly
+          RUSTUP_TOOLCHAIN: 1.95
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           # Прогон benches для сбора representative profile данных.
@@ -94,52 +108,35 @@ jobs:
 
       - name: PGO step 3/3 — merge profdata + final build
         env:
-          RUSTUP_TOOLCHAIN: nightly
+          RUSTUP_TOOLCHAIN: 1.95
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
-          # Resolve llvm-profdata через fallback chain (priority order):
-          # 1. `rustup which llvm-profdata` — **PRIMARY**: nightly toolchain's
-          #    `llvm-tools-preview` → guaranteed format match с rustc nightly.
-          # 2. `/usr/lib/llvm-{17,16,15}/bin/llvm-profdata` — fallback для rustc 1.95
-          #    MSRV (format v8 совместим с rustc 1.95, NOT с nightly).
-          # 3. `which llvm-profdata` — apt default symlink (probably llvm-18 на
-          #    ubuntu-24.04+, format mismatch — только last resort).
-          # 4. `/usr/lib/llvm-*/bin/llvm-profdata` — generic versioned path
-          # 5. toolchain default bin — explicit rustup default path
+          # Resolve llvm-profdata — apt-installed llvm-17 (format v8) совместим
+          # с rustc 1.95 MSRV. Tier 1: prefer versioned path.
           LLVM_PROFDATA=""
 
-          # Tier 1: rustup which (nightly toolchain's matching version — **PRIMARY**).
-          # Это дает нам `llvm-profdata` из той же LLVM major version что и rustc.
-          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
-
-          # Tier 2: apt-installed llvm-{17,16,15} (для rustc 1.95 MSRV fallback).
-          # На nightly rustc эти форматы mismatch, но служит emergency net.
-          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            for v in 17 16 15; do
-              if [ -x "/usr/lib/llvm-${v}/bin/llvm-profdata" ]; then
-                LLVM_PROFDATA="/usr/lib/llvm-${v}/bin/llvm-profdata"
-                break
-              fi
-            done
+          # Tier 1: /usr/lib/llvm-17/bin/llvm-profdata (versioned path).
+          if [ -x "/usr/lib/llvm-17/bin/llvm-profdata" ]; then
+            LLVM_PROFDATA="/usr/lib/llvm-17/bin/llvm-profdata"
           fi
 
-          # Tier 3: /usr/bin/llvm-profdata (apt default symlink, possibly llvm-18 — format mismatch).
+          # Tier 2: /usr/bin/llvm-profdata (apt default symlink).
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
             LLVM_PROFDATA="$(which llvm-profdata 2>/dev/null || true)"
           fi
 
-          # Tier 4: generic versioned path.
+          # Tier 3: generic /usr/lib/llvm-*/bin/llvm-profdata.
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
             LLVM_PROFDATA="$(ls -d /usr/lib/llvm-*/bin/llvm-profdata 2>/dev/null | head -1 || true)"
           fi
 
-          # Tier 5: explicit toolchain default bin.
+          # Tier 4: rustup which (fallback).
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata"
+            LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
           fi
 
           if [ ! -x "$LLVM_PROFDATA" ]; then
-            echo "::error::llvm-profdata binary not found. Tried: rustup which / llvm-{17,16,15} / which / /usr/lib/llvm-*/bin / toolchain default bin."
+            echo "::error::llvm-profdata binary not found. Tried: llvm-17 / which / /usr/lib/llvm-*/bin / rustup which."
             exit 1
           fi
           echo "Using llvm-profdata: $LLVM_PROFDATA"

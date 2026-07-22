@@ -97,74 +97,49 @@ jobs:
           RUSTUP_TOOLCHAIN: nightly
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
-          # Resolve llvm-profdata через fallback chain (priorities):
-          # 1. Prefer llvm-17 (apt-installed versioned path) — НЕ совместим с rustc 1.97
-          #    формат mismatch. На nightly toolchain profile format может быть stable или v11+.
-          # 2. `rustup which llvm-profdata` — rustup-managed nightly toolchain
-          #    (если llvm-tools-preview установлен) → guaranteed match с rustc nightly.
-          # 3. `/usr/bin/llvm-profdata` — apt default symlink (может быть llvm-17,
-          #    формат mismatch — последний fallback).
+          # Resolve llvm-profdata через fallback chain (priority order):
+          # 1. `rustup which llvm-profdata` — **PRIMARY**: nightly toolchain's
+          #    `llvm-tools-preview` → guaranteed format match с rustc nightly.
+          # 2. `/usr/lib/llvm-{17,16,15}/bin/llvm-profdata` — fallback для rustc 1.95
+          #    MSRV (format v8 совместим с rustc 1.95, NOT с nightly).
+          # 3. `which llvm-profdata` — apt default symlink (probably llvm-18 на
+          #    ubuntu-24.04+, format mismatch — только last resort).
           # 4. `/usr/lib/llvm-*/bin/llvm-profdata` — generic versioned path
-          # 5. toolchain default bin — explicit rustup default toolchain path
+          # 5. toolchain default bin — explicit rustup default path
           LLVM_PROFDATA=""
-          # Tier 1: prefer llvm-17 specifically (format v8 для rustc 1.95 MSRV).
-          for v in 17 16 15; do
-            if [ -x "/usr/lib/llvm-${v}/bin/llvm-profdata" ]; then
-              LLVM_PROFDATA="/usr/lib/llvm-${v}/bin/llvm-profdata"
-              break
-            fi
-          done
-          # Tier 2: rustup which (prefer nightly toolchain's matching version).
+
+          # Tier 1: rustup which (nightly toolchain's matching version — **PRIMARY**).
+          # Это дает нам `llvm-profdata` из той же LLVM major version что и rustc.
+          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
+
+          # Tier 2: apt-installed llvm-{17,16,15} (для rustc 1.95 MSRV fallback).
+          # На nightly rustc эти форматы mismatch, но служит emergency net.
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
+            for v in 17 16 15; do
+              if [ -x "/usr/lib/llvm-${v}/bin/llvm-profdata" ]; then
+                LLVM_PROFDATA="/usr/lib/llvm-${v}/bin/llvm-profdata"
+                break
+              fi
+            done
           fi
-          # Tier 3: /usr/bin/llvm-profdata (apt default, possibly llvm-17).
+
+          # Tier 3: /usr/bin/llvm-profdata (apt default symlink, possibly llvm-18 — format mismatch).
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
             LLVM_PROFDATA="$(which llvm-profdata 2>/dev/null || true)"
           fi
+
           # Tier 4: generic versioned path.
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
             LLVM_PROFDATA="$(ls -d /usr/lib/llvm-*/bin/llvm-profdata 2>/dev/null | head -1 || true)"
           fi
+
           # Tier 5: explicit toolchain default bin.
           if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
             LLVM_PROFDATA="$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata"
           fi
+
           if [ ! -x "$LLVM_PROFDATA" ]; then
-            echo "::error::llvm-profdata binary not found. Tried: llvm-17/16/15, rustup which / which / /usr/lib/llvm-*/bin / toolchain default bin."
-            exit 1
-          fi
-          echo "Using llvm-profdata: $LLVM_PROFDATA"
-          "$LLVM_PROFDATA" --version
-          #    формат mismatch — последний fallback).
-          # 4. `/usr/lib/llvm-*/bin/llvm-profdata` — generic versioned path
-          # 5. toolchain default bin — explicit rustup default toolchain path
-          LLVM_PROFDATA=""
-          # Tier 1: prefer llvm-17 specifically (format v9 совместим с rustc 1.97).
-          for v in 17 16 15; do
-            if [ -x "/usr/lib/llvm-${v}/bin/llvm-profdata" ]; then
-              LLVM_PROFDATA="/usr/lib/llvm-${v}/bin/llvm-profdata"
-              break
-            fi
-          done
-          # Tier 2: rustup which.
-          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
-          fi
-          # Tier 3: /usr/bin/llvm-profdata (apt default, possibly llvm-18).
-          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$(which llvm-profdata 2>/dev/null || true)"
-          fi
-          # Tier 4: generic versioned path.
-          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$(ls -d /usr/lib/llvm-*/bin/llvm-profdata 2>/dev/null | head -1 || true)"
-          fi
-          # Tier 5: explicit toolchain default bin.
-          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
-            LLVM_PROFDATA="$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata"
-          fi
-          if [ ! -x "$LLVM_PROFDATA" ]; then
-            echo "::error::llvm-profdata binary not found. Tried: llvm-17/16/15, rustup which / which / /usr/lib/llvm-*/bin / toolchain default bin."
+            echo "::error::llvm-profdata binary not found. Tried: rustup which / llvm-{17,16,15} / which / /usr/lib/llvm-*/bin / toolchain default bin."
             exit 1
           fi
           echo "Using llvm-profdata: $LLVM_PROFDATA"

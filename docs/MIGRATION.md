@@ -118,9 +118,9 @@ re-export обёртки. Код, импортирующий через стар
 (~1.9 GB) с GitHub release. PGO build теперь работает на tag push —
 artifact `syslog-generator-pgo-v10.7.19` uploaded автоматически.
 
-PR-Q series history:
+PR-Q series history (8 PR'ов):
 - #70 (PATH fallback) ✅
-- #71-#76 (5 PR'ов) ❌ closed (wrong assumptions)
+- #71-#76 (6 PR'ов) ❌ closed (wrong assumptions)
 - #77 (THIS) ✅ — stable rustc + LLVM 20 tarball (правильный URL)
 
 Phase 14 Step 1+2+3: см. v10.7.18 (Tier 2 coverage на tls.rs + kafka.rs).

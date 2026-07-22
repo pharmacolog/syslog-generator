@@ -18,7 +18,7 @@
   Coverage `transport/tls.rs`: 58.94% → 74.11% (+15.17pp).
 - **Phase 14 Step 2 (PR #66)**: 9 unit + 3 integration теста.
   Coverage `transport/tls.rs`: 74.11% → 79.87% (+5.76pp).
-- **Phase 14 Step 3 (PR #69)**: refactor extract validate_kafka_target_config +
+- **Phase 14 Step 3 (PR #69)**: refactor extract `validate_kafka_target_config` +
   8 unit-тестов. Coverage `transport/kafka.rs`: 51.68% → 77.80% (+26.12pp).
 - **CI hardening (PR #64)**: notify-telegram.yml — `llvm-profdata: command not found`
   fix (jq syntax + PATH fallback).
@@ -32,7 +32,7 @@
   (Tier 2 target 85%, +20.93pp cumulative)
 - ✅ **Coverage `transport/kafka.rs`:** 51.68% → **77.80%** lines
   (Tier 2 target 70% ✅ ДОСТИГНУТ, +26.12pp)
-- ✅ **Coverage TOTAL:** 91.10% → **93.86%** lines (+2.76pp cumulative)
+- ✅ **Coverage TOTAL:** 91.10% → **94.03%** lines (+2.93pp cumulative)
 - ✅ **PGO build:** работает на tag push через release-pgo.yml
   (LLVM 20 tarball download), artifact `syslog-generator-pgo-v10.7.19`
 - ✅ **clippy clean, fmt clean** — throughout all CI runs
@@ -46,13 +46,13 @@ hot-path bench). Никаких breaking changes для consumers.
 
 ### PR-Q Series History (release-pgo.yml infra)
 
-7 PR'ов в попытке fix release-pgo.yml workflow (LLVM version mismatch):
+8 PR'ов в попытке fix release-pgo.yml workflow (LLVM version mismatch):
 - #70 (PATH fallback) ✅ — base infrastructure
 - #71 (preview→stable) ❌ wrong — stable llvm-tools НЕ содержит llvm-profdata
 - #72 (apt install) ❌ wrong — llvm-18 format v9 vs rustc 1.97 v10
 - #73 (llvm-17) ❌ wrong — format v8 vs v10
 - #74 (nightly) ❌ wrong — llvm-tools-preview НЕ содержит llvm-profdata
-- #75 (tarball) ❌ wrong URL — Windows asset вместо Linux
+- #75 (tarball 200MB) ❌ wrong URL — Windows asset name
 - #76 (rustc 1.95) ❌ wrong — 1.95 использует LLVM 22 (format v10)
 - **#77 (THIS) ✅** — stable rustc + LLVM 20 tarball (правильный URL)
 

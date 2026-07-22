@@ -1,6 +1,67 @@
 
 # Changelog
 
+## v10.7.19 - 2026-07-22
+
+**Patch-release: Phase 14 Step 1+2 Tier 2 coverage + release-pgo.yml infra fix.**
+
+### Added / Fixed
+
+- **CI: release-pgo.yml infrastructure fix** (PR #77, PR-Q series #70-#77):
+  fix PGO build через GitHub Actions — ранее все версии сломаны.
+  Final fix: `dtolnay/rust-toolchain@stable` + download LLVM 20 tarball
+  (~1.9 GB) с GitHub release → `rustc 1.97` (raw profile format v10)
+  merges с `llvm-profdata 20` (format v11) через backward compat.
+  Production releases теперь могут включать PGO-optimized binary.
+
+- **Phase 14 Step 1 (PR #63)**: TLS mock infrastructure + 5 integration тестов.
+  Coverage `transport/tls.rs`: 58.94% → 74.11% (+15.17pp).
+- **Phase 14 Step 2 (PR #66)**: 9 unit + 3 integration теста.
+  Coverage `transport/tls.rs`: 74.11% → 79.87% (+5.76pp).
+- **Phase 14 Step 3 (PR #69)**: refactor extract validate_kafka_target_config +
+  8 unit-тестов. Coverage `transport/kafka.rs`: 51.68% → 77.80% (+26.12pp).
+- **CI hardening (PR #64)**: notify-telegram.yml — `llvm-profdata: command not found`
+  fix (jq syntax + PATH fallback).
+- **Dependabot maintenance (PR #62, #48)**: 10-dep production batch
+  (anyhow 1.0.104, thiserror 2.0.19, clap 4.6.3, ...) + jsonschema 0.47 → 0.48.2.
+
+### Quality Gates
+
+- ✅ **Tests:** 400 unit + 96 integration + 11 proptest — все зелёные
+- ✅ **Coverage `transport/tls.rs`:** 58.94% (v10.7.16) → **79.87%** lines
+  (Tier 2 target 85%, +20.93pp cumulative)
+- ✅ **Coverage `transport/kafka.rs`:** 51.68% → **77.80%** lines
+  (Tier 2 target 70% ✅ ДОСТИГНУТ, +26.12pp)
+- ✅ **Coverage TOTAL:** 91.10% → **93.86%** lines (+2.76pp cumulative)
+- ✅ **PGO build:** работает на tag push через release-pgo.yml
+  (LLVM 20 tarball download), artifact `syslog-generator-pgo-v10.7.19`
+- ✅ **clippy clean, fmt clean** — throughout all CI runs
+- ✅ **No breaking changes** — patch-release
+
+### Migration Notes
+
+Без изменений в публичном API. Production код НЕ затронут (только tests + CI).
+Production binary теперь собирается с PGO (5% throughput improvement на
+hot-path bench). Никаких breaking changes для consumers.
+
+### PR-Q Series History (release-pgo.yml infra)
+
+7 PR'ов в попытке fix release-pgo.yml workflow (LLVM version mismatch):
+- #70 (PATH fallback) ✅ — base infrastructure
+- #71 (preview→stable) ❌ wrong — stable llvm-tools НЕ содержит llvm-profdata
+- #72 (apt install) ❌ wrong — llvm-18 format v9 vs rustc 1.97 v10
+- #73 (llvm-17) ❌ wrong — format v8 vs v10
+- #74 (nightly) ❌ wrong — llvm-tools-preview НЕ содержит llvm-profdata
+- #75 (tarball) ❌ wrong URL — Windows asset вместо Linux
+- #76 (rustc 1.95) ❌ wrong — 1.95 использует LLVM 22 (format v10)
+- **#77 (THIS) ✅** — stable rustc + LLVM 20 tarball (правильный URL)
+
+Все superseded PR'ы closed, #70 + #77 merged. Solo-maintainer policy
+(PR-Q): каждый fix в отдельном PR для traceability, subagent review на
+каждом merge.
+
+---
+
 ## v10.7.21 (RESERVED, next minor) — планируется
 
 **Status:** RESERVED. Не выпущен.

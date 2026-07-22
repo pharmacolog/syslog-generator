@@ -40,11 +40,25 @@ jobs:
         with:
           # v10.7.19 fix: `llvm-tools-preview` доступен ТОЛЬКО на nightly.
           # На stable используем `llvm-tools` (стабильный с Rust 1.65+) —
-          # включает `llvm-profdata` для merge step.
-          # rust-toolchain.toml в репо указывает на 1.95 с llvm-tools-preview,
-          # что не работает — компонента preview нет. Override toolchain через
-          # env: RUSTUP_TOOLCHAIN ниже чтобы проект собирался с stable.
+          # содержит `llvm-profdata` для merge step.
           components: rustfmt, clippy, llvm-tools
+
+      - name: Install llvm-profdata (apt fallback)
+        if: always()
+        run: |
+          # v10.7.19 fix #2: даже после `rustup component add llvm-tools`,
+          # на некоторых runner toolchain install НЕ успешен, или
+          # `rust-toolchain.toml` (1.95) override'ит и rustup which ищет
+          # в 1.95 bin (где llvm-profdata нет). Гарантируем наличие
+          # llvm-profdata через apt. `sudo` не требуется на ubuntu-latest
+          # runners (мы уже root), но `apt-get` используется на случай
+          # если runner сменится.
+          sudo apt-get update -qq 2>&1 | tail -3 || true
+          sudo apt-get install -y --no-install-recommends llvm 2>&1 | tail -3 || true
+          echo "=== llvm-profdata location after install ==="
+          which llvm-profdata || true
+          ls -la /usr/bin/llvm-profdata 2>&1 || true
+          ls -la /usr/lib/llvm-*/bin/llvm-profdata 2>&1 || true
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -80,16 +94,23 @@ jobs:
           RUSTUP_TOOLCHAIN: stable
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
-          # Resolve llvm-profdata через rustup (компонент llvm-tools
-          # ставится в toolchain bin, не в PATH по умолчанию на GitHub Actions).
-          # v10.7.19 fix: используем `llvm-tools` (стабильный) вместо
-          # `llvm-tools-preview` (только nightly). `rustup which llvm-profdata`
-          # возвращает путь до активного toolchain бинаря.
-          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null \
-                           || which llvm-profdata 2>/dev/null \
-                           || echo "$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata")"
+          # Resolve llvm-profdata через fallback chain (priorities):
+          # 1. `rustup which llvm-profdata` — rustup-managed toolchain (если llvm-tools установлен)
+          # 2. `/usr/bin/llvm-profdata` — apt-installed system package (llvm-* deb)
+          # 3. `/usr/lib/llvm-*/bin/llvm-profdata` — apt-installed в versioned path
+          # 4. toolchain default bin — explicit rustup default toolchain path
+          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || true)"
+          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
+            LLVM_PROFDATA="$(which llvm-profdata 2>/dev/null || true)"
+          fi
+          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
+            LLVM_PROFDATA="$(ls -d /usr/lib/llvm-*/bin/llvm-profdata 2>/dev/null | head -1 || true)"
+          fi
+          if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
+            LLVM_PROFDATA="$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata"
+          fi
           if [ ! -x "$LLVM_PROFDATA" ]; then
-            echo "::error::llvm-profdata binary not found. Install llvm-tools component first."
+            echo "::error::llvm-profdata binary not found. Tried: rustup which / which / /usr/lib/llvm-*/bin / toolchain default bin."
             exit 1
           fi
           echo "Using llvm-profdata: $LLVM_PROFDATA"

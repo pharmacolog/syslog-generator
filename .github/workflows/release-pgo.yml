@@ -68,10 +68,21 @@ jobs:
         env:
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
+          # Resolve llvm-profdata через rustup (компонент llvm-tools-preview
+          # ставится в toolchain bin, не в PATH по умолчанию на GitHub Actions).
+          # v10.7.18 fix: `llvm-profdata: command not found` exit 127 — fixed через
+          # `rustup which llvm-profdata` вместо hard-coded PATH.
+          LLVM_PROFDATA="$(rustup which llvm-profdata 2>/dev/null || which llvm-profdata 2>/dev/null || echo "$HOME/.rustup/toolchains/$(rustup default 2>/dev/null | awk '{print $1}')/bin/llvm-profdata")"
+          if [ ! -x "$LLVM_PROFDATA" ]; then
+            echo "::error::llvm-profdata binary not found. Install llvm-tools-preview component first."
+            exit 1
+          fi
+          echo "Using llvm-profdata: $LLVM_PROFDATA"
+
           # Merge .profraw → merged.profdata
           echo "::group::Merging $(ls "$PGO_DIR"/*.profraw 2>/dev/null | wc -l | tr -d ' ') profraw files"
           ls "$PGO_DIR"/*.profraw 2>/dev/null | head -5
-          llvm-profdata merge -o "$PGO_DIR/merged.profdata" "$PGO_DIR"/*.profraw
+          "$LLVM_PROFDATA" merge -o "$PGO_DIR/merged.profdata" "$PGO_DIR"/*.profraw
           ls -la "$PGO_DIR/merged.profdata"
           echo "::endgroup::"
 

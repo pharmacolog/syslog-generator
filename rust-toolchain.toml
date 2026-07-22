@@ -7,5 +7,8 @@
 # MSRV = 1.95 (минимальная версия, на которой проект собирается).
 # См. Cargo.toml `[package].rust-version = "1.95"`.
 channel = "1.95"
-components = ["rustfmt", "clippy", "llvm-tools-preview"]
+# v10.7.19 fix: `llvm-tools-preview` доступен ТОЛЬКО на nightly toolchain.
+# Используем стабильный `llvm-tools` (есть с Rust 1.65+) — содержит
+# `llvm-profdata` для PGO build в `.github/workflows/release-pgo.yml`.
+components = ["rustfmt", "clippy", "llvm-tools"]
 profile = "minimal"

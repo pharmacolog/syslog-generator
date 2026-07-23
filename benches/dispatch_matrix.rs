@@ -49,6 +49,9 @@ fn make_profile(paths: Vec<PathBuf>, distribution: &str, weights: Vec<usize>) ->
         targets,
         distribution: distribution.to_string(),
         shutdown: ShutdownConfig::default(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         phases: vec![Phase {
             name: "bench".into(),
             messages_per_second: 0,

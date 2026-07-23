@@ -312,6 +312,9 @@ fn make_profile(targets: Vec<TargetConfig>, distribution: &str, count: u64, name
     Profile {
         targets,
         distribution: distribution.into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: name.into(),
@@ -526,6 +529,9 @@ async fn test_rate_limiting_respects_target() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "rate".into(),
@@ -564,6 +570,9 @@ async fn test_load_shape_linear_ramp_volume() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "ramp".into(),
@@ -607,6 +616,9 @@ async fn test_load_shape_burst_exceeds_base() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "burst".into(),
@@ -696,6 +708,9 @@ async fn test_connection_pool_opens_multiple_connections() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "pool".into(),
@@ -878,6 +893,9 @@ async fn test_octet_counting_framing_over_tcp() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase_with_format(
             "rfc5424",
@@ -1404,6 +1422,9 @@ async fn test_n2_messages_by_format_total_exported() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: Default::default(),
         phases: vec![
             Phase {
@@ -1553,6 +1574,9 @@ async fn test_f13_run_profile_rejects_invalid_profile() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "p".into(),
@@ -1581,6 +1605,9 @@ async fn test_f13_valid_profile_passes_validation() {
     let profile = Profile {
         targets: vec![parse_target("127.0.0.1:9998:tcp").unwrap()],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "ok".into(),
@@ -1605,6 +1632,9 @@ async fn test_f13_collects_all_errors() {
             ..Default::default()
         }],
         distribution: "nope".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![],
         metrics_addr: None,
@@ -2214,6 +2244,9 @@ fn test_n4_mtls_validation_rejects_missing_cert_file() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "mtls".into(),
@@ -2246,6 +2279,9 @@ fn test_n4_mtls_validation_rejects_bad_min_protocol() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "min".into(),
@@ -2281,6 +2317,9 @@ async fn test_f17_burst_injection_increases_volume() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "burst".into(),
@@ -2324,6 +2363,9 @@ async fn test_f17_slow_drip_decreases_volume() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "slow".into(),
@@ -2373,6 +2415,9 @@ async fn test_f17_packet_loss_drops_about_percent() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "loss".into(),
@@ -2425,6 +2470,9 @@ async fn test_f17_no_anomalies_behaves_like_baseline() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "baseline".into(),
@@ -2459,6 +2507,9 @@ fn test_f17_validate_rejects_bad_burst_multiplier() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "bad".into(),
@@ -2500,6 +2551,9 @@ fn test_n4_cipher_policy_validation_rejects_unknown() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "cipher-policy".into(),
@@ -2537,6 +2591,9 @@ fn test_n4_cipher_policy_validation_accepts_known() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "cipher-policy".into(),
@@ -2725,6 +2782,9 @@ fn test_f15_validate_cef_without_config_fails() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase],
         metrics_addr: None,
@@ -2798,6 +2858,9 @@ async fn test_f17_burst_and_packet_loss_combined() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "combo".into(),
@@ -2872,6 +2935,9 @@ fn test_f15_validate_cef_without_config_fails_continue() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase],
         metrics_addr: None,
@@ -2911,6 +2977,9 @@ fn test_f15_validate_cef_empty_field_fails() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase],
         metrics_addr: None,
@@ -2950,6 +3019,9 @@ fn test_f15_validate_cef_severity_out_of_range_fails() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase],
         metrics_addr: None,
@@ -2979,6 +3051,9 @@ fn test_f15_validate_leef_without_config_fails() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![phase],
         metrics_addr: None,
@@ -3037,6 +3112,9 @@ fn test_f16_validate_kafka_requires_topic() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "kafka".into(),
@@ -3069,6 +3147,9 @@ fn test_f16_validate_rejects_bad_rotation_params() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "rot".into(),
@@ -3111,6 +3192,9 @@ fn test_f16_validate_rejects_bad_reconnect_params() {
             ..Default::default()
         }],
         distribution: "round-robin".into(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         shutdown: ShutdownConfig::default(),
         phases: vec![Phase {
             name: "rc".into(),

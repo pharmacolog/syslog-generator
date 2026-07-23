@@ -95,6 +95,9 @@ async fn n7_run_profile_smoke_does_not_panic() {
         }],
         distribution: "round-robin".into(),
         shutdown: Default::default(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         phases: vec![Phase {
             name: "smoke".into(),
             total_messages: Some(1),

@@ -90,6 +90,72 @@ pub fn record_error(metrics: &Metrics, target: &str) {
     metrics.errors_total.with_label_values(&[target]).inc();
 }
 
+/// PR-A3 (Issue #89): policy для broadcast distribution + per-target queue
+/// behavior. Определяет как producer отправляет сообщения в multiple targets
+/// при distribution="broadcast".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BroadcastPolicy {
+    /// Sequential `send().await` по всем targets. Самый медленный —
+    /// ждёт каждого target. Backward-compat default.
+    Strict,
+    /// Per-target queues с независимым send. Самый быстрый — все targets
+    /// получают параллельно. При переполнении очереди — drop newest
+    /// (с инкрементом metrics `messages_dropped_by_target_total`).
+    Independent,
+    /// `try_send` без await. Не блокирует ни на одном target. Drop newest
+    /// при переполнении. Самый низкий latency.
+    BestEffort,
+}
+
+impl BroadcastPolicy {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "strict" => Some(Self::Strict),
+            "independent" => Some(Self::Independent),
+            "best-effort" => Some(Self::BestEffort),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Strict => "strict",
+            Self::Independent => "independent",
+            Self::BestEffort => "best-effort",
+        }
+    }
+}
+
+/// PR-A3: policy для reaction на target failure во время phase execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetFailurePolicy {
+    /// Fail entire phase on any target failure (default).
+    FailPhase,
+    /// Continue generation if target fails (errors accumulate в metrics).
+    Continue,
+    /// Disable failing target (не отправлять в него, остальные продолжают).
+    DisableTarget,
+}
+
+impl TargetFailurePolicy {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "fail-phase" => Some(Self::FailPhase),
+            "continue" => Some(Self::Continue),
+            "disable-target" => Some(Self::DisableTarget),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::FailPhase => "fail-phase",
+            Self::Continue => "continue",
+            Self::DisableTarget => "disable-target",
+        }
+    }
+}
+
 /// Взять следующее сообщение из общей очереди пула.
 /// PR-17e: `parking_lot::Mutex::try_lock` + `tokio::task::yield_now().await` —
 /// нельзя `.lock().await` на sync mutex (guard `!Send`, нельзя держать через await).
@@ -857,5 +923,44 @@ mod tests {
         // Реальный результат — Err (handshake fail) или Ok (если отправили
         // пустую очередь без сообщений). В обоих случаях dispatch состоялся.
         let _ = result;
+    }
+
+    /// PR-A3: BroadcastPolicy::parse roundtrip + invalid handling.
+    #[test]
+    fn a3_broadcast_policy_parse_roundtrip() {
+        assert_eq!(
+            BroadcastPolicy::parse("strict"),
+            Some(BroadcastPolicy::Strict)
+        );
+        assert_eq!(
+            BroadcastPolicy::parse("independent"),
+            Some(BroadcastPolicy::Independent)
+        );
+        assert_eq!(
+            BroadcastPolicy::parse("best-effort"),
+            Some(BroadcastPolicy::BestEffort)
+        );
+        assert_eq!(BroadcastPolicy::parse("invalid"), None);
+        assert_eq!(BroadcastPolicy::Strict.as_str(), "strict");
+        assert_eq!(BroadcastPolicy::Independent.as_str(), "independent");
+        assert_eq!(BroadcastPolicy::BestEffort.as_str(), "best-effort");
+    }
+
+    /// PR-A3: TargetFailurePolicy::parse roundtrip.
+    #[test]
+    fn a3_target_failure_policy_parse_roundtrip() {
+        assert_eq!(
+            TargetFailurePolicy::parse("fail-phase"),
+            Some(TargetFailurePolicy::FailPhase)
+        );
+        assert_eq!(
+            TargetFailurePolicy::parse("continue"),
+            Some(TargetFailurePolicy::Continue)
+        );
+        assert_eq!(
+            TargetFailurePolicy::parse("disable-target"),
+            Some(TargetFailurePolicy::DisableTarget)
+        );
+        assert_eq!(TargetFailurePolicy::parse("nope"), None);
     }
 }

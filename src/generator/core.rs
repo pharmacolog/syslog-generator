@@ -14,7 +14,7 @@ use crate::transport::kafka::{
 use crate::transport::reconnect::ReconnectConfig;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
-    target_sender_udp, Framing,
+    target_sender_udp, BroadcastPolicy, Framing,
 };
 use anyhow::Result;
 use governor::{Quota, RateLimiter};
@@ -561,6 +561,33 @@ pub struct PhaseContext {
     /// Pre-loaded schema (если задано `schema_file`), либо None. `Arc` для
     /// cheap clone (используется в `Schema.fields.iter()`).
     pub schema: Option<Arc<Schema>>,
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: pre-cached anomaly metric handles.
+    /// Каждый \`AnomalyKind\` имеет pre-resolved IntCounter handles —
+    /// без \`with_label_values()\` HashMap lookup + Mutex per msg.
+    ///
+    /// None → не инициализировано (anomalies либо отсутствуют, либо setup
+    /// не выполнен). Some(vec) → инициализировано для всех phase.anomalies.
+    /// Index i соответствует `phase.anomalies[i]`.
+    pub cached_anomaly_handles: Option<Vec<CachedAnomalyHandles>>,
+}
+
+/// Issue #85 \[A1\] sub-tasks 2 + 4: pre-cached metric handles per anomaly.
+///
+/// Hot-path использует эти handles напрямую (\`handle.inc()\`) вместо
+/// \`metrics.anomalies_applied_total.with_label_values(...).inc()\`,
+/// что экономит HashMap lookup + Mutex lock per anomaly per msg.
+///
+/// Note: CounterVec::with_label_values() возвращает \`prometheus::Counter\`
+/// (f64), не IntCounter. Храним именно этот тип.
+#[derive(Clone)]
+pub struct CachedAnomalyHandles {
+    /// Stable type name из \`Anomaly::type_name()\` (BurstInjection/SlowDrip/PacketLoss).
+    pub type_name: &'static str,
+    /// Counter для применённых rate-аномалий (\`multiplier != 1.0\`).
+    pub applied: prometheus::Counter,
+    /// Counter для срабатываний packet-loss (только для \`AnomalyKind::PacketLoss\`).
+    /// None для других типов аномалий.
+    pub dropped: Option<prometheus::Counter>,
 }
 
 /// Cacheable parts of syslog header (если все поля static).
@@ -703,7 +730,49 @@ impl PhaseContext {
             // MVP: compile для всех phases (план сам решает когда применим).
             // Полная миграция hot path в generate_message_with_plan — PR-A2.3.
             compiled_plan: Some(crate::plan::compile_phase(phase)),
+            // Issue #85 sub-tasks 2 + 4: anomaly handles инициализируются
+            // отдельно через `init_anomaly_handles(anomalies, metrics)` в run_phase_multi_inner.
+            cached_anomaly_handles: None,
         })
+    }
+
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: инициализировать pre-cached handles
+    /// для каждой аномалии.
+    ///
+    /// Должна быть вызвана ОДИН раз перед hot-path loop. После этого
+    /// \`cached_anomaly_handles\` — Some(vec) с handles для каждой аномалии.
+    ///
+    /// \`phase_name\` — значение метки \`phase\` для CounterVec (для группировки
+    /// в Prometheus).
+    /// \`anomalies\` — список из \`phase.anomalies.as_deref().unwrap_or(&[])\`.
+    pub fn init_anomaly_handles(
+        &mut self,
+        phase_name: &str,
+        anomalies: &[crate::anomaly::Anomaly],
+        metrics: &crate::observability::metrics::Metrics,
+    ) {
+        let mut handles = Vec::with_capacity(anomalies.len());
+        for a in anomalies {
+            let type_name = a.type_name();
+            let applied = metrics
+                .anomalies_applied_total
+                .with_label_values(&[phase_name, type_name]);
+            let dropped = if matches!(a.kind, crate::anomaly::AnomalyKind::PacketLoss { .. }) {
+                Some(
+                    metrics
+                        .anomalies_dropped_total
+                        .with_label_values(&[phase_name, type_name]),
+                )
+            } else {
+                None
+            };
+            handles.push(CachedAnomalyHandles {
+                type_name,
+                applied,
+                dropped,
+            });
+        }
+        self.cached_anomaly_handles = Some(handles);
     }
 }
 
@@ -797,6 +866,46 @@ fn resolve_correlated_field(
     }
     // Нет соответствия и нет дефолта — генерируем базовым типом.
     gen_schema_field(field, rng)
+}
+
+/// PR-A3 (Issue #89) + PR-A4 (Issue #86): broadcast dispatch с policy.
+///
+/// Strict: sequential `tx.send().await` per target (backward-compat default).
+/// Independent: параллельный send через tokio::JoinSet.
+/// BestEffort: `tx.try_send()` без await — drop newest при переполнении.
+#[allow(dead_code)]
+pub async fn broadcast_dispatch(
+    txs: &[mpsc::Sender<bytes::Bytes>],
+    msg_bytes: bytes::Bytes,
+    policy: BroadcastPolicy,
+) {
+    match policy {
+        BroadcastPolicy::Strict => {
+            for tx in txs {
+                let _ = tx.send(msg_bytes.clone()).await;
+            }
+        }
+        BroadcastPolicy::Independent => {
+            // Параллельный send через tokio::JoinSet — без futures crate.
+            // Sender::send() future borrows self, поэтому клонируем sender
+            // в owned value для spawned task. Также клонируем msg_bytes
+            // внутри closure (Bytes::clone = atomic increment).
+            let mut set = tokio::task::JoinSet::new();
+            for tx in txs {
+                let tx = tx.clone();
+                let value = msg_bytes.clone();
+                set.spawn(async move { tx.send(value).await });
+            }
+            while set.join_next().await.is_some() {}
+        }
+        BroadcastPolicy::BestEffort => {
+            // try_send без await — самый низкий latency. Drop newest при
+            // переполнении очереди. Receiver не блокируется.
+            for tx in txs {
+                let _ = tx.try_send(msg_bytes.clone());
+            }
+        }
+    }
 }
 
 /// Обёртка syslog + F6-паддинг тела до целевого размера (если задан).
@@ -916,6 +1025,7 @@ fn wrap_syslog(
 pub async fn run_phase_multi(
     phase: &Phase,
     targets: &[TargetConfig],
+    broadcast_policy: BroadcastPolicy,
     distribution: &str,
     shutdown_cfg: &crate::config::ShutdownConfig,
     metrics: Metrics,
@@ -929,7 +1039,13 @@ pub async fn run_phase_multi(
 
     // PR-5: pre-resolve templates и schema ОДИН раз (file I/O + JSON parse)
     // для использования в hot loop. Раньше резолвились per-message.
-    let ctx = PhaseContext::resolve(phase)?;
+    let mut ctx = PhaseContext::resolve(phase)?;
+    // Issue #85 \[A1\] sub-tasks 2 + 4: pre-cache anomaly metric handles.
+    ctx.init_anomaly_handles(
+        &phase.name,
+        phase.anomalies.as_deref().unwrap_or(&[]),
+        &metrics,
+    );
 
     let dispatch = create_dispatcher(targets, distribution);
     let mut txs = Vec::new();
@@ -1333,14 +1449,31 @@ pub async fn run_phase_multi(
         // F17: учёт применения rate-аномалий. Если multiplier != 1.0 —
         // хотя бы одна rate-аномалия активна. Считаем по каждой аномалии,
         // чтобы можно было разделить burst и slow-drip в метриках.
+        //
+        // Issue #85 \[A1\] sub-task 2: cached anomaly metric handles.
+        // Hot-path использует pre-resolved Counter handles (atomic inc),
+        // а не `with_label_values()` HashMap lookup per msg.
         if has_anomalies {
-            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
-                let m = crate::anomaly::rate_multiplier(&a.kind, t_now);
-                if (m - 1.0).abs() > f64::EPSILON {
-                    metrics
-                        .anomalies_applied_total
-                        .with_label_values(&[&phase.name, a.type_name()])
-                        .inc();
+            if let Some(cached_handles) = ctx.cached_anomaly_handles.as_ref() {
+                for (i, a) in phase.anomalies.as_deref().unwrap_or(&[]).iter().enumerate() {
+                    let m = crate::anomaly::rate_multiplier(&a.kind, t_now);
+                    if (m - 1.0).abs() > f64::EPSILON {
+                        // Bounds check: cached_handles.len() == anomalies.len()
+                        if let Some(h) = cached_handles.get(i) {
+                            h.applied.inc();
+                        }
+                    }
+                }
+            } else {
+                // Fallback если handles не инициализированы (legacy path).
+                for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                    let m = crate::anomaly::rate_multiplier(&a.kind, t_now);
+                    if (m - 1.0).abs() > f64::EPSILON {
+                        metrics
+                            .anomalies_applied_total
+                            .with_label_values(&[&phase.name, a.type_name()])
+                            .inc();
+                    }
                 }
             }
         }
@@ -1351,13 +1484,30 @@ pub async fn run_phase_multi(
             // Учитываем дроп в метрике (по типу первой сработавшей
             // аномалии — для остальных не инкрементируем, чтобы не было
             // двойного счёта при нескольких packet-loss в фазе).
-            for a in phase.anomalies.as_deref().unwrap_or(&[]) {
-                if let crate::anomaly::AnomalyKind::PacketLoss { .. } = &a.kind {
-                    metrics
-                        .anomalies_dropped_total
-                        .with_label_values(&[&phase.name, a.type_name()])
-                        .inc();
-                    break;
+            //
+            // Issue #85 \[A1\] sub-task 4: cached anomaly handles by type.
+            if let Some(cached_handles) = ctx.cached_anomaly_handles.as_ref() {
+                for (i, a) in phase.anomalies.as_deref().unwrap_or(&[]).iter().enumerate() {
+                    if let crate::anomaly::AnomalyKind::PacketLoss { .. } = &a.kind {
+                        if let Some(h) = cached_handles.get(i) {
+                            if let Some(dropped) = &h.dropped {
+                                dropped.inc();
+                            }
+                        }
+                        break; // один drop = одна запись в метрике
+                    }
+                }
+            } else {
+                // Fallback если handles не инициализированы.
+                for a in phase.anomalies.as_deref().unwrap_or(&[]) {
+                    if let crate::anomaly::AnomalyKind::PacketLoss { .. } = &a.kind {
+                        metrics
+                            .anomalies_dropped_total
+                            .with_label_values(&[&phase.name, a.type_name()])
+                            .inc();
+
+                        break; // один drop = одна запись в метрике
+                    }
                 }
             }
             // Пропускаем tx.send для дропнутого сообщения.
@@ -1368,9 +1518,9 @@ pub async fn run_phase_multi(
         // не memcpy. Для broadcast это экономит N-1 memcpys payload'а.
         let msg_bytes: bytes::Bytes = bytes::Bytes::from(msg);
         if distribution == "broadcast" {
-            for tx in &txs {
-                let _ = tx.send(msg_bytes.clone()).await;
-            }
+            // PR-A3 (Issue #89) + PR-A4 (Issue #86): BroadcastPolicy dispatch.
+            // Strict = sequential await; Independent = parallel; BestEffort = try_send.
+            broadcast_dispatch(&txs, msg_bytes, broadcast_policy).await;
         } else if !dispatch.is_empty() {
             let idx = dispatch[(seq - 1) % dispatch.len()];
             if let Some(tx) = txs.get(idx) {
@@ -1443,6 +1593,11 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
             run_phase_multi(
                 phase,
                 &profile.targets,
+                profile
+                    .broadcast_policy
+                    .as_deref()
+                    .and_then(crate::transport::BroadcastPolicy::parse)
+                    .unwrap_or(crate::transport::BroadcastPolicy::Strict),
                 &profile.distribution,
                 &profile.shutdown,
                 metrics.clone(),
@@ -1889,6 +2044,7 @@ phases:
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
             compiled_plan: None,
+            cached_anomaly_handles: None,
         };
         // Resolved FormatKind::Rfc5424 (default).
         let format_kind = FormatKind::Rfc5424;
@@ -1928,6 +2084,7 @@ phases:
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
             compiled_plan: None,
+            cached_anomaly_handles: None,
         };
         let format_kind = FormatKind::Raw;
         let msg =
@@ -1979,6 +2136,7 @@ phases:
         let result = run_phase_multi(
             &phase,
             &targets,
+            BroadcastPolicy::Strict,
             "round-robin",
             &ShutdownConfig::default(),
             metrics,
@@ -2018,6 +2176,7 @@ phases:
         run_phase_multi(
             &phase,
             &targets,
+            BroadcastPolicy::Strict,
             "round-robin",
             &ShutdownConfig::default(),
             metrics,
@@ -2389,5 +2548,122 @@ phases:
 
         let s = std::str::from_utf8(&msg).expect("utf8");
         assert_eq!(s, "plain text no placeholders", "got: {s}");
+    }
+
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: init_anomaly_handles caches
+    /// handles per anomaly in phase.anomalies.
+    #[test]
+    fn a1_subtask24_init_anomaly_handles_empty_anomalies() {
+        let phase = Phase::default();
+        let mut ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let metrics = crate::observability::create_metrics().expect("metrics ok");
+        ctx.init_anomaly_handles(
+            &phase.name,
+            phase.anomalies.as_deref().unwrap_or(&[]),
+            &metrics,
+        );
+        assert!(
+            ctx.cached_anomaly_handles.is_none()
+                || ctx.cached_anomaly_handles.as_ref().unwrap().is_empty(),
+            "empty anomalies → None или пустой vec"
+        );
+    }
+
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: init_anomaly_handles caches
+    /// applied handles для rate-ааномалий.
+    #[test]
+    fn a1_subtask24_init_anomaly_handles_rate_anomaly() {
+        use crate::anomaly::{Anomaly, AnomalyKind};
+        let phase = Phase {
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: 3.0,
+                    interval_secs: 60.0,
+                    duration_secs: 5.0,
+                },
+            }]),
+            ..Default::default()
+        };
+
+        let mut ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let metrics = crate::observability::create_metrics().expect("metrics ok");
+        ctx.init_anomaly_handles(
+            &phase.name,
+            phase.anomalies.as_deref().unwrap_or(&[]),
+            &metrics,
+        );
+
+        let handles = ctx.cached_anomaly_handles.as_ref().expect("handles");
+        assert_eq!(handles.len(), 1);
+        assert_eq!(handles[0].type_name, "burst-injection");
+        assert!(handles[0].dropped.is_none(), "burst не имеет dropped");
+    }
+
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: init_anomaly_handles caches
+    /// dropped handle для PacketLoss anomaly.
+    #[test]
+    fn a1_subtask24_init_anomaly_handles_packet_loss() {
+        use crate::anomaly::{Anomaly, AnomalyKind};
+        let phase = Phase {
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::PacketLoss { loss_percent: 5.0 },
+            }]),
+            ..Default::default()
+        };
+
+        let mut ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let metrics = crate::observability::create_metrics().expect("metrics ok");
+        ctx.init_anomaly_handles(
+            &phase.name,
+            phase.anomalies.as_deref().unwrap_or(&[]),
+            &metrics,
+        );
+
+        let handles = ctx.cached_anomaly_handles.as_ref().expect("handles");
+        assert_eq!(handles.len(), 1);
+        assert_eq!(handles[0].type_name, "packet-loss");
+        assert!(handles[0].dropped.is_some(), "packet-loss имеет dropped");
+    }
+
+    /// Issue #85 \[A1\] sub-tasks 2 + 4: cached handle inc updates metric
+    /// (identity test).
+    #[test]
+    fn a1_subtask24_cached_handle_inc_updates_metric() {
+        use crate::anomaly::{Anomaly, AnomalyKind};
+        use crate::observability::metrics::gather_metrics;
+
+        let phase = Phase {
+            name: "test_phase".into(),
+            anomalies: Some(vec![Anomaly {
+                kind: AnomalyKind::BurstInjection {
+                    rate_multiplier: 2.0,
+                    interval_secs: 60.0,
+                    duration_secs: 5.0,
+                },
+            }]),
+            ..Default::default()
+        };
+
+        let mut ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let metrics = crate::observability::create_metrics().expect("metrics ok");
+        ctx.init_anomaly_handles(
+            &phase.name,
+            phase.anomalies.as_deref().unwrap_or(&[]),
+            &metrics,
+        );
+
+        // Inc через cached handle.
+        let handles = ctx.cached_anomaly_handles.as_ref().expect("handles");
+        handles[0].applied.inc();
+        handles[0].applied.inc();
+        handles[0].applied.inc();
+
+        let body = gather_metrics(&metrics).expect("gather ok");
+        assert!(
+            body.contains(
+                "syslog_anomalies_applied_total{phase=\"test_phase\",type=\"burst-injection\"} 3"
+            ),
+            "должно быть 3 inc'а, got:\n{body}"
+        );
     }
 }

@@ -92,6 +92,9 @@ mod tests {
             }],
             distribution: "round-robin".into(),
             shutdown: ShutdownConfig::default(),
+            broadcast_policy: None,
+            queue_capacity: None,
+            on_target_failure: None,
             phases: vec![Phase {
                 name: "smoke".into(),
                 total_messages: Some(1),

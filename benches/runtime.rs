@@ -34,6 +34,9 @@ fn profile_for(path: &Path, format: &str, body: &str) -> Profile {
         }],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         phases: vec![Phase {
             name: "bench".into(),
             duration_secs: 0,

@@ -317,6 +317,9 @@
     "distribution": { "$ref": "#/$defs/Distribution" },
     "shutdown": { "$ref": "#/$defs/ShutdownConfig" },
     "phases": { "type": "array", "items": { "$ref": "#/$defs/Phase" }, "minItems": 1 },
-    "metrics_addr": { "type": ["string", "null"] }
+    "metrics_addr": { "type": ["string", "null"] },
+    "broadcast_policy": { "type": ["string", "null"], "enum": ["strict", "independent", "best-effort", null] },
+    "queue_capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 1048576 },
+    "on_target_failure": { "type": ["string", "null"], "enum": ["fail-phase", "continue", "disable-target", null] }
   }
 }

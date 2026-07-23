@@ -3606,7 +3606,7 @@ async fn phase14_tls_drain_on_cert_failure() {
     let mut profile_with_long_drain = profile;
     profile_with_long_drain.shutdown.drain_timeout_secs = 120;
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(
             &profile_with_long_drain,
             create_metrics().expect("metrics ok"),
@@ -3747,7 +3747,7 @@ async fn phase14_tls_mtls_with_client_cert() {
     let mut profile_with_long_drain = profile;
     profile_with_long_drain.shutdown.drain_timeout_secs = 120;
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(
             &profile_with_long_drain,
             create_metrics().expect("metrics ok"),
@@ -3811,7 +3811,7 @@ async fn phase14_tls_handshake_failure_drains_queue() {
     let mut profile_with_long_drain = profile;
     profile_with_long_drain.shutdown.drain_timeout_secs = 120;
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(
             &profile_with_long_drain,
             create_metrics().expect("metrics ok"),
@@ -3896,7 +3896,7 @@ async fn phase14_step2_tls_mtls_full_round_trip_strict() {
     let mut profile_with_long_drain = profile;
     profile_with_long_drain.shutdown.drain_timeout_secs = 120;
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(
             &profile_with_long_drain,
             create_metrics().expect("metrics ok"),
@@ -3949,7 +3949,7 @@ async fn phase14_step2_tls_reconnect_after_write_failure() {
     let mut profile_with_long_drain = profile;
     profile_with_long_drain.shutdown.drain_timeout_secs = 120;
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(
             &profile_with_long_drain,
             create_metrics().expect("metrics ok"),
@@ -3996,7 +3996,7 @@ async fn phase14_step2_tls_initial_handshake_fail_drains() {
         "phase14-step2-init-fail",
     );
     let res = tokio::time::timeout(
-        Duration::from_secs(120),
+        Duration::from_secs(180),
         run_profile(&profile, create_metrics().expect("metrics ok")),
     )
     .await

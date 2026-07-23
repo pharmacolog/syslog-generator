@@ -582,9 +582,12 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::config::Profile
+pub syslog_generator::config::Profile::broadcast_policy: core::option::Option<alloc::string::String>
 pub syslog_generator::config::Profile::distribution: alloc::string::String
 pub syslog_generator::config::Profile::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::config::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::config::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
+pub syslog_generator::config::Profile::queue_capacity: core::option::Option<usize>
 pub syslog_generator::config::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::config::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -880,7 +883,7 @@ pub fn syslog_generator::core::default_values(&syslog_generator::generator::core
 pub fn syslog_generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::error
 pub enum syslog_generator::error::ConfigError
@@ -1539,9 +1542,12 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::generator::config::Profile
+pub syslog_generator::generator::config::Profile::broadcast_policy: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::config::Profile::distribution: alloc::string::String
 pub syslog_generator::generator::config::Profile::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::generator::config::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::config::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
+pub syslog_generator::generator::config::Profile::queue_capacity: core::option::Option<usize>
 pub syslog_generator::generator::config::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::generator::config::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -1973,6 +1979,7 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::cor
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::SyslogHeaderParts where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::SyslogHeaderParts where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::core::SyslogHeaderParts::vzip(self) -> V
+pub async fn syslog_generator::generator::core::broadcast_dispatch(&[tokio::sync::mpsc::bounded::Sender<bytes::bytes::Bytes>], bytes::bytes::Bytes, syslog_generator::transport::BroadcastPolicy)
 pub fn syslog_generator::generator::core::create_dispatcher(&[syslog_generator::generator::config::TargetConfig], &str) -> alloc::vec::Vec<usize>
 pub fn syslog_generator::generator::core::default_values(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn syslog_generator::generator::core::default_values_into(&mut std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>, &syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, usize, &mut rand::rngs::std::StdRng, chrono::datetime::DateTime<chrono::offset::utc::Utc>) -> usize
@@ -1982,7 +1989,7 @@ pub fn syslog_generator::generator::core::generate_message_with_format_cached(&s
 pub fn syslog_generator::generator::core::generate_message_with_plan(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize, &mut syslog_generator::plan::value::ValueArena, &mut alloc::string::String) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub struct syslog_generator::generator::CefConfig
 pub syslog_generator::generator::CefConfig::device_product: alloc::string::String
@@ -2217,9 +2224,12 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
 pub struct syslog_generator::generator::Profile
+pub syslog_generator::generator::Profile::broadcast_policy: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::Profile::distribution: alloc::string::String
 pub syslog_generator::generator::Profile::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::generator::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
+pub syslog_generator::generator::Profile::queue_capacity: core::option::Option<usize>
 pub syslog_generator::generator::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::generator::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -2517,7 +2527,7 @@ pub fn syslog_generator::generator::load_profile_from_path(&std::path::Path) -> 
 pub fn syslog_generator::generator::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub fn syslog_generator::generator::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::load_shape
 pub enum syslog_generator::load_shape::LoadShape
@@ -4548,6 +4558,67 @@ pub fn syslog_generator::transport::tls::parse_tls_min_version(&str) -> anyhow::
 pub async fn syslog_generator::transport::tls::target_sender_tls(alloc::string::String, syslog_generator::transport::tls::TlsParams, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken, syslog_generator::transport::Framing, core::option::Option<syslog_generator::transport::reconnect::ReconnectConfig>) -> anyhow::Result<()>
 pub mod syslog_generator::transport::udp
 pub async fn syslog_generator::transport::udp::target_sender_udp(alloc::string::String, alloc::string::String, syslog_generator::transport::SharedRx, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub enum syslog_generator::transport::BroadcastPolicy
+pub syslog_generator::transport::BroadcastPolicy::BestEffort
+pub syslog_generator::transport::BroadcastPolicy::Independent
+pub syslog_generator::transport::BroadcastPolicy::Strict
+impl syslog_generator::transport::BroadcastPolicy
+pub fn syslog_generator::transport::BroadcastPolicy::as_str(self) -> &'static str
+pub fn syslog_generator::transport::BroadcastPolicy::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::transport::BroadcastPolicy
+pub fn syslog_generator::transport::BroadcastPolicy::clone(&self) -> syslog_generator::transport::BroadcastPolicy
+impl core::cmp::Eq for syslog_generator::transport::BroadcastPolicy
+impl core::cmp::PartialEq for syslog_generator::transport::BroadcastPolicy
+pub fn syslog_generator::transport::BroadcastPolicy::eq(&self, &syslog_generator::transport::BroadcastPolicy) -> bool
+impl core::fmt::Debug for syslog_generator::transport::BroadcastPolicy
+pub fn syslog_generator::transport::BroadcastPolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::transport::BroadcastPolicy
+impl core::marker::StructuralPartialEq for syslog_generator::transport::BroadcastPolicy
+impl core::marker::Freeze for syslog_generator::transport::BroadcastPolicy
+impl core::marker::Send for syslog_generator::transport::BroadcastPolicy
+impl core::marker::Sync for syslog_generator::transport::BroadcastPolicy
+impl core::marker::Unpin for syslog_generator::transport::BroadcastPolicy
+impl core::marker::UnsafeUnpin for syslog_generator::transport::BroadcastPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::BroadcastPolicy
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::BroadcastPolicy
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::transport::BroadcastPolicy where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::transport::BroadcastPolicy where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::BroadcastPolicy where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::BroadcastPolicy where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::transport::BroadcastPolicy where U: core::convert::From<T>
+pub fn syslog_generator::transport::BroadcastPolicy::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::transport::BroadcastPolicy where U: core::convert::Into<T>
+pub type syslog_generator::transport::BroadcastPolicy::Error = core::convert::Infallible
+pub fn syslog_generator::transport::BroadcastPolicy::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::transport::BroadcastPolicy where U: core::convert::TryFrom<T>
+pub type syslog_generator::transport::BroadcastPolicy::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::transport::BroadcastPolicy::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::transport::BroadcastPolicy where T: core::clone::Clone
+pub type syslog_generator::transport::BroadcastPolicy::Owned = T
+pub fn syslog_generator::transport::BroadcastPolicy::clone_into(&self, &mut T)
+pub fn syslog_generator::transport::BroadcastPolicy::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::transport::BroadcastPolicy where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::transport::BroadcastPolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::transport::BroadcastPolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::transport::BroadcastPolicy where T: core::clone::Clone
+pub unsafe fn syslog_generator::transport::BroadcastPolicy::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::transport::BroadcastPolicy
+pub fn syslog_generator::transport::BroadcastPolicy::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::transport::BroadcastPolicy where T: core::marker::Copy
+pub fn syslog_generator::transport::BroadcastPolicy::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::transport::BroadcastPolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::BroadcastPolicy::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::transport::BroadcastPolicy::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::transport::BroadcastPolicy
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::BroadcastPolicy
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::BroadcastPolicy where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::BroadcastPolicy where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::transport::BroadcastPolicy::vzip(self) -> V
 pub enum syslog_generator::transport::Framing
 pub syslog_generator::transport::Framing::NonTransparent
 pub syslog_generator::transport::Framing::OctetCounting
@@ -4607,6 +4678,67 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::Fra
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::Framing where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::Framing where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::Framing::vzip(self) -> V
+pub enum syslog_generator::transport::TargetFailurePolicy
+pub syslog_generator::transport::TargetFailurePolicy::Continue
+pub syslog_generator::transport::TargetFailurePolicy::DisableTarget
+pub syslog_generator::transport::TargetFailurePolicy::FailPhase
+impl syslog_generator::transport::TargetFailurePolicy
+pub fn syslog_generator::transport::TargetFailurePolicy::as_str(self) -> &'static str
+pub fn syslog_generator::transport::TargetFailurePolicy::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::transport::TargetFailurePolicy
+pub fn syslog_generator::transport::TargetFailurePolicy::clone(&self) -> syslog_generator::transport::TargetFailurePolicy
+impl core::cmp::Eq for syslog_generator::transport::TargetFailurePolicy
+impl core::cmp::PartialEq for syslog_generator::transport::TargetFailurePolicy
+pub fn syslog_generator::transport::TargetFailurePolicy::eq(&self, &syslog_generator::transport::TargetFailurePolicy) -> bool
+impl core::fmt::Debug for syslog_generator::transport::TargetFailurePolicy
+pub fn syslog_generator::transport::TargetFailurePolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::StructuralPartialEq for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::Freeze for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::Send for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::Sync for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::Unpin for syslog_generator::transport::TargetFailurePolicy
+impl core::marker::UnsafeUnpin for syslog_generator::transport::TargetFailurePolicy
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::transport::TargetFailurePolicy
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::transport::TargetFailurePolicy
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::transport::TargetFailurePolicy where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::transport::TargetFailurePolicy where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::transport::TargetFailurePolicy where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::transport::TargetFailurePolicy where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::transport::TargetFailurePolicy where U: core::convert::From<T>
+pub fn syslog_generator::transport::TargetFailurePolicy::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::transport::TargetFailurePolicy where U: core::convert::Into<T>
+pub type syslog_generator::transport::TargetFailurePolicy::Error = core::convert::Infallible
+pub fn syslog_generator::transport::TargetFailurePolicy::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::transport::TargetFailurePolicy where U: core::convert::TryFrom<T>
+pub type syslog_generator::transport::TargetFailurePolicy::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::transport::TargetFailurePolicy::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::transport::TargetFailurePolicy where T: core::clone::Clone
+pub type syslog_generator::transport::TargetFailurePolicy::Owned = T
+pub fn syslog_generator::transport::TargetFailurePolicy::clone_into(&self, &mut T)
+pub fn syslog_generator::transport::TargetFailurePolicy::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::transport::TargetFailurePolicy where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::transport::TargetFailurePolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::transport::TargetFailurePolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::transport::TargetFailurePolicy where T: core::clone::Clone
+pub unsafe fn syslog_generator::transport::TargetFailurePolicy::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::transport::TargetFailurePolicy
+pub fn syslog_generator::transport::TargetFailurePolicy::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::transport::TargetFailurePolicy where T: core::marker::Copy
+pub fn syslog_generator::transport::TargetFailurePolicy::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::transport::TargetFailurePolicy where T: ?core::marker::Sized
+pub fn syslog_generator::transport::TargetFailurePolicy::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::transport::TargetFailurePolicy::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::transport::TargetFailurePolicy
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::TargetFailurePolicy
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::TargetFailurePolicy where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::TargetFailurePolicy where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::transport::TargetFailurePolicy::vzip(self) -> V
 pub enum syslog_generator::transport::TlsVersion
 pub syslog_generator::transport::TlsVersion::Tls12
 pub syslog_generator::transport::TlsVersion::Tls13
@@ -6403,9 +6535,12 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
 pub struct syslog_generator::Profile
+pub syslog_generator::Profile::broadcast_policy: core::option::Option<alloc::string::String>
 pub syslog_generator::Profile::distribution: alloc::string::String
 pub syslog_generator::Profile::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
+pub syslog_generator::Profile::queue_capacity: core::option::Option<usize>
 pub syslog_generator::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -7011,7 +7146,7 @@ pub async fn syslog_generator::reconnect_with_backoff<F, Fut, T, E>(&syslog_gene
 pub fn syslog_generator::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub fn syslog_generator::render_template(&str, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::string::String
 pub fn syslog_generator::route(&str, &str, &syslog_generator::observability::metrics::Metrics) -> alloc::string::String
-pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub async fn syslog_generator::serve_metrics(&str, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub fn syslog_generator::should_drop_packet(&syslog_generator::anomaly::AnomalyKind, core::option::Option<u64>, usize) -> bool

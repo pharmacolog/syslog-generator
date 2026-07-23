@@ -108,6 +108,10 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 ## через `rskafka = { ..., features = ["compression-snappy"] }` после
 ## форка проекта.
 rskafka = { version = "0.6", optional = true, default-features = false, features = ["compression-gzip", "compression-lz4", "compression-snappy", "compression-zstd"] }
+# PR-A5 (v10.8.0): libc для TCP_NODELAY + SO_SNDBUF setsockopt calls
+# в production code (target_sender_tcp). Раньше использовался только в
+# dev-deps для SIGTERM test.
+libc = "0.2"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio"] }

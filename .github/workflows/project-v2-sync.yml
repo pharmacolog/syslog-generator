@@ -142,10 +142,8 @@ jobs:
             const pr = context.payload.pull_request;
             const body = pr.body || '';
 
-            // Regex для keyword-based linking: Closes #N, Fixes #N, Resolves #N.
-            // Также ловим неформальные ссылки ("Issue #N", "Part of #N") для
-            // auto-update статуса, когда PR явно ссылается на issue.
-            const re = /(?:close[sd]?|fixe[sd]?|resolve[sd]?|issue|part\s+of|refs?)\s*#(\d+)/gi;
+            // Regex для keyword-based linking: Closes #N, Fixes #N, Resolves #N
+            const re = /(?:close[sd]?|fixe[sd]?|resolve[sd]?)\s+#(\d+)/gi;
             const matches = [...body.matchAll(re)];
 
             const issueNumbers = [...new Set(matches.map(m => parseInt(m[1], 10)))];

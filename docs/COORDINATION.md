@@ -221,6 +221,53 @@ Expected: pre-PR gate-check passes
 
 **Запрещено**: писать "TODO: implement later" без отдельного tracking issue.
 
+### S11. Test Coverage Requirement (P9 — принцип 9)
+
+**Обязательство**: каждый code change в рамках выполняемой задачи ДОЛЖЕН сопровождаться тестами в том же PR.
+
+#### Правила
+
+| Тип изменения | Минимальные требования к тестам |
+|---|---|
+| **New feature** | Positive tests (happy path) + negative tests (error paths) + edge cases |
+| **Bug fix** | Regression test, который воспроизводит баг и проверяет фикс |
+| **Refactor** | Existing tests must continue to pass; refactor should NOT decrease coverage |
+| **Optimization** | Benchmark (если применимо) + correctness tests (что оптимизация не сломала behavior) |
+| **Documentation** | N/A (только если меняется doc-tests или example code) |
+
+#### Конкретные требования
+
+1. **Unit tests**: добавлять в `#[cfg(test)] mod tests` в конце файла, который меняется
+2. **Integration tests**: для cross-cutting changes — добавлять в `tests/integration_tests.rs`
+3. **Snapshot tests**: для output форматирования (форматы: rfc5424, rfc3164, cef, leef, json_lines, protobuf)
+4. **Property-based tests (proptest)**: для сложных invariants
+5. **Test naming**: `fn test_<feature>_<scenario>` (e.g., `sanitize_header_ascii_fast_path`)
+6. **Coverage gate**: `cargo test --release --lib` должен проходить; coverage не должна падать ниже текущего уровня (~93.86%)
+7. **TDD preference**: для новых фич — писать тест СНАЧАЛА, потом реализацию
+
+#### Что запрещено
+
+- ❌ PR без тестов для нового кода
+- ❌ "TODO: add tests later" в PR body
+- ❌ Удаление существующих тестов без обоснования в PR body
+- ❌ Пропуск flaky тестов через `#[ignore]` без создания linked issue
+
+#### Acceptance для PR
+
+PR блокируется merge если:
+- Новый public API без unit тестов
+- Bug fix без regression test
+- Coverage delta < 0% (coverage упала)
+
+#### Примеры для Issue #85 sub-tasks
+
+| Sub-task | Обязательные тесты |
+|---|---|
+| #85 sub-task 10 (BytesMut capacity) | unit test для нового `calculate_capacity()` функции + integration test с большим `max_message_bytes` |
+| #85 sub-task 7 (protobuf pre-resolve) | snapshot test что wire-format НЕ изменился + benchmark test |
+| #85 sub-task 6 (regex HIR cache) | unit test на cache hit/miss + integration test на детерминизм |
+| #85 sub-task 9 (TLS Arc<ClientConfig>) | unit test на lazy init + integration test mTLS round-trip |
+
 ## 4. Action Plan
 
 ### Phase 1 (немедленно)
@@ -296,7 +343,28 @@ echo "ALL CHECKS PASSED ✅"
 - ❌ Закрывать issue без verification по коду
 - ❌ Закрывать issue без обновления документации
 - ❌ Браться за issue, который уже assigned другому агенту без согласования
+- ❌ **PR без тестов** для нового кода (S11/P9)
+- ❌ **Удалять существующие тесты** без обоснования
+- ❌ **`#[ignore]` на flaky tests** без linked tracking issue
 
 ---
 
 **Следующий шаг**: показать пользователю, применить к текущей работе, начать Issue #85 remaining sub-tasks.
+
+---
+
+## История изменений
+
+### v1.1 (2026-07-23 13:50) — добавили S11/P9: Test Coverage Requirement
+
+По запросу пользователя: каждый code change в рамках задачи ДОЛЖЕН сопровождаться тестами. Правила:
+- New feature → positive + negative + edge cases
+- Bug fix → regression test
+- Refactor → existing tests pass, coverage не падает
+- Optimization → correctness tests + benchmark
+
+Запрет: PR без тестов для нового кода блокируется merge.
+
+Применяется к:
+- Issue #85 remaining sub-tasks (1-7, 9-10, 13)
+- Все будущие issue в track-*

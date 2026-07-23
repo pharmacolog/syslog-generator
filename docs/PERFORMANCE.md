@@ -1,7 +1,7 @@
 # PERFORMANCE
 
-> **Версия:** v10.7.4. Документ описывает оптимизации производительности
-> и методику замера.
+> **Версия:** v10.7.19 + Issue #85 sub-tasks 2/3/4/7/8/10/11/12. Документ
+> описывает оптимизации производительности и методику замера.
 
 ## 1. Стратегия
 
@@ -13,6 +13,8 @@
    `format!()` в критических местах.
 3. **Async I/O через tokio multi-thread runtime** — нативная параллельность.
 4. **Compile-time оптимизации** — `lto = "fat"` + `codegen-units = 1`.
+5. **Pre-cache metric handles** — атомарный inc вместо HashMap+Mutex lookup
+   в hot path (Issue #85 sub-tasks 2/4).
 
 ## 2. Реализованные оптимизации
 
@@ -21,11 +23,16 @@
 | Транспорт | Буфер | Размер | Эффект |
 |-----------|-------|--------|--------|
 | `file` | `BufWriter<File>` | 8 KiB | Уменьшение write-syscall'ов в ~50-100x |
-| `tcp` | `BytesMut` | 8 KiB | Один write на N сообщений (вместо N writes) |
+| `tcp` | `BytesMut` (adaptive) | 8 KiB baseline → power-of-2 на рост | Один write на N сообщений; realloc только если msg > capacity (Issue #85 sub-task 10) |
 | `tls` | `BytesMut` | 8 KiB | Аналогично TCP + TLS overhead |
 | `udp` | none (zero-copy by design) | — | `send_to(&[u8])` без копий |
 
 Hot-path benchmark: throughput вырос в **5-10x** по сравнению с pre-N6 версией.
+
+**Adaptive BytesMut (Issue #85 sub-task 10, v11.0)**: ёмкость буфера
+увеличивается power-of-2 при превышении текущей ёмкости (`>8 KiB`).
+Маленькие сообщения (≤8 KiB) — zero realloc (текущее поведение).
+Большие сообщения — один realloc при первом большом msg, далее reuse.
 
 ### 2.2 Performance ч.1 (v10.1.0): LTO + codegen-units
 

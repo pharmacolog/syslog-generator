@@ -1189,9 +1189,11 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::format::protobuf::PbType where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::format::protobuf::PbType::vzip(self) -> V
 pub fn syslog_generator::format::protobuf::apply_protobuf_schema(core::option::Option<&syslog_generator::generator::config::ProtobufSchemaFieldMap>, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
+pub fn syslog_generator::format::protobuf::compile_protobuf_fields(core::option::Option<&syslog_generator::generator::config::ProtobufSchemaFieldMap>) -> core::option::Option<alloc::sync::Arc<alloc::vec::Vec<(u64, syslog_generator::format::protobuf::PbType, syslog_generator::template::CompiledTemplate)>>>
 pub fn syslog_generator::format::protobuf::resolve_fields(core::option::Option<&syslog_generator::generator::config::ProtobufSchemaFieldMap>, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::vec::Vec<(u64, syslog_generator::format::protobuf::PbType, alloc::string::String)>
 pub fn syslog_generator::format::protobuf::serialize_protobuf(core::option::Option<&syslog_generator::generator::config::ProtobufSchemaFieldMap>, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::vec::Vec<u8>
 pub fn syslog_generator::format::protobuf::serialize_protobuf_like(core::option::Option<&syslog_generator::generator::config::ProtobufSchemaFieldMap>, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::vec::Vec<u8>
+pub fn syslog_generator::format::protobuf::serialize_protobuf_with_compiled(&[(u64, syslog_generator::format::protobuf::PbType, syslog_generator::template::CompiledTemplate)], &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::vec::Vec<u8>
 pub fn syslog_generator::format::protobuf::write_varint(&mut alloc::vec::Vec<u8>, u64)
 pub mod syslog_generator::format::raw
 pub fn syslog_generator::format::raw::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>

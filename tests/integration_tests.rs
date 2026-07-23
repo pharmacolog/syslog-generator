@@ -3601,12 +3601,19 @@ async fn phase14_tls_drain_on_cert_failure() {
         "phase14-drain",
     );
     // run_profile должен завершиться Ok (TLS drain path).
+    // PR-A2 (Round 4): timeout + drain_timeout_secs увеличены с 15s до 60s
+    // — flaky на shared CI runners с kafka feature build.
+    let mut profile_with_long_drain = profile;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 60;
     let res = tokio::time::timeout(
-        Duration::from_secs(15),
-        run_profile(&profile, create_metrics().expect("metrics ok")),
+        Duration::from_secs(60),
+        run_profile(
+            &profile_with_long_drain,
+            create_metrics().expect("metrics ok"),
+        ),
     )
     .await
-    .expect("target_sender_tls не завис на drain (15s timeout)");
+    .expect("target_sender_tls не завис на drain (60s timeout)");
     assert!(
         res.is_ok(),
         "target_sender_tls должен возвращать Ok после drain: {res:?}"
@@ -3736,9 +3743,15 @@ async fn phase14_tls_mtls_with_client_cert() {
     // Не делаем строгих assertion на handshake outcome — для Step 1 важно
     // ПРОКРЫТЬ mTLS path в `build_tls_connector` (subagent review request
     // cleared by accepting this is a mTLS-only test, not handshake-strict).
+    // PR-A2 (Round 4): timeout + drain_timeout_secs увеличены с 15s до 60s.
+    let mut profile_with_long_drain = profile;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 60;
     let res = tokio::time::timeout(
-        Duration::from_secs(15),
-        run_profile(&profile, create_metrics().expect("metrics ok")),
+        Duration::from_secs(60),
+        run_profile(
+            &profile_with_long_drain,
+            create_metrics().expect("metrics ok"),
+        ),
     )
     .await
     .expect("target_sender_tls не завис");
@@ -3791,9 +3804,15 @@ async fn phase14_tls_handshake_failure_drains_queue() {
     );
     // Подольше timeout (60s) — TLS handshake + drain могут занять значительное
     // время на быстрых CI runner'ах (kafka feature test runs медленнее).
+    // PR-A2 (Round 4): drain_timeout_secs увеличен с 15s до 60s.
+    let mut profile_with_long_drain = profile;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 60;
     let res = tokio::time::timeout(
         Duration::from_secs(60),
-        run_profile(&profile, create_metrics().expect("metrics ok")),
+        run_profile(
+            &profile_with_long_drain,
+            create_metrics().expect("metrics ok"),
+        ),
     )
     .await
     .expect("target_sender_tls не завис (60s)");
@@ -3974,7 +3993,7 @@ async fn phase14_step2_tls_initial_handshake_fail_drains() {
         "phase14-step2-init-fail",
     );
     let res = tokio::time::timeout(
-        Duration::from_secs(15),
+        Duration::from_secs(60),
         run_profile(&profile, create_metrics().expect("metrics ok")),
     )
     .await

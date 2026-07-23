@@ -84,6 +84,8 @@ pub mod observability;
 pub mod payload;
 #[cfg(test)]
 mod payload_proptests;
+// PR-A2 (v10.8.0): Compiled ExecutionPlan.
+pub mod plan;
 pub mod schema;
 pub mod schema_check;
 pub mod shutdown;

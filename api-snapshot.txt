@@ -1833,6 +1833,7 @@ pub mod syslog_generator::generator::core
 pub struct syslog_generator::generator::core::PhaseContext
 pub syslog_generator::generator::core::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::core::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::generator::core::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::generator::core::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::generator::core::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::generator::core::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
@@ -2122,6 +2123,7 @@ pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::generator::PhaseContext
 pub syslog_generator::generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::generator::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
@@ -2760,6 +2762,904 @@ pub fn syslog_generator::payload::pad_to_size(alloc::vec::Vec<u8>, usize, &mut r
 pub fn syslog_generator::payload::random_string(usize, &mut rand::rngs::std::StdRng) -> alloc::string::String
 pub fn syslog_generator::payload::weighted_index(&[f64], &mut rand::rngs::std::StdRng) -> usize
 pub fn syslog_generator::payload::zipf_index(usize, f64, &mut rand::rngs::std::StdRng) -> usize
+pub mod syslog_generator::plan
+pub mod syslog_generator::plan::schema
+pub enum syslog_generator::plan::schema::CompiledDistribution
+pub syslog_generator::plan::schema::CompiledDistribution::Uniform
+pub syslog_generator::plan::schema::CompiledDistribution::Weighted
+pub syslog_generator::plan::schema::CompiledDistribution::Weighted::cumulative: alloc::vec::Vec<f64>
+pub syslog_generator::plan::schema::CompiledDistribution::Zipf
+pub syslog_generator::plan::schema::CompiledDistribution::Zipf::cumulative: alloc::vec::Vec<f64>
+impl core::clone::Clone for syslog_generator::plan::schema::CompiledDistribution
+pub fn syslog_generator::plan::schema::CompiledDistribution::clone(&self) -> syslog_generator::plan::schema::CompiledDistribution
+impl core::fmt::Debug for syslog_generator::plan::schema::CompiledDistribution
+pub fn syslog_generator::plan::schema::CompiledDistribution::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::schema::CompiledDistribution
+impl core::marker::Send for syslog_generator::plan::schema::CompiledDistribution
+impl core::marker::Sync for syslog_generator::plan::schema::CompiledDistribution
+impl core::marker::Unpin for syslog_generator::plan::schema::CompiledDistribution
+impl core::marker::UnsafeUnpin for syslog_generator::plan::schema::CompiledDistribution
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::schema::CompiledDistribution
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::schema::CompiledDistribution
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::schema::CompiledDistribution where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::schema::CompiledDistribution where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::schema::CompiledDistribution where U: core::convert::From<T>
+pub fn syslog_generator::plan::schema::CompiledDistribution::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::schema::CompiledDistribution where U: core::convert::Into<T>
+pub type syslog_generator::plan::schema::CompiledDistribution::Error = core::convert::Infallible
+pub fn syslog_generator::plan::schema::CompiledDistribution::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::schema::CompiledDistribution where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::schema::CompiledDistribution::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::schema::CompiledDistribution::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::schema::CompiledDistribution where T: core::clone::Clone
+pub type syslog_generator::plan::schema::CompiledDistribution::Owned = T
+pub fn syslog_generator::plan::schema::CompiledDistribution::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::schema::CompiledDistribution::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::schema::CompiledDistribution where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledDistribution::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::schema::CompiledDistribution where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledDistribution::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::schema::CompiledDistribution where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledDistribution::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::schema::CompiledDistribution where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::schema::CompiledDistribution::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::schema::CompiledDistribution
+pub fn syslog_generator::plan::schema::CompiledDistribution::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::schema::CompiledDistribution where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledDistribution::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::schema::CompiledDistribution::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::schema::CompiledDistribution
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::schema::CompiledDistribution
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::schema::CompiledDistribution where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::schema::CompiledDistribution where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::schema::CompiledDistribution::vzip(self) -> V
+pub struct syslog_generator::plan::schema::CompiledSchema
+pub syslog_generator::plan::schema::CompiledSchema::body_template: core::option::Option<syslog_generator::plan::template::CompiledTemplateV2>
+pub syslog_generator::plan::schema::CompiledSchema::field_slot_names: alloc::vec::Vec<alloc::string::String>
+pub syslog_generator::plan::schema::CompiledSchema::fields: alloc::vec::Vec<syslog_generator::plan::schema::CompiledSchemaField>
+impl syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::compile(&syslog_generator::schema::Schema) -> Self
+impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::clone(&self) -> syslog_generator::plan::schema::CompiledSchema
+impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Send for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Sync for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Unpin for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::UnsafeUnpin for syslog_generator::plan::schema::CompiledSchema
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::schema::CompiledSchema
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::schema::CompiledSchema
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::schema::CompiledSchema where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::schema::CompiledSchema where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::From<T>
+pub fn syslog_generator::plan::schema::CompiledSchema::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::Into<T>
+pub type syslog_generator::plan::schema::CompiledSchema::Error = core::convert::Infallible
+pub fn syslog_generator::plan::schema::CompiledSchema::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::schema::CompiledSchema::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::schema::CompiledSchema::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::schema::CompiledSchema where T: core::clone::Clone
+pub type syslog_generator::plan::schema::CompiledSchema::Owned = T
+pub fn syslog_generator::plan::schema::CompiledSchema::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::schema::CompiledSchema::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::schema::CompiledSchema where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::schema::CompiledSchema where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::schema::CompiledSchema::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::schema::CompiledSchema::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::schema::CompiledSchema
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::schema::CompiledSchema
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::schema::CompiledSchema where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::schema::CompiledSchema::vzip(self) -> V
+pub struct syslog_generator::plan::schema::CompiledSchemaField
+pub syslog_generator::plan::schema::CompiledSchemaField::depends_on: core::option::Option<alloc::string::String>
+pub syslog_generator::plan::schema::CompiledSchemaField::distribution: syslog_generator::plan::schema::CompiledDistribution
+pub syslog_generator::plan::schema::CompiledSchemaField::field_type: alloc::string::String
+pub syslog_generator::plan::schema::CompiledSchemaField::name: alloc::string::String
+impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::clone(&self) -> syslog_generator::plan::schema::CompiledSchemaField
+impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Send for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Sync for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Unpin for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::UnsafeUnpin for syslog_generator::plan::schema::CompiledSchemaField
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::schema::CompiledSchemaField
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::schema::CompiledSchemaField
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::schema::CompiledSchemaField where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::schema::CompiledSchemaField where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::From<T>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::Into<T>
+pub type syslog_generator::plan::schema::CompiledSchemaField::Error = core::convert::Infallible
+pub fn syslog_generator::plan::schema::CompiledSchemaField::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::schema::CompiledSchemaField::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::schema::CompiledSchemaField::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::schema::CompiledSchemaField where T: core::clone::Clone
+pub type syslog_generator::plan::schema::CompiledSchemaField::Owned = T
+pub fn syslog_generator::plan::schema::CompiledSchemaField::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::schema::CompiledSchemaField::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::schema::CompiledSchemaField where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::schema::CompiledSchemaField where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::schema::CompiledSchemaField::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::schema::CompiledSchemaField
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::schema::CompiledSchemaField
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::schema::CompiledSchemaField where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::vzip(self) -> V
+pub mod syslog_generator::plan::template
+pub struct syslog_generator::plan::template::CompiledTemplateV2
+impl syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::compile_from_strings(&[alloc::string::String], &mut alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn syslog_generator::plan::template::CompiledTemplateV2::empty() -> Self
+pub fn syslog_generator::plan::template::CompiledTemplateV2::part_count(&self) -> usize
+pub fn syslog_generator::plan::template::CompiledTemplateV2::render_into(&self, &syslog_generator::plan::value::ValueArena, &mut alloc::string::String)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::render_into_bytes(&self, &syslog_generator::plan::value::ValueArena, &mut bytes::bytes_mut::BytesMut)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::slot_count(&self) -> usize
+impl core::clone::Clone for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::clone(&self) -> syslog_generator::plan::template::CompiledTemplateV2
+impl core::fmt::Debug for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Send for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Sync for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Unpin for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::UnsafeUnpin for syslog_generator::plan::template::CompiledTemplateV2
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::template::CompiledTemplateV2
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::template::CompiledTemplateV2
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::template::CompiledTemplateV2 where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::template::CompiledTemplateV2 where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::From<T>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::Into<T>
+pub type syslog_generator::plan::template::CompiledTemplateV2::Error = core::convert::Infallible
+pub fn syslog_generator::plan::template::CompiledTemplateV2::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::template::CompiledTemplateV2::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::template::CompiledTemplateV2::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::template::CompiledTemplateV2 where T: core::clone::Clone
+pub type syslog_generator::plan::template::CompiledTemplateV2::Owned = T
+pub fn syslog_generator::plan::template::CompiledTemplateV2::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::template::CompiledTemplateV2 where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::template::CompiledTemplateV2 where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::template::CompiledTemplateV2::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::template::CompiledTemplateV2
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::template::CompiledTemplateV2
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::template::CompiledTemplateV2 where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::vzip(self) -> V
+pub mod syslog_generator::plan::value
+pub enum syslog_generator::plan::value::FakerKind
+pub syslog_generator::plan::value::FakerKind::Hostname
+pub syslog_generator::plan::value::FakerKind::HttpStatus
+pub syslog_generator::plan::value::FakerKind::Ipv4
+pub syslog_generator::plan::value::FakerKind::Ipv6
+pub syslog_generator::plan::value::FakerKind::Mac
+pub syslog_generator::plan::value::FakerKind::Url
+pub syslog_generator::plan::value::FakerKind::UserAgent
+pub syslog_generator::plan::value::FakerKind::Username
+pub syslog_generator::plan::value::FakerKind::Uuid
+impl syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::as_str(self) -> &'static str
+impl core::clone::Clone for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::clone(&self) -> syslog_generator::plan::value::FakerKind
+impl core::cmp::Eq for syslog_generator::plan::value::FakerKind
+impl core::cmp::PartialEq for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::eq(&self, &syslog_generator::plan::value::FakerKind) -> bool
+impl core::fmt::Debug for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::plan::value::FakerKind
+impl core::marker::StructuralPartialEq for syslog_generator::plan::value::FakerKind
+impl core::marker::Freeze for syslog_generator::plan::value::FakerKind
+impl core::marker::Send for syslog_generator::plan::value::FakerKind
+impl core::marker::Sync for syslog_generator::plan::value::FakerKind
+impl core::marker::Unpin for syslog_generator::plan::value::FakerKind
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::FakerKind
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::FakerKind
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::FakerKind
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::plan::value::FakerKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::plan::value::FakerKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::FakerKind where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::FakerKind where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::FakerKind where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::FakerKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::FakerKind where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::FakerKind::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::FakerKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::FakerKind where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::FakerKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::FakerKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::FakerKind where T: core::clone::Clone
+pub type syslog_generator::plan::value::FakerKind::Owned = T
+pub fn syslog_generator::plan::value::FakerKind::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::FakerKind::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::FakerKind where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::FakerKind where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::FakerKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::plan::value::FakerKind where T: core::marker::Copy
+pub fn syslog_generator::plan::value::FakerKind::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::FakerKind::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::FakerKind
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::FakerKind
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::FakerKind where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::FakerKind::vzip(self) -> V
+pub enum syslog_generator::plan::value::Value
+pub syslog_generator::plan::value::Value::Owned(alloc::string::String)
+pub syslog_generator::plan::value::Value::Static(&'static str)
+impl syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::as_str(&self) -> &str
+impl core::clone::Clone for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::clone(&self) -> syslog_generator::plan::value::Value
+impl core::convert::From<&'static str> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(&'static str) -> Self
+impl core::convert::From<alloc::string::String> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(alloc::string::String) -> Self
+impl core::fmt::Debug for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::value::Value
+impl core::marker::Send for syslog_generator::plan::value::Value
+impl core::marker::Sync for syslog_generator::plan::value::Value
+impl core::marker::Unpin for syslog_generator::plan::value::Value
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::Value
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::Value
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::Value
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::Value where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::Value where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::Value where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::Value::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::Value where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::Value::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::Value::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::Value where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::Value::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::Value::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::Value where T: core::clone::Clone
+pub type syslog_generator::plan::value::Value::Owned = T
+pub fn syslog_generator::plan::value::Value::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::Value::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::Value where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::Value where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::Value::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::Value::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::Value
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::Value
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::Value where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::Value::vzip(self) -> V
+pub enum syslog_generator::plan::value::ValueSlot
+pub syslog_generator::plan::value::ValueSlot::Faker(syslog_generator::plan::value::FakerKind)
+pub syslog_generator::plan::value::ValueSlot::LegacyKey
+pub syslog_generator::plan::value::ValueSlot::Pid
+pub syslog_generator::plan::value::ValueSlot::SchemaField(u32)
+pub syslog_generator::plan::value::ValueSlot::Sequence
+pub syslog_generator::plan::value::ValueSlot::StaticStr(&'static str)
+pub syslog_generator::plan::value::ValueSlot::StaticStrArc(alloc::sync::Arc<str>)
+pub syslog_generator::plan::value::ValueSlot::Timestamp
+impl core::clone::Clone for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::clone(&self) -> syslog_generator::plan::value::ValueSlot
+impl core::cmp::Eq for syslog_generator::plan::value::ValueSlot
+impl core::cmp::PartialEq for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::eq(&self, &syslog_generator::plan::value::ValueSlot) -> bool
+impl core::fmt::Debug for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::plan::value::ValueSlot
+impl core::marker::Freeze for syslog_generator::plan::value::ValueSlot
+impl core::marker::Send for syslog_generator::plan::value::ValueSlot
+impl core::marker::Sync for syslog_generator::plan::value::ValueSlot
+impl core::marker::Unpin for syslog_generator::plan::value::ValueSlot
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::ValueSlot
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::ValueSlot
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::ValueSlot
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::plan::value::ValueSlot where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::plan::value::ValueSlot where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::ValueSlot where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::ValueSlot where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::ValueSlot::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::ValueSlot::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::ValueSlot::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::ValueSlot::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::ValueSlot::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::ValueSlot where T: core::clone::Clone
+pub type syslog_generator::plan::value::ValueSlot::Owned = T
+pub fn syslog_generator::plan::value::ValueSlot::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::ValueSlot::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::ValueSlot where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::ValueSlot where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::ValueSlot::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::ValueSlot::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::ValueSlot
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::ValueSlot
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::ValueSlot where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::ValueSlot::vzip(self) -> V
+pub struct syslog_generator::plan::value::ValueArena
+impl syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::get(&self, usize) -> &str
+pub fn syslog_generator::plan::value::ValueArena::is_empty(&self) -> bool
+pub fn syslog_generator::plan::value::ValueArena::len(&self) -> usize
+pub fn syslog_generator::plan::value::ValueArena::new(usize) -> Self
+pub fn syslog_generator::plan::value::ValueArena::push(&mut self, impl core::convert::Into<syslog_generator::plan::value::Value>) -> usize
+pub fn syslog_generator::plan::value::ValueArena::reset(&mut self)
+pub fn syslog_generator::plan::value::ValueArena::scratch_str(&mut self) -> &mut alloc::string::String
+pub fn syslog_generator::plan::value::ValueArena::set(&mut self, usize, impl core::convert::Into<syslog_generator::plan::value::Value>)
+pub fn syslog_generator::plan::value::ValueArena::write_scratch<F: core::ops::function::FnOnce(&mut alloc::string::String)>(&mut self, F) -> &str
+impl core::fmt::Debug for syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::value::ValueArena
+impl core::marker::Send for syslog_generator::plan::value::ValueArena
+impl core::marker::Sync for syslog_generator::plan::value::ValueArena
+impl core::marker::Unpin for syslog_generator::plan::value::ValueArena
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::ValueArena
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::ValueArena
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::ValueArena
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::ValueArena where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::ValueArena where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::ValueArena where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::ValueArena::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::ValueArena where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::ValueArena::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::ValueArena::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::ValueArena where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::ValueArena::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::ValueArena::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for syslog_generator::plan::value::ValueArena where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::ValueArena::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::ValueArena
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::ValueArena
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::ValueArena where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::ValueArena::vzip(self) -> V
+pub fn syslog_generator::plan::value::write_pid(&mut alloc::string::String, i64)
+pub fn syslog_generator::plan::value::write_seq(&mut alloc::string::String, usize)
+pub enum syslog_generator::plan::FakerKind
+pub syslog_generator::plan::FakerKind::Hostname
+pub syslog_generator::plan::FakerKind::HttpStatus
+pub syslog_generator::plan::FakerKind::Ipv4
+pub syslog_generator::plan::FakerKind::Ipv6
+pub syslog_generator::plan::FakerKind::Mac
+pub syslog_generator::plan::FakerKind::Url
+pub syslog_generator::plan::FakerKind::UserAgent
+pub syslog_generator::plan::FakerKind::Username
+pub syslog_generator::plan::FakerKind::Uuid
+impl syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::as_str(self) -> &'static str
+impl core::clone::Clone for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::clone(&self) -> syslog_generator::plan::value::FakerKind
+impl core::cmp::Eq for syslog_generator::plan::value::FakerKind
+impl core::cmp::PartialEq for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::eq(&self, &syslog_generator::plan::value::FakerKind) -> bool
+impl core::fmt::Debug for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::plan::value::FakerKind
+impl core::marker::StructuralPartialEq for syslog_generator::plan::value::FakerKind
+impl core::marker::Freeze for syslog_generator::plan::value::FakerKind
+impl core::marker::Send for syslog_generator::plan::value::FakerKind
+impl core::marker::Sync for syslog_generator::plan::value::FakerKind
+impl core::marker::Unpin for syslog_generator::plan::value::FakerKind
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::FakerKind
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::FakerKind
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::FakerKind
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::plan::value::FakerKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::plan::value::FakerKind where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::FakerKind where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::FakerKind where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::FakerKind where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::FakerKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::FakerKind where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::FakerKind::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::FakerKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::FakerKind where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::FakerKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::FakerKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::FakerKind where T: core::clone::Clone
+pub type syslog_generator::plan::value::FakerKind::Owned = T
+pub fn syslog_generator::plan::value::FakerKind::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::FakerKind::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::FakerKind where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::FakerKind where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::FakerKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::FakerKind
+pub fn syslog_generator::plan::value::FakerKind::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::plan::value::FakerKind where T: core::marker::Copy
+pub fn syslog_generator::plan::value::FakerKind::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::FakerKind::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::FakerKind::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::FakerKind
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::FakerKind
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::FakerKind where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::FakerKind where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::FakerKind::vzip(self) -> V
+pub enum syslog_generator::plan::Value
+pub syslog_generator::plan::Value::Owned(alloc::string::String)
+pub syslog_generator::plan::Value::Static(&'static str)
+impl syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::as_str(&self) -> &str
+impl core::clone::Clone for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::clone(&self) -> syslog_generator::plan::value::Value
+impl core::convert::From<&'static str> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(&'static str) -> Self
+impl core::convert::From<alloc::string::String> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(alloc::string::String) -> Self
+impl core::fmt::Debug for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::value::Value
+impl core::marker::Send for syslog_generator::plan::value::Value
+impl core::marker::Sync for syslog_generator::plan::value::Value
+impl core::marker::Unpin for syslog_generator::plan::value::Value
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::Value
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::Value
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::Value
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::Value where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::Value where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::Value where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::Value::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::Value where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::Value::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::Value::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::Value where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::Value::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::Value::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::Value where T: core::clone::Clone
+pub type syslog_generator::plan::value::Value::Owned = T
+pub fn syslog_generator::plan::value::Value::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::Value::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::Value where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::Value where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::Value::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::Value
+pub fn syslog_generator::plan::value::Value::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::Value::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::Value::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::Value
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::Value
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::Value where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::Value where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::Value::vzip(self) -> V
+pub enum syslog_generator::plan::ValueSlot
+pub syslog_generator::plan::ValueSlot::Faker(syslog_generator::plan::value::FakerKind)
+pub syslog_generator::plan::ValueSlot::LegacyKey
+pub syslog_generator::plan::ValueSlot::Pid
+pub syslog_generator::plan::ValueSlot::SchemaField(u32)
+pub syslog_generator::plan::ValueSlot::Sequence
+pub syslog_generator::plan::ValueSlot::StaticStr(&'static str)
+pub syslog_generator::plan::ValueSlot::StaticStrArc(alloc::sync::Arc<str>)
+pub syslog_generator::plan::ValueSlot::Timestamp
+impl core::clone::Clone for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::clone(&self) -> syslog_generator::plan::value::ValueSlot
+impl core::cmp::Eq for syslog_generator::plan::value::ValueSlot
+impl core::cmp::PartialEq for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::eq(&self, &syslog_generator::plan::value::ValueSlot) -> bool
+impl core::fmt::Debug for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::plan::value::ValueSlot
+impl core::marker::Freeze for syslog_generator::plan::value::ValueSlot
+impl core::marker::Send for syslog_generator::plan::value::ValueSlot
+impl core::marker::Sync for syslog_generator::plan::value::ValueSlot
+impl core::marker::Unpin for syslog_generator::plan::value::ValueSlot
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::ValueSlot
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::ValueSlot
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::ValueSlot
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::plan::value::ValueSlot where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::plan::value::ValueSlot where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::ValueSlot where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::ValueSlot where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::ValueSlot::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::ValueSlot::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::ValueSlot::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::ValueSlot where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::ValueSlot::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::ValueSlot::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::value::ValueSlot where T: core::clone::Clone
+pub type syslog_generator::plan::value::ValueSlot::Owned = T
+pub fn syslog_generator::plan::value::ValueSlot::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::value::ValueSlot::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::value::ValueSlot where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::value::ValueSlot where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::value::ValueSlot::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::value::ValueSlot
+pub fn syslog_generator::plan::value::ValueSlot::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueSlot::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::ValueSlot::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::ValueSlot
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::ValueSlot
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::ValueSlot where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::ValueSlot where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::ValueSlot::vzip(self) -> V
+pub struct syslog_generator::plan::CompiledPhase
+pub syslog_generator::plan::CompiledPhase::body_template: syslog_generator::plan::template::CompiledTemplateV2
+pub syslog_generator::plan::CompiledPhase::syslog_templates: core::option::Option<syslog_generator::plan::SyslogHeaderTemplates>
+pub syslog_generator::plan::CompiledPhase::value_slot_count: usize
+impl core::clone::Clone for syslog_generator::plan::CompiledPhase
+pub fn syslog_generator::plan::CompiledPhase::clone(&self) -> syslog_generator::plan::CompiledPhase
+impl core::fmt::Debug for syslog_generator::plan::CompiledPhase
+pub fn syslog_generator::plan::CompiledPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::CompiledPhase
+impl core::marker::Send for syslog_generator::plan::CompiledPhase
+impl core::marker::Sync for syslog_generator::plan::CompiledPhase
+impl core::marker::Unpin for syslog_generator::plan::CompiledPhase
+impl core::marker::UnsafeUnpin for syslog_generator::plan::CompiledPhase
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::CompiledPhase
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::CompiledPhase
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::CompiledPhase where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::CompiledPhase where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::CompiledPhase where U: core::convert::From<T>
+pub fn syslog_generator::plan::CompiledPhase::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::CompiledPhase where U: core::convert::Into<T>
+pub type syslog_generator::plan::CompiledPhase::Error = core::convert::Infallible
+pub fn syslog_generator::plan::CompiledPhase::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::CompiledPhase where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::CompiledPhase::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::CompiledPhase::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::CompiledPhase where T: core::clone::Clone
+pub type syslog_generator::plan::CompiledPhase::Owned = T
+pub fn syslog_generator::plan::CompiledPhase::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::CompiledPhase::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::CompiledPhase where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::CompiledPhase::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::CompiledPhase where T: ?core::marker::Sized
+pub fn syslog_generator::plan::CompiledPhase::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::CompiledPhase where T: ?core::marker::Sized
+pub fn syslog_generator::plan::CompiledPhase::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::CompiledPhase where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::CompiledPhase::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::CompiledPhase
+pub fn syslog_generator::plan::CompiledPhase::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::CompiledPhase where T: ?core::marker::Sized
+pub fn syslog_generator::plan::CompiledPhase::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::CompiledPhase::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::CompiledPhase
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::CompiledPhase
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::CompiledPhase where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::CompiledPhase where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::CompiledPhase::vzip(self) -> V
+pub struct syslog_generator::plan::CompiledSchema
+pub syslog_generator::plan::CompiledSchema::body_template: core::option::Option<syslog_generator::plan::template::CompiledTemplateV2>
+pub syslog_generator::plan::CompiledSchema::field_slot_names: alloc::vec::Vec<alloc::string::String>
+pub syslog_generator::plan::CompiledSchema::fields: alloc::vec::Vec<syslog_generator::plan::schema::CompiledSchemaField>
+impl syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::compile(&syslog_generator::schema::Schema) -> Self
+impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::clone(&self) -> syslog_generator::plan::schema::CompiledSchema
+impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Send for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Sync for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::Unpin for syslog_generator::plan::schema::CompiledSchema
+impl core::marker::UnsafeUnpin for syslog_generator::plan::schema::CompiledSchema
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::schema::CompiledSchema
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::schema::CompiledSchema
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::schema::CompiledSchema where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::schema::CompiledSchema where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::From<T>
+pub fn syslog_generator::plan::schema::CompiledSchema::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::Into<T>
+pub type syslog_generator::plan::schema::CompiledSchema::Error = core::convert::Infallible
+pub fn syslog_generator::plan::schema::CompiledSchema::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::schema::CompiledSchema where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::schema::CompiledSchema::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::schema::CompiledSchema::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::schema::CompiledSchema where T: core::clone::Clone
+pub type syslog_generator::plan::schema::CompiledSchema::Owned = T
+pub fn syslog_generator::plan::schema::CompiledSchema::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::schema::CompiledSchema::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::schema::CompiledSchema where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::schema::CompiledSchema where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::schema::CompiledSchema::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::schema::CompiledSchema
+pub fn syslog_generator::plan::schema::CompiledSchema::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchema::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::schema::CompiledSchema::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::schema::CompiledSchema
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::schema::CompiledSchema
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::schema::CompiledSchema where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::schema::CompiledSchema where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::schema::CompiledSchema::vzip(self) -> V
+pub struct syslog_generator::plan::CompiledSchemaField
+pub syslog_generator::plan::CompiledSchemaField::depends_on: core::option::Option<alloc::string::String>
+pub syslog_generator::plan::CompiledSchemaField::distribution: syslog_generator::plan::schema::CompiledDistribution
+pub syslog_generator::plan::CompiledSchemaField::field_type: alloc::string::String
+pub syslog_generator::plan::CompiledSchemaField::name: alloc::string::String
+impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::clone(&self) -> syslog_generator::plan::schema::CompiledSchemaField
+impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Send for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Sync for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::Unpin for syslog_generator::plan::schema::CompiledSchemaField
+impl core::marker::UnsafeUnpin for syslog_generator::plan::schema::CompiledSchemaField
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::schema::CompiledSchemaField
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::schema::CompiledSchemaField
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::schema::CompiledSchemaField where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::schema::CompiledSchemaField where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::From<T>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::Into<T>
+pub type syslog_generator::plan::schema::CompiledSchemaField::Error = core::convert::Infallible
+pub fn syslog_generator::plan::schema::CompiledSchemaField::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::schema::CompiledSchemaField where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::schema::CompiledSchemaField::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::schema::CompiledSchemaField::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::schema::CompiledSchemaField where T: core::clone::Clone
+pub type syslog_generator::plan::schema::CompiledSchemaField::Owned = T
+pub fn syslog_generator::plan::schema::CompiledSchemaField::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::schema::CompiledSchemaField::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::schema::CompiledSchemaField where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::schema::CompiledSchemaField where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::schema::CompiledSchemaField::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::schema::CompiledSchemaField
+pub fn syslog_generator::plan::schema::CompiledSchemaField::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+pub fn syslog_generator::plan::schema::CompiledSchemaField::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::schema::CompiledSchemaField
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::schema::CompiledSchemaField
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::schema::CompiledSchemaField where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::schema::CompiledSchemaField where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::schema::CompiledSchemaField::vzip(self) -> V
+pub struct syslog_generator::plan::CompiledTemplateV2
+impl syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::compile_from_strings(&[alloc::string::String], &mut alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn syslog_generator::plan::template::CompiledTemplateV2::empty() -> Self
+pub fn syslog_generator::plan::template::CompiledTemplateV2::part_count(&self) -> usize
+pub fn syslog_generator::plan::template::CompiledTemplateV2::render_into(&self, &syslog_generator::plan::value::ValueArena, &mut alloc::string::String)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::render_into_bytes(&self, &syslog_generator::plan::value::ValueArena, &mut bytes::bytes_mut::BytesMut)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::slot_count(&self) -> usize
+impl core::clone::Clone for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::clone(&self) -> syslog_generator::plan::template::CompiledTemplateV2
+impl core::fmt::Debug for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Send for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Sync for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::Unpin for syslog_generator::plan::template::CompiledTemplateV2
+impl core::marker::UnsafeUnpin for syslog_generator::plan::template::CompiledTemplateV2
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::template::CompiledTemplateV2
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::template::CompiledTemplateV2
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::template::CompiledTemplateV2 where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::template::CompiledTemplateV2 where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::From<T>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::Into<T>
+pub type syslog_generator::plan::template::CompiledTemplateV2::Error = core::convert::Infallible
+pub fn syslog_generator::plan::template::CompiledTemplateV2::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::template::CompiledTemplateV2 where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::template::CompiledTemplateV2::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::template::CompiledTemplateV2::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::template::CompiledTemplateV2 where T: core::clone::Clone
+pub type syslog_generator::plan::template::CompiledTemplateV2::Owned = T
+pub fn syslog_generator::plan::template::CompiledTemplateV2::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::template::CompiledTemplateV2::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::template::CompiledTemplateV2 where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::template::CompiledTemplateV2 where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::template::CompiledTemplateV2::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::template::CompiledTemplateV2
+pub fn syslog_generator::plan::template::CompiledTemplateV2::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+pub fn syslog_generator::plan::template::CompiledTemplateV2::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::template::CompiledTemplateV2
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::template::CompiledTemplateV2
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::template::CompiledTemplateV2 where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::template::CompiledTemplateV2 where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::template::CompiledTemplateV2::vzip(self) -> V
+pub struct syslog_generator::plan::SyslogHeaderTemplates
+pub syslog_generator::plan::SyslogHeaderTemplates::app_name: syslog_generator::plan::template::CompiledTemplateV2
+pub syslog_generator::plan::SyslogHeaderTemplates::hostname: syslog_generator::plan::template::CompiledTemplateV2
+pub syslog_generator::plan::SyslogHeaderTemplates::msgid: syslog_generator::plan::template::CompiledTemplateV2
+pub syslog_generator::plan::SyslogHeaderTemplates::procid: syslog_generator::plan::template::CompiledTemplateV2
+pub syslog_generator::plan::SyslogHeaderTemplates::structured_data: syslog_generator::plan::template::CompiledTemplateV2
+impl syslog_generator::plan::SyslogHeaderTemplates
+pub fn syslog_generator::plan::SyslogHeaderTemplates::render_into(&self, &syslog_generator::plan::value::ValueArena, &mut alloc::vec::Vec<u8>)
+impl core::clone::Clone for syslog_generator::plan::SyslogHeaderTemplates
+pub fn syslog_generator::plan::SyslogHeaderTemplates::clone(&self) -> syslog_generator::plan::SyslogHeaderTemplates
+impl core::fmt::Debug for syslog_generator::plan::SyslogHeaderTemplates
+pub fn syslog_generator::plan::SyslogHeaderTemplates::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::SyslogHeaderTemplates
+impl core::marker::Send for syslog_generator::plan::SyslogHeaderTemplates
+impl core::marker::Sync for syslog_generator::plan::SyslogHeaderTemplates
+impl core::marker::Unpin for syslog_generator::plan::SyslogHeaderTemplates
+impl core::marker::UnsafeUnpin for syslog_generator::plan::SyslogHeaderTemplates
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::SyslogHeaderTemplates
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::SyslogHeaderTemplates
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::SyslogHeaderTemplates where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::SyslogHeaderTemplates where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::SyslogHeaderTemplates where U: core::convert::From<T>
+pub fn syslog_generator::plan::SyslogHeaderTemplates::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::SyslogHeaderTemplates where U: core::convert::Into<T>
+pub type syslog_generator::plan::SyslogHeaderTemplates::Error = core::convert::Infallible
+pub fn syslog_generator::plan::SyslogHeaderTemplates::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::SyslogHeaderTemplates where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::SyslogHeaderTemplates::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::SyslogHeaderTemplates::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::plan::SyslogHeaderTemplates where T: core::clone::Clone
+pub type syslog_generator::plan::SyslogHeaderTemplates::Owned = T
+pub fn syslog_generator::plan::SyslogHeaderTemplates::clone_into(&self, &mut T)
+pub fn syslog_generator::plan::SyslogHeaderTemplates::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::plan::SyslogHeaderTemplates where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::SyslogHeaderTemplates::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::SyslogHeaderTemplates where T: ?core::marker::Sized
+pub fn syslog_generator::plan::SyslogHeaderTemplates::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::SyslogHeaderTemplates where T: ?core::marker::Sized
+pub fn syslog_generator::plan::SyslogHeaderTemplates::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::plan::SyslogHeaderTemplates where T: core::clone::Clone
+pub unsafe fn syslog_generator::plan::SyslogHeaderTemplates::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::plan::SyslogHeaderTemplates
+pub fn syslog_generator::plan::SyslogHeaderTemplates::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::SyslogHeaderTemplates where T: ?core::marker::Sized
+pub fn syslog_generator::plan::SyslogHeaderTemplates::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::SyslogHeaderTemplates::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::SyslogHeaderTemplates
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::SyslogHeaderTemplates
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::SyslogHeaderTemplates where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::SyslogHeaderTemplates where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::SyslogHeaderTemplates::vzip(self) -> V
+pub struct syslog_generator::plan::ValueArena
+impl syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::get(&self, usize) -> &str
+pub fn syslog_generator::plan::value::ValueArena::is_empty(&self) -> bool
+pub fn syslog_generator::plan::value::ValueArena::len(&self) -> usize
+pub fn syslog_generator::plan::value::ValueArena::new(usize) -> Self
+pub fn syslog_generator::plan::value::ValueArena::push(&mut self, impl core::convert::Into<syslog_generator::plan::value::Value>) -> usize
+pub fn syslog_generator::plan::value::ValueArena::reset(&mut self)
+pub fn syslog_generator::plan::value::ValueArena::scratch_str(&mut self) -> &mut alloc::string::String
+pub fn syslog_generator::plan::value::ValueArena::set(&mut self, usize, impl core::convert::Into<syslog_generator::plan::value::Value>)
+pub fn syslog_generator::plan::value::ValueArena::write_scratch<F: core::ops::function::FnOnce(&mut alloc::string::String)>(&mut self, F) -> &str
+impl core::fmt::Debug for syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::plan::value::ValueArena
+impl core::marker::Send for syslog_generator::plan::value::ValueArena
+impl core::marker::Sync for syslog_generator::plan::value::ValueArena
+impl core::marker::Unpin for syslog_generator::plan::value::ValueArena
+impl core::marker::UnsafeUnpin for syslog_generator::plan::value::ValueArena
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::plan::value::ValueArena
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::plan::value::ValueArena
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::plan::value::ValueArena where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::plan::value::ValueArena where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::plan::value::ValueArena where U: core::convert::From<T>
+pub fn syslog_generator::plan::value::ValueArena::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::plan::value::ValueArena where U: core::convert::Into<T>
+pub type syslog_generator::plan::value::ValueArena::Error = core::convert::Infallible
+pub fn syslog_generator::plan::value::ValueArena::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::plan::value::ValueArena where U: core::convert::TryFrom<T>
+pub type syslog_generator::plan::value::ValueArena::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::plan::value::ValueArena::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for syslog_generator::plan::value::ValueArena where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for syslog_generator::plan::value::ValueArena
+pub fn syslog_generator::plan::value::ValueArena::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+pub fn syslog_generator::plan::value::ValueArena::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::plan::value::ValueArena::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::plan::value::ValueArena
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::plan::value::ValueArena
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::plan::value::ValueArena where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::ValueArena where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::plan::value::ValueArena::vzip(self) -> V
+pub fn syslog_generator::plan::compile_phase(&syslog_generator::generator::config::Phase) -> syslog_generator::plan::CompiledPhase
 pub mod syslog_generator::protobuf
 pub enum syslog_generator::protobuf::PbType
 pub syslog_generator::protobuf::PbType::Bool
@@ -5404,6 +6304,7 @@ pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::PhaseContext
 pub syslog_generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
+pub syslog_generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>

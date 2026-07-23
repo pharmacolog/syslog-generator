@@ -42,9 +42,18 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-sbom
 
+      - name: Cache cargo-cyclonedx
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-cyclonedx
+          key: cargo-tool-${{ runner.os }}-cargo-cyclonedx-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-cyclonedx-
       - name: Install cargo-cyclonedx
-        run: cargo install cargo-cyclonedx --locked
-
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-cyclonedx" ]; then
+            cargo install cargo-cyclonedx --locked
+          fi
       - name: Generate SBOM (CycloneDX JSON)
         # PR-15 fix: --override-filename="sbom-${GITHUB_SHA::8}.cdx" → результат:
         #   sbom-<sha8>.cdx.json (явное расширение .cdx).
@@ -60,7 +69,7 @@ jobs:
       - name: Validate SBOM JSON
         # Убеждаемся что файл валидный JSON и содержит обязательные поля.
         run: |
-          SBOM_FILE=$(ls sbom-*.cdx.json | head -1)
+          SBOM_FILE=$(find . -maxdepth 1 -type f -name 'sbom-*.cdx.json' -print -quit)
           echo "SBOM file: $SBOM_FILE"
           test -f "$SBOM_FILE" || (echo "❌ SBOM file not generated" && exit 1)
           # Валидируем JSON.

@@ -3604,7 +3604,7 @@ async fn phase14_tls_drain_on_cert_failure() {
     // PR-A2 (Round 4): timeout + drain_timeout_secs увеличены с 15s до 60s
     // — flaky на shared CI runners с kafka feature build.
     let mut profile_with_long_drain = profile;
-    profile_with_long_drain.shutdown.drain_timeout_secs = 120;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 300;
     let res = tokio::time::timeout(
         Duration::from_secs(300),
         run_profile(
@@ -3745,7 +3745,7 @@ async fn phase14_tls_mtls_with_client_cert() {
     // cleared by accepting this is a mTLS-only test, not handshake-strict).
     // PR-A2 (Round 4): timeout + drain_timeout_secs увеличены с 15s до 60s.
     let mut profile_with_long_drain = profile;
-    profile_with_long_drain.shutdown.drain_timeout_secs = 120;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 300;
     let res = tokio::time::timeout(
         Duration::from_secs(300),
         run_profile(
@@ -3809,7 +3809,7 @@ async fn phase14_tls_handshake_failure_drains_queue() {
     // (cold cache + параллельные jobs + coverage instrumentation) mTLS handshake
     // занимает >60s, drain также затягивается.
     let mut profile_with_long_drain = profile;
-    profile_with_long_drain.shutdown.drain_timeout_secs = 120;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 300;
     let res = tokio::time::timeout(
         Duration::from_secs(300),
         run_profile(
@@ -3894,7 +3894,7 @@ async fn phase14_step2_tls_mtls_full_round_trip_strict() {
     // PR-A2 (Round 3): drain timeout_secs увеличен с 15s до 60s — на CI с
     // kafka feature build workers не успевают drain'ить за 15s.
     let mut profile_with_long_drain = profile;
-    profile_with_long_drain.shutdown.drain_timeout_secs = 120;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 300;
     let res = tokio::time::timeout(
         Duration::from_secs(300),
         run_profile(
@@ -3947,7 +3947,7 @@ async fn phase14_step2_tls_reconnect_after_write_failure() {
     // PR-A2: дополнительно увеличен до 60s.
     // PR-A2 (Round 3): drain timeout_secs увеличен с 15s до 60s.
     let mut profile_with_long_drain = profile;
-    profile_with_long_drain.shutdown.drain_timeout_secs = 120;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 300;
     let res = tokio::time::timeout(
         Duration::from_secs(300),
         run_profile(

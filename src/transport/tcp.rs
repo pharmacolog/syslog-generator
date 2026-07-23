@@ -51,7 +51,7 @@ pub async fn target_sender_tcp(
             // Reconnect-strategy здесь НЕ применяется (иначе при max_attempts=None
             // sender зависнет на бесконечном backoff'е — это противоречит
             // поведению v9.1.0 и ломает negative-path тесты).
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             drain_as_errors(&rx, &metrics, &addr).await;
             return Ok(());
         }
@@ -81,7 +81,7 @@ async fn run_send_loop(
         frame_into(&mut buf, &msg, framing);
         let t0 = std::time::Instant::now();
         if stream.write_all(&buf).await.is_err() {
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             buf.clear();
             // F16: попытка переустановить соединение через exponential backoff.
             // reconnect_with_backoff возвращает:
@@ -118,10 +118,9 @@ async fn run_send_loop(
                             &addr,
                             msg.len() as u64,
                             &shutdown,
-                        )
-                        .await;
+                        );
                     } else {
-                        record_error(&metrics, &addr).await;
+                        record_error(&metrics, &addr);
                     }
                 }
                 Some(Err(_)) | None => {
@@ -140,8 +139,7 @@ async fn run_send_loop(
                 &addr,
                 msg.len() as u64,
                 &shutdown,
-            )
-            .await;
+            );
         }
         // Освобождаем буфер для следующего сообщения. `clear()` сохраняет
         // capacity (ёмкость) — переиспользуем аллокацию.
@@ -314,9 +312,9 @@ mod tests {
     async fn record_error_increments_errors_total_per_target() {
         use crate::observability::metrics::create_metrics;
         let metrics = create_metrics().unwrap();
-        record_error(&metrics, "127.0.0.1:514").await;
-        record_error(&metrics, "127.0.0.1:514").await;
-        record_error(&metrics, "127.0.0.1:515").await;
+        record_error(&metrics, "127.0.0.1:514");
+        record_error(&metrics, "127.0.0.1:514");
+        record_error(&metrics, "127.0.0.1:515");
         let m = metrics
             .errors_total
             .get_metric_with_label_values(&["127.0.0.1:514"])

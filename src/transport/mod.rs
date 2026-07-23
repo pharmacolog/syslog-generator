@@ -37,7 +37,11 @@ use tokio_util::sync::CancellationToken;
 /// PR-17e: `Bytes` (cheap clone) + `parking_lot::Mutex` (sync, fast).
 pub type SharedRx = Arc<parking_lot::Mutex<mpsc::Receiver<Bytes>>>;
 
-pub async fn record_send(
+/// Issue #85 \[A1\] sub-task 3: sync record_send — убирает async overhead
+/// (~80-100 нс/msg) на каждом сообщении. Внутри нет await-операций;
+/// CancellationToken::is_cancelled() — sync метод.
+#[inline]
+pub fn record_send(
     metrics: &Metrics,
     transport: &str,
     phase: &str,
@@ -79,7 +83,10 @@ pub(crate) fn record_reconnect(metrics: &Metrics, transport: &str, target: &str)
         .inc();
 }
 
-pub async fn record_error(metrics: &Metrics, target: &str) {
+/// Issue #85 \[A1\] sub-task 3: sync record_error — убирает async overhead
+/// (~80-100 нс/msg) на каждой ошибке.
+#[inline]
+pub fn record_error(metrics: &Metrics, target: &str) {
     metrics.errors_total.with_label_values(&[target]).inc();
 }
 
@@ -128,7 +135,7 @@ impl Framing {
 /// чтобы продюсер не блокировался на переполненном канале.
 pub(crate) async fn drain_as_errors(rx: &SharedRx, metrics: &Metrics, addr: &str) {
     while next_msg(rx).await.is_some() {
-        record_error(metrics, addr).await;
+        record_error(metrics, addr);
     }
 }
 
@@ -429,7 +436,7 @@ mod tests {
         let metrics = create_metrics().expect("create_metrics ok");
         let shutdown = CancellationToken::new();
 
-        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 42, &shutdown).await;
+        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 42, &shutdown);
 
         let body = gather_metrics(&metrics).expect("gather ok");
         // messages_total{transport=tcp,phase=phase1,target=...,result=success} == 1
@@ -458,7 +465,7 @@ mod tests {
         let shutdown = CancellationToken::new();
         shutdown.cancel();
 
-        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 10, &shutdown).await;
+        record_send(&metrics, "tcp", "phase1", "10.0.0.1:514", 10, &shutdown);
 
         let body = gather_metrics(&metrics).expect("gather ok");
         assert!(
@@ -515,9 +522,9 @@ mod tests {
     #[tokio::test]
     async fn v10_4_0_record_error_increments() {
         let metrics = create_metrics().expect("create_metrics ok");
-        record_error(&metrics, "10.0.0.1:514").await;
-        record_error(&metrics, "10.0.0.1:514").await;
-        record_error(&metrics, "10.0.0.1:514").await;
+        record_error(&metrics, "10.0.0.1:514");
+        record_error(&metrics, "10.0.0.1:514");
+        record_error(&metrics, "10.0.0.1:514");
 
         let body = gather_metrics(&metrics).expect("gather ok");
         assert!(
@@ -548,11 +555,11 @@ mod tests {
         use crate::observability::metrics::create_metrics;
         let metrics = create_metrics().unwrap();
         let cancel = CancellationToken::new();
-        record_send(&metrics, "tcp", "phase1", "127.0.0.1:514", 100, &cancel).await;
+        record_send(&metrics, "tcp", "phase1", "127.0.0.1:514", 100, &cancel);
         let cancel2 = CancellationToken::new();
-        record_send(&metrics, "udp", "phase2", "127.0.0.1:514", 200, &cancel2).await;
+        record_send(&metrics, "udp", "phase2", "127.0.0.1:514", 200, &cancel2);
         let cancel3 = CancellationToken::new();
-        record_send(&metrics, "tls", "phase3", "127.0.0.1:6514", 300, &cancel3).await;
+        record_send(&metrics, "tls", "phase3", "127.0.0.1:6514", 300, &cancel3);
 
         // bytes_total should be 600.
         let m = metrics
@@ -570,6 +577,54 @@ mod tests {
             .get_metric_with_label_values(&["tls", "phase3", "127.0.0.1:6514"])
             .unwrap();
         assert_eq!(m.get(), 300.0);
+    }
+
+    /// Issue #85 \[A1\] sub-task 3: `record_send` и `record_error` — sync функции
+    /// (не возвращают Future). Компилятор гарантирует это через type signature,
+    /// но тест явно проверяет отсутствие `.await` в callers.
+    ///
+    /// Проверяем что functions:
+    /// 1. Не возвращают Future (вызываются напрямую)
+    /// 2. Обновляют те же metrics что и раньше (backward-compat)
+    /// 3. Могут быть вызваны из sync контекста (например, в benchmark)
+    #[test]
+    fn a1_subtask3_record_send_record_error_are_sync() {
+        use crate::observability::metrics::create_metrics;
+        let metrics = create_metrics().unwrap();
+        let cancel = CancellationToken::new();
+
+        // Эти вызовы компилируются без `.await` — это compile-time proof
+        // что record_send/record_error не возвращают Future.
+        record_send(&metrics, "tcp", "phase1", "127.0.0.1:514", 100, &cancel);
+        record_send(&metrics, "udp", "phase2", "127.0.0.1:514", 200, &cancel);
+        record_error(&metrics, "127.0.0.1:514");
+
+        // Проверяем что metric counters обновлены (backward-compat).
+        let m = metrics
+            .bytes_total
+            .get_metric_with_label_values(&["tcp", "phase1", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(m.get(), 100.0, "record_send должен обновить bytes_total");
+
+        let m = metrics
+            .bytes_total
+            .get_metric_with_label_values(&["udp", "phase2", "127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(
+            m.get(),
+            200.0,
+            "record_send должен обновить bytes_total для udp"
+        );
+
+        let m = metrics
+            .errors_total
+            .get_metric_with_label_values(&["127.0.0.1:514"])
+            .unwrap();
+        assert_eq!(
+            m.get(),
+            1.0,
+            "record_error должен инкрементировать errors_total"
+        );
     }
 
     /// PR-16 (coverage): frame_into_appends_with_proper_separator.

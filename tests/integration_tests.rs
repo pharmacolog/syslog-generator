@@ -3867,8 +3867,10 @@ async fn phase14_step2_tls_mtls_full_round_trip_strict() {
     // Это best-effort покрытие mTLS path в build_tls_connector + tls_sender_tls.
     // PR-A0 (v10.8.0): таймаут 30s вместо 15s — flaky на shared CI runners
     // (cold-start mTLS handshake может занимать >15s с rustls + ring).
+    // PR-A2: дополнительно увеличен до 60s — PR #94 CI показал что 30s всё
+    // ещё мало на shared runners при cold cache + параллельных jobs.
     let res = tokio::time::timeout(
-        Duration::from_secs(30),
+        Duration::from_secs(60),
         run_profile(&profile, create_metrics().expect("metrics ok")),
     )
     .await
@@ -3913,8 +3915,9 @@ async fn phase14_step2_tls_reconnect_after_write_failure() {
     // server receives 1 message → close_after_write_failure → client reconnects.
     // Покрытие run_send_loop path через metric `reconnects_total`.
     // PR-A0 (v10.8.0): таймаут 30s — flaky на shared CI runners.
+    // PR-A2: дополнительно увеличен до 60s.
     let res = tokio::time::timeout(
-        Duration::from_secs(30),
+        Duration::from_secs(60),
         run_profile(&profile, create_metrics().expect("metrics ok")),
     )
     .await

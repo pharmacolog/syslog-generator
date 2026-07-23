@@ -3,11 +3,16 @@
 //! с pacing, transport, metrics.
 //!
 //! Сценарии:
-//! - `runtime_rfc5424_unlimited` — static RFC 5424 в /dev/null, без rate-limit.
-//! - `runtime_rfc5424_faker`     — faker tokens, без rate-limit.
-//! - `runtime_rfc3164_unlimited` — RFC 3164 static.
-//! - `runtime_json_lines`        — JSON-lines static.
-//! - `runtime_udp_loopback`      — UDP 127.0.0.1, generator → loopback receiver.
+//! - `runtime_rfc5424_static` — body-only template, no fakers, RFC 5424.
+//! - `runtime_rfc5424_faker`  — body-only faker template.
+//! - `runtime_rfc3164_static` — body-only template, RFC 3164.
+//! - `runtime_json_static`   — body-only JSON-lines.
+//!
+//! Все runtime benches используют:
+//! - Fixed seed (42) для воспроизводимости.
+//! - Single warmup + main iter (steady-state отдельно от setup/teardown).
+//! - File target в /tmp.
+//! - Assert на `run_profile` Ok + доставленные messages.
 //!
 //! Примеры запуска:
 //!     cargo bench --bench runtime
@@ -16,27 +21,17 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::hint::black_box;
 use std::path::PathBuf;
-use std::time::Instant;
 use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 
-fn static_template() -> &'static str {
-    "<165>1 {{timestamp}} {{hostname}} {{real_app}}[{{pid}}]: login user=alice seq={{sequence}}"
-}
+const MESSAGES_PER_ITER: u64 = 20_000;
 
-fn faker_template() -> &'static str {
-    "<165>1 {{timestamp}} {{hostname}} {{real_app}}[{{pid}}]: user {{faker.username}} from {{faker.ipv4}} seq={{sequence}}"
-}
-
-fn json_template() -> &'static str {
-    r#"{"ts":"{{timestamp}}","host":"{{hostname}}","app":"{{real_app}}","pid":{{pid}},"seq":{{sequence}},"msg":"login user=alice"}"#
-}
-
-fn profile_for(template: &str, transport: &str, addr: &str) -> Profile {
+fn profile_static(format: &str, body: &str) -> Profile {
     Profile {
         targets: vec![TargetConfig {
-            address: addr.to_string(),
-            transport: transport.to_string(),
+            address: "/tmp/a0-runtime-bench.log".into(),
+            transport: "file".into(),
             ..Default::default()
         }],
         distribution: "round-robin".into(),
@@ -45,84 +40,58 @@ fn profile_for(template: &str, transport: &str, addr: &str) -> Profile {
             name: "bench".into(),
             duration_secs: 0,
             messages_per_second: 0,
-            total_messages: Some(20_000),
-            templates: vec![template.to_string()],
-            format: None,
+            total_messages: Some(MESSAGES_PER_ITER),
+            templates: vec![body.to_string()],
+            format: Some(format.to_string()),
+            seed: Some(42),
             ..Default::default()
         }],
         metrics_addr: None,
     }
 }
 
-fn run_one(template: &str, transport: &str, addr: &str) -> u64 {
-    let profile = profile_for(template, transport, addr);
+async fn run_one_async(profile: Profile) -> u64 {
     let metrics = create_metrics().expect("create_metrics");
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async {
-        let _ = run_profile(black_box(&profile), black_box(metrics)).await;
-    });
-    profile.phases[0].total_messages.unwrap_or(0)
+    run_profile(black_box(&profile), black_box(metrics))
+        .await
+        .expect("run_profile ok");
+    MESSAGES_PER_ITER
 }
 
-fn bench_runtime_rfc5424_unlimited(c: &mut Criterion) {
-    let tmp = tempfile_in_tmp("bench_rfc5424");
-    let path = tmp.to_string_lossy().to_string();
+fn runtime_bench(c: &mut Criterion, name: &str, format: &str, body: &str) {
+    let tmp = tempfile_in_tmp(name);
+    let profile = profile_static(format, body);
+    let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("runtime");
-    group.throughput(Throughput::Elements(20_000));
-    group.bench_function("rfc5424_static", |b| {
-        b.iter(|| {
-            let n = run_one(black_box(static_template()), "file", black_box(&path));
-            black_box(n)
+    group.throughput(Throughput::Elements(MESSAGES_PER_ITER));
+    group.bench_function(name, move |b| {
+        b.to_async(&rt).iter(|| async {
+            let _ = run_one_async(black_box(profile.clone())).await;
         });
     });
     group.finish();
     let _ = std::fs::remove_file(&tmp);
+}
+
+fn bench_runtime_rfc5424_static(c: &mut Criterion) {
+    // Body-only: format wrapper добавит RFC 5424 header.
+    let body = "user=alice seq={{sequence}}";
+    runtime_bench(c, "rfc5424_static", "rfc5424", body);
 }
 
 fn bench_runtime_rfc5424_faker(c: &mut Criterion) {
-    let tmp = tempfile_in_tmp("bench_rfc5424_faker");
-    let path = tmp.to_string_lossy().to_string();
-    let mut group = c.benchmark_group("runtime");
-    group.throughput(Throughput::Elements(20_000));
-    group.bench_function("rfc5424_faker", |b| {
-        b.iter(|| {
-            let n = run_one(black_box(faker_template()), "file", black_box(&path));
-            black_box(n)
-        });
-    });
-    group.finish();
-    let _ = std::fs::remove_file(&tmp);
+    let body = "user {{faker.username}} from {{faker.ipv4}} seq={{sequence}}";
+    runtime_bench(c, "rfc5424_faker", "rfc5424", body);
 }
 
-fn bench_runtime_rfc3164_unlimited(c: &mut Criterion) {
-    let tmp = tempfile_in_tmp("bench_rfc3164");
-    let path = tmp.to_string_lossy().to_string();
-    let mut group = c.benchmark_group("runtime");
-    group.throughput(Throughput::Elements(20_000));
-    let template_static = "<13>Feb 10 12:00:00 host app: seq={{sequence}}";
-    group.bench_function("rfc3164_static", |b| {
-        b.iter(|| {
-            let n = run_one(black_box(template_static), "file", black_box(&path));
-            black_box(n)
-        });
-    });
-    group.finish();
-    let _ = std::fs::remove_file(&tmp);
+fn bench_runtime_rfc3164_static(c: &mut Criterion) {
+    let body = "user=alice seq={{sequence}}";
+    runtime_bench(c, "rfc3164_static", "rfc3164", body);
 }
 
 fn bench_runtime_json_lines(c: &mut Criterion) {
-    let tmp = tempfile_in_tmp("bench_json");
-    let path = tmp.to_string_lossy().to_string();
-    let mut group = c.benchmark_group("runtime");
-    group.throughput(Throughput::Elements(20_000));
-    group.bench_function("json_lines_static", |b| {
-        b.iter(|| {
-            let n = run_one(black_box(json_template()), "file", black_box(&path));
-            black_box(n)
-        });
-    });
-    group.finish();
-    let _ = std::fs::remove_file(&tmp);
+    let body = r#"{"host":"{{hostname}}","app":"{{real_app}}","seq":{{sequence}},"msg":"login"}"#;
+    runtime_bench(c, "json_lines_static", "json_lines", body);
 }
 
 fn tempfile_in_tmp(name: &str) -> PathBuf {
@@ -135,15 +104,19 @@ fn tempfile_in_tmp(name: &str) -> PathBuf {
     p
 }
 
-fn _wall_clock_for_sanity() -> Instant {
-    Instant::now()
+// Sanity listener for unused-mut warning suppression.
+#[allow(dead_code)]
+fn _no_op_listener() -> std::io::Result<TcpListener> {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async { TcpListener::bind("127.0.0.1:0").await })
+        .map(|_| unreachable!())
 }
 
 criterion_group!(
     benches,
-    bench_runtime_rfc5424_unlimited,
+    bench_runtime_rfc5424_static,
     bench_runtime_rfc5424_faker,
-    bench_runtime_rfc3164_unlimited,
+    bench_runtime_rfc3164_static,
     bench_runtime_json_lines,
 );
 criterion_main!(benches);

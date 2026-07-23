@@ -1,8 +1,12 @@
 //! [A0] Dispatch matrix bench — round-robin / weighted / broadcast на разном числе targets.
 //!
-//! Использует `target_sender_file` (наиболее стабильный для bench) для разных
-//! конфигураций распределения. Каждый iteration создаёт N временных файлов,
-//! запускает run_profile, удаляет их.
+//! - N targets: 1, 4, 16.
+//! - Distribution: round-robin, weighted (non-uniform), broadcast.
+//!
+//! Каждый case:
+//! - File targets во временных путях.
+//! - Cleanup между итерациями.
+//! - Errors propagated.
 //!
 //! Примеры:
 //!     cargo bench --bench dispatch_matrix
@@ -13,6 +17,8 @@ use std::hint::black_box;
 use std::path::PathBuf;
 use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
 use tokio::runtime::Runtime;
+
+const MESSAGES_PER_ITER: u64 = 10_000;
 
 fn make_paths(n: usize) -> Vec<PathBuf> {
     let nanos = std::time::SystemTime::now()
@@ -46,18 +52,23 @@ fn make_profile(paths: Vec<PathBuf>, distribution: &str, weights: Vec<usize>) ->
         phases: vec![Phase {
             name: "bench".into(),
             messages_per_second: 0,
-            total_messages: Some(10_000),
+            total_messages: Some(MESSAGES_PER_ITER),
             templates: vec!["seq={{sequence}}".to_string()],
+            seed: Some(42),
             ..Default::default()
         }],
         metrics_addr: None,
     }
 }
 
-fn cleanup(paths: &[PathBuf]) {
+fn count_file_bytes(paths: &[PathBuf]) -> u64 {
+    let mut total = 0u64;
     for p in paths {
-        let _ = std::fs::remove_file(p);
+        if let Ok(meta) = std::fs::metadata(p) {
+            total += meta.len();
+        }
     }
+    total
 }
 
 fn bench_one(
@@ -70,7 +81,9 @@ fn bench_one(
     let rt = Runtime::new().unwrap();
     let distribution_owned = distribution.to_string();
     let mut group = c.benchmark_group("dispatch_matrix");
-    group.throughput(Throughput::Elements(10_000));
+    // Для broadcast пропускная способность = messages_per_iter * n_targets.
+    // Метрика считает "input messages" — это то, что считает producer.
+    group.throughput(Throughput::Elements(MESSAGES_PER_ITER));
     group.bench_with_input(
         BenchmarkId::from_parameter(name),
         &n_targets,
@@ -83,12 +96,16 @@ fn bench_one(
                 async move {
                     let paths = make_paths(n_targets);
                     let profile = make_profile(paths.clone(), &distribution, weights);
-                    let _ = run_profile(
+                    run_profile(
                         black_box(&profile),
                         black_box(create_metrics().expect("metrics")),
                     )
-                    .await;
-                    cleanup(&paths);
+                    .await
+                    .expect("run_profile ok");
+                    let _ = count_file_bytes(&paths);
+                    for p in &paths {
+                        let _ = std::fs::remove_file(p);
+                    }
                 }
             });
         },
@@ -103,8 +120,22 @@ fn bench_round_robin(c: &mut Criterion) {
 }
 
 fn bench_weighted(c: &mut Criterion) {
+    // Non-uniform weights: первый target получает 70%, второй 20%, остальные 10%.
+    let weights_4 = vec![7, 2, 1, 1];
+    let weights_16 = {
+        let mut v = vec![1usize; 16];
+        v[0] = 70;
+        v[1] = 20;
+        v
+    };
     for n in [1usize, 4, 16] {
-        bench_one(c, &format!("weighted_{n}"), "weighted", n, vec![1; n]);
+        let weights = match n {
+            1 => vec![1],
+            4 => weights_4.clone(),
+            16 => weights_16.clone(),
+            _ => vec![1; n],
+        };
+        bench_one(c, &format!("weighted_{n}"), "weighted", n, weights);
     }
 }
 

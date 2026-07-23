@@ -3,8 +3,13 @@
 //!
 //! Форматы: rfc5424, rfc3164, raw, protobuf, cef, leef, json_lines.
 //! Payload:
-//! - static:    без placeholders.
-//! - faker:     {{faker.username}}, {{faker.ipv4}}.
+//! - static:  без placeholders.
+//! - faker:   {{faker.username}}, {{faker.ipv4}}.
+//!
+//! Каждый формат использует правильную конфигурацию:
+//! - CEF требует CefConfig (иначе fallback на raw).
+//! - LEEF требует LeefConfig.
+//! - Protobuf использует пустую схему (валидный empty protobuf).
 //!
 //! Примеры:
 //!     cargo bench --bench format_matrix
@@ -14,12 +19,40 @@ use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::collections::HashMap;
 use std::hint::black_box;
 use syslog_generator::{
-    format::FormatKind, generate_message_with_format_cached, load_profile_from_yaml_str, Phase,
-    PhaseContext,
+    format::FormatKind, generate_message_with_format_cached, load_profile_from_yaml_str, CefConfig,
+    LeefConfig, Phase, PhaseContext, ProtobufSchemaFieldMap,
 };
 
-fn yaml_for(format: Option<&str>, body: &str) -> String {
-    let fmt = format.unwrap_or("rfc5424");
+fn yaml_for(format: &str, body: &str) -> String {
+    let phase_extra = match format {
+        "cef" => {
+            r#"
+      cef:
+        device_vendor: Acme
+        device_product: SyslogGen
+        device_version: "1.0"
+        signature_id: "42"
+        name: login
+        severity: 5
+"#
+        }
+        "leef" => {
+            r#"
+      leef:
+        vendor: Acme
+        product: SyslogGen
+        version: "1.0"
+        event_id: "42"
+"#
+        }
+        "protobuf" => {
+            r#"
+      protobuf_schema:
+        fields: {}
+"#
+        }
+        _ => "",
+    };
     format!(
         r#"
 targets:
@@ -33,20 +66,21 @@ phases:
     messages_per_second: 0
     templates:
       - {body}
-    format: {fmt}
+    format: {format}
+    seed: 42
     syslog:
       facility: 16
       severity: 6
+{phase_extra}
 "#
     )
 }
 
-fn build(format: Option<&str>, body: &str) -> (PhaseContext, Phase, FormatKind) {
+fn build(format: &str, body: &str) -> (PhaseContext, Phase, FormatKind) {
     let profile = load_profile_from_yaml_str(&yaml_for(format, body)).expect("parse");
     let phase = profile.phases.into_iter().next().expect("phase");
     let ctx = PhaseContext::resolve(&phase).expect("ctx");
-    let fk =
-        FormatKind::parse(phase.format.as_deref().unwrap_or("rfc5424")).unwrap_or(FormatKind::Raw);
+    let fk = FormatKind::parse(format).unwrap_or(FormatKind::Raw);
     (ctx, phase, fk)
 }
 
@@ -73,31 +107,37 @@ fn bench_one(c: &mut Criterion, name: &str, ctx: PhaseContext, phase: Phase, fk:
 }
 
 fn bench_static(c: &mut Criterion) {
-    for (fmt_name, fmt) in [
-        ("rfc5424", Some("rfc5424")),
-        ("rfc3164", Some("rfc3164")),
-        ("raw", Some("raw")),
-        ("protobuf", Some("protobuf")),
-        ("cef", Some("cef")),
-        ("leef", Some("leef")),
-        ("json_lines", Some("json_lines")),
+    for fmt in [
+        "rfc5424",
+        "rfc3164",
+        "raw",
+        "protobuf",
+        "cef",
+        "leef",
+        "json_lines",
     ] {
         let (ctx, phase, fk) = build(fmt, "seq={{sequence}}");
-        let name = format!("{fmt_name}_static");
-        bench_one(c, &name, ctx, phase, fk);
+        bench_one(c, &format!("{fmt}_static"), ctx, phase, fk);
     }
 }
 
 fn bench_faker(c: &mut Criterion) {
     let body = "user {{faker.username}} from {{faker.ipv4}} seq={{sequence}}";
-    for (fmt_name, fmt) in [
-        ("rfc5424", Some("rfc5424")),
-        ("json_lines", Some("json_lines")),
-    ] {
+    for fmt in ["rfc5424", "json_lines"] {
         let (ctx, phase, fk) = build(fmt, body);
-        let name = format!("{fmt_name}_faker");
-        bench_one(c, &name, ctx, phase, fk);
+        bench_one(c, &format!("{fmt}_faker"), ctx, phase, fk);
     }
+}
+
+// Compile-time guards: ensure config types are reachable from this bench
+// so future CEF/LEEF/Protobuf enhancements stay wired.
+#[allow(dead_code)]
+fn _type_guards(
+    cef: CefConfig,
+    leef: LeefConfig,
+    proto: ProtobufSchemaFieldMap,
+) -> (CefConfig, LeefConfig, ProtobufSchemaFieldMap) {
+    (cef, leef, proto)
 }
 
 criterion_group!(benches, bench_static, bench_faker);

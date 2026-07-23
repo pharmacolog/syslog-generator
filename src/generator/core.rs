@@ -460,7 +460,12 @@ impl PhaseContext {
 
         // PR-10: detect referenced fakers. Scan всех templates (body + syslog fields)
         // для `{{faker.*}}` placeholders. Только referenced генерируются.
-        let mut referenced_fakers: Option<std::collections::HashSet<&'static str>> = None;
+        // PR-A0 (v10.8.0): явно инициализируем как `Some(empty)` если ничего не найдено —
+        // иначе downstream код (default_values_into) ошибочно генерирует ВСЕ 9 fakers
+        // для шаблонов без {{faker.*}} (из-за `match Option` на None → fallback ветка).
+        // Benchmarks статических шаблонов ловили этот регресс.
+        let mut referenced_fakers: Option<std::collections::HashSet<&'static str>> =
+            Some(std::collections::HashSet::new());
         let s = &phase.syslog;
         let mut scan_templates: Vec<&str> = templates.iter().map(|t| t.as_str()).collect();
         scan_templates.push(&s.hostname);
@@ -472,7 +477,8 @@ impl PhaseContext {
             for kind in FAKER_KIND_NAMES {
                 if tpl.contains(&format!("{{faker.{kind}}}")) {
                     referenced_fakers
-                        .get_or_insert_with(std::collections::HashSet::new)
+                        .as_mut()
+                        .expect("initialized as Some above")
                         .insert(kind);
                 }
             }

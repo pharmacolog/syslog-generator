@@ -2,23 +2,13 @@
 
 > PR-A0 (v10.8.0): зафиксированные baseline-цифры runtime benches.
 > Обновлено: 2026-07-23.
+> Hardware: Apple M1, Criterion `--quick` (~10 sample size).
 
 ## Цель
 
 Baseline — это измерения реального `run_profile`, а не только `hot_path` bench.
 Hot-path показывает per-message overhead в наносекундах; runtime — end-to-end
 throughput (msg/s) с pacing, transport, metrics.
-
-## Как запустить
-
-```bash
-scripts/perf-baseline.sh quick         # быстрый прогон (--quick)
-scripts/perf-baseline.sh full          # полный прогон (10s measurement_time)
-scripts/perf-baseline.sh update <sha>  # сохранить baseline в perf/baselines/<sha>.json
-```
-
-CI: `.github/workflows/perf-baseline.yml` запускает nightly + on-tag,
-результат публикуется как non-blocking artifact.
 
 ## Bench matrix
 
@@ -36,91 +26,94 @@ CI: `.github/workflows/perf-baseline.yml` запускает nightly + on-tag,
 |---|---|---|
 | `time/msg (ns)` | все benches | меньше — лучше |
 | `throughput (elem/s)` | runtime/transport/dispatch | больше — лучше |
-| `allocations/msg` | DHAT в `benches/dhat_runtime.rs` | меньше — лучше (PR-A1+) |
-| `syscalls/msg` | perf stat (опционально) | меньше — лучше (PR-A5+) |
 
 ## Profile
 
-С PR-A0 введён `[profile.bench] inherits = "release"` с `debug=false`. Это
-гарантирует, что benches компилируются с теми же оптимизациями, что и release
-(LTO, codegen-units=1, opt-level=3), без debug-информации.
+С PR-A0 введён `[profile.bench] inherits = "release"` с `debug=false`. Bench
+компилируется с LTO + opt-level=3 как release. Дефолтные `bench`-профили в
+Cargo используют `dev`-настройки; без `inherits = "release"` benches
+измеряли бы debug-режим (≈ −50% throughput).
 
-## Baseline (PR-A0, v10.7.19 baseline, Apple M1 / Linux x86_64)
+## Baseline v10.8.0-A0 (Apple M1, --quick)
 
-Измерено в quick mode (`--quick`, ~5 sample size). Абсолютные цифры зависят
-от hardware; относительные delta — главная метрика между версиями.
-
-### `runtime` (file transport, 20 000 msg, unlimited rate)
+### `runtime` (file transport, 20 000 msg, unlimited rate, seed=42)
 
 | Bench | time (median) | throughput |
 |---|---|---|
-| `runtime/rfc5424_static`  | 61.9 ms  | 323 K msg/s |
-| `runtime/rfc5424_faker`   | 51.4 ms  | 389 K msg/s |
-| `runtime/rfc3164_static`  | 57.3 ms  | 349 K msg/s |
-| `runtime/json_lines_static` | 61.3 ms | 326 K msg/s |
+| `runtime/rfc5424_static`     | ~50 ms | ~400 K msg/s |
+| `runtime/rfc5424_faker`      | ~52 ms | ~385 K msg/s |
+| `runtime/rfc3164_static`     | ~42 ms | ~474 K msg/s |
+| `runtime/json_lines_static`  | ~56 ms | ~357 K msg/s |
 
-### `format_matrix` (per-message, ns/msg)
+### `format_matrix` (per-message, ns/msg, seed=42)
 
-| Bench | time | throughput |
-|---|---|---|
-| `rfc5424_static`    | 1957 ns | 511 K msg/s |
-| `rfc3164_static`    | 2354 ns | 425 K msg/s |
-| `raw_static`        | 1858 ns | 538 K msg/s |
-| `protobuf_static`   | 1997 ns | 501 K msg/s |
-| `cef_static`        | 1779 ns | 562 K msg/s |
-| `leef_static`       | 1762 ns | 568 K msg/s |
-| `json_lines_static` | 2332 ns | 429 K msg/s |
-| `rfc5424_faker`     | 1578 ns | 634 K msg/s |
-| `json_lines_faker`  | 2000 ns | 500 K msg/s |
+| Bench | time | throughput | Delta vs initial bench |
+|---|---|---|---|
+| `rfc5424_static`    | 1202 ns | 832 K msg/s | −39% (referenced_fakers fix) |
+| `rfc3164_static`    | 1495 ns | 669 K msg/s | −37% |
+| `raw_static`        | 1024 ns | 977 K msg/s | −45% |
+| `protobuf_static`   |  677 ns | 1477 K msg/s | −66% |
+| `cef_static`        | 1003 ns | 997 K msg/s | −44% |
+| `leef_static`       | 1011 ns | 990 K msg/s | −43% |
+| `json_lines_static` | 1541 ns | 649 K msg/s | −34% |
+| `rfc5424_faker`     | 1558 ns | 642 K msg/s | −1% (already faker-aware) |
+| `json_lines_faker`  | 2007 ns | 498 K msg/s |  ±0% |
 
-### `transport_matrix` (TCP/UDP, 5000 msg each)
-
-| Bench | time | throughput |
-|---|---|---|
-| `tcp/1`  | 25.4 ms | 197 K msg/s |
-| `tcp/4`  | 57.9 ms |  86 K msg/s |
-| `tcp/16` | 814 ms  |   6 K msg/s (SharedRx mutex contention — PR-A4 issue) |
-| `udp/1`  | 35.4 ms | 141 K msg/s |
-| `udp/4`  | 59.3 ms |  84 K msg/s |
-| `udp/16` | 80.6 ms |  62 K msg/s |
-
-### `dispatch_matrix` (10 000 msg, file transport)
+### `transport_matrix` (2000 msg, real listener)
 
 | Bench | time | throughput |
 |---|---|---|
-| `rr/1`           | 48.5 ms | 206 K msg/s |
-| `rr/4`           | 31.4 ms | 318 K msg/s |
-| `rr/16`          | 36.0 ms | 278 K msg/s |
-| `weighted/1`     | 27.8 ms | 360 K msg/s |
-| `weighted/4`     | 33.3 ms | 301 K msg/s |
-| `weighted/16`    | 46.3 ms | 216 K msg/s |
-| `broadcast/1`    | 31.2 ms | 321 K msg/s |
-| `broadcast/4`    | 45.1 ms | 222 K msg/s |
-| `broadcast/16`   | 112.4 ms |  89 K msg/s (serial await per target — PR-A3 issue) |
+| `tcp/1`  |  4.4 ms | 453 K msg/s |
+| `tcp/4`  |  5.2 ms | 387 K msg/s |
+| `tcp/16` |  5.9 ms | 337 K msg/s |
+| `udp/1`  |  9.0 ms | 221 K msg/s |
+| `udp/4`  |  6.2 ms | 324 K msg/s |
 
-## Acceptance criteria для PR-A1 и далее
+### `dispatch_matrix` (10 000 msg, file transport, seed=42)
 
-- `hot_path/rfc5424_with_faker`: ≤ −10% ns/msg
-- `runtime/rfc5424_static`: ≤ −5% wall-time
-- `format_matrix/rfc5424_static`: ≤ −10% ns/msg
-- allocation count (DHAT): ≤ −15% allocations/msg
+| Bench | time | throughput |
+|---|---|---|
+| `rr/1`           | ~48 ms | ~210 K msg/s |
+| `rr/4`           | ~31 ms | ~320 K msg/s |
+| `rr/16`          | ~36 ms | ~280 K msg/s |
+| `weighted/1`     | ~28 ms | ~360 K msg/s |
+| `weighted/4`     | ~33 ms | ~300 K msg/s |
+| `weighted/16`    | ~28 ms | ~360 K msg/s (non-uniform: 70/20/...) |
+| `broadcast/1`    | ~20 ms | ~498 K msg/s |
+| `broadcast/4`    | ~34 ms | ~298 K msg/s |
+| `broadcast/16`   | ~96 ms | ~104 K msg/s (serial `send().await`) |
+
+## Acceptance criteria для PR-A1+
+
+- `hot_path/rfc5424_with_faker`: ≤ −10% ns/msg (baseline: 1783 ns → target ≤ 1605 ns)
+- `runtime/rfc5424_static`: ≤ −5% wall-time (baseline: ~400 K msg/s → target ≥ 420 K)
+- `format_matrix/rfc5424_static`: ≤ −10% ns/msg (baseline: 1202 ns → target ≤ 1082 ns)
 
 ## Наблюдения из baseline
 
-1. **`tcp/16` падает в 30×** — подтверждает P14 из анализа: `SharedRx` mutex
-   сериализует connections при росте пула. PR-A4 (per-worker channels)
-   устранит это.
-2. **`broadcast/16` падает в 3.5×** относительно `broadcast/1` —
-   подтверждает P1.4 (serial `send().await` per target). PR-A3 + PR-A4
-   решают через per-target queues и broadcast policy.
-3. **`runtime/json_lines` ≈ `runtime/rfc5424_static`** — JSON-lines
-   BTreeMap overhead компенсируется отсутствием syslog header.
-4. **`rfc3164` медленнее `rfc5424`** за счёт `Local::now()` per message
-   (~200 нс). PR-A1 candidate.
+1. **`tcp/16` падает в 1.3×** vs `tcp/1` (453→337 K msg/s) — SharedRx mutex
+   contention подтверждена, но меньше ожидаемого. PR-A4 (per-worker channels)
+   устранит остаток.
+2. **`broadcast/16` падает в 5×** vs `broadcast/1` — сериальный `send().await`
+   подтверждён. Цель PR-A3.
+3. **`protobuf_static` теперь самый быстрый** (677 ns, 1477 K msg/s) — после
+   fix faker-scan это пустой protobuf без overhead.
+4. **`rfc3164_static` быстрее `rfc5424_static`** в runtime — нет tag/procid
+   wrapping overhead, формат компактнее.
+5. **`referenced_fakers` fix дал −34..−66% на static templates** — это
+   самое большое открытие baseline. Без него все 9 fakers генерировались
+   даже для шаблонов без `{{faker.*}}`.
+
+## Известные ограничения
+
+- `transport_matrix/udp/16` пропущен в `--quick` (deadlock при быстром send):
+  bench остаётся доступным через `cargo bench --bench transport_matrix` без `--quick`.
+- `dhatch_heap` (PR-A0 issue #81) не реализован в этом PR — добавлен в backlog
+  PR-A6 (perf governance) для DHAT integration.
 
 ## Roadmap
 
-- PR-A0: benches + baselines (этот PR)
-- PR-A1: hot-path micro-optics → первый видимый прирост
-- PR-A2: CompiledPlan → −30–50% allocations/msg
-- PR-A6: blocking CI gate на основе этих baselines
+- PR-A0: benches + baselines + скрипты + CI workflow (этот PR).
+- PR-A1: hot-path micro-optics → ожидаемый прирост на faker-насыщенных шаблонах.
+- PR-A2: CompiledPlan → ожидаемый −30–50% allocations/msg (DHAT будет в PR-A6).
+- PR-A6: blocking CI gate на основе этих baselines + DHAT integration.

@@ -1,14 +1,15 @@
-# PR-A0 (v10.8.0): Perf baseline — nightly + on-tag bench run.
+# PR-A0 (v10.8.0): Perf baseline — nightly bench run + baseline artifact.
 #
-# Не блокирующий PR: собирает baseline цифры и публикует как artifact.
-# Blocking gate появится в PR-A6.
+# - Nightly cron (каждый день в 04:00 UTC).
+# - on-tag: baseline для tagged releases.
+# - workflow_dispatch: ручной запуск.
+# - Default branch: PUSH baseline JSON + comparison log as artifacts.
 
 name: perf-baseline
 
 on:
   schedule:
-    # Каждый понедельник в 04:00 UTC (после dependabot).
-    - cron: '0 4 * * 1'
+    - cron: '0 4 * * *'
   push:
     tags:
       - 'v*.*.*'
@@ -21,7 +22,7 @@ jobs:
   bench:
     name: Bench baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,21 +42,29 @@ jobs:
       - name: Compile benches
         run: cargo bench --no-run --locked
 
-      - name: Run baseline (quick mode)
-        continue-on-error: true
+      - name: Run baseline + save artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          mkdir -p bench-output
-          for bench in hot_path runtime format_matrix transport_matrix dispatch_matrix; do
-            echo "=== ${bench} ===" | tee -a bench-output/combined.txt
-            cargo bench --locked --bench "${bench}" -- --quick 2>&1 | tee -a bench-output/combined.txt || true
-            echo | tee -a bench-output/combined.txt
-          done
+          set -euo pipefail
+          mkdir -p perf/baselines bench-output
+          SHA="$(git rev-parse HEAD)"
+          ./scripts/perf-baseline.sh update "${SHA}" 2>&1 | tee bench-output/perf-baseline.log
 
       - name: Upload bench output (artifact)
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: perf-baseline-${{ github.run_id }}
-          path: bench-output/combined.txt
+          path: |
+            bench-output/
+            perf/baselines/*.json
+          if-no-files-found: error
+
+      - name: Upload combined log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-baseline-log-${{ github.run_id }}
+          path: bench-output/perf-baseline.log
           if-no-files-found: ignore

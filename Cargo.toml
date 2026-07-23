@@ -27,9 +27,11 @@ strip = "none"
 
 # PR-C1: test profile — opt-level=1 для ускорения компиляции без
 # потери coverage gates. debug=true сохраняет debug info.
-[profile.test]
-opt-level = 1
-debug = true
+# PR-A0 (v10.8.0): НЕ применяется в этом PR — выделен в отдельный PR-C1
+# чтобы изолировать его влияние от bench profile changes.
+# [profile.test]
+# opt-level = 1
+# debug = true
 # PR-17d (v10.7.19): PGO (Profile-Guided Optimization) opt-in via env var.
 # Production release builds НЕ используют PGO по умолчанию (для скорости CI).
 # Включение для release: `RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release`.

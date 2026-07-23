@@ -226,7 +226,6 @@ mod tests {
     /// PR-A2.5: pre-compile weighted distribution → cumulative weights.
     #[test]
     fn a2_5_precompile_weighted_distribution() {
-        use std::collections::HashMap;
         let mut schema = Schema::default();
         schema.fields.insert(
             "level".to_string(),

@@ -86,9 +86,10 @@ jobs:
           base_path = os.environ["BASELINE_FILE"]
           with open(base_path) as f:
               base = json.load(f)
-          curr_path = base_path.replace("perf/baselines/", "perf/baselines/pr-")
-          if not os.path.exists(curr_path):
-              curr_path = base_path
+          # Current baseline: "perf/baselines/pr-N.json" где N = PR number.
+          # BASELINE_FILE генерируется scripts/perf-baseline.sh quick pr-N
+          # в предыдущем step — ищем тот же файл.
+          curr_path = base_path
           with open(curr_path) as f:
               curr = json.load(f)
           base_e = {e["label"]: e for e in base["estimates"]}

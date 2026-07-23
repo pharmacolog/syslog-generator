@@ -1,0 +1,114 @@
+# CODEOWNERS для syslog-generator
+#
+# Каждый файл/модуль имеет owner — основного агента/мэйнтейнера
+# ответственного за изменения. См. docs/COORDINATION.md (S3).
+#
+# Формат: pattern @owner [@owner2 ...]
+# Pattern может быть glob (например `src/format/`).
+
+# Глобальные owners (default fallback)
+*                                               @pharmacolog
+
+# CLI / config (Issue #93, #92, #83)
+/src/cli.rs                                     @pharmacolog
+/src/generator/config.rs                        @pharmacolog
+
+# Format layer (Issue #85 quick-wins + F15)
+/src/format/                                    @pharmacolog
+/src/format/mod.rs                              @pharmacolog
+/src/format/rfc5424.rs                          @pharmacolog
+/src/format/rfc3164.rs                          @pharmacolog
+/src/format/raw.rs                              @pharmacolog
+/src/format/protobuf.rs                         @pharmacolog
+/src/format/cef.rs                              @pharmacolog
+/src/format/leef.rs                             @pharmacolog
+/src/format/json_lines.rs                       @pharmacolog
+
+# Transport layer (Issue #82, F16)
+/src/transport/                                 @pharmacolog
+/src/transport/file.rs                          @pharmacolog
+/src/transport/udp.rs                           @pharmacolog
+/src/transport/tcp.rs                           @pharmacolog
+/src/transport/tls.rs                           @pharmacolog
+/src/transport/reconnect.rs                     @pharmacolog
+/src/transport/kafka.rs                         @pharmacolog
+
+# Generator orchestrator (Issue #85 sub-tasks 1-4, #86, #88, #89)
+/src/generator/                                 @pharmacolog
+/src/generator/core.rs                          @pharmacolog
+/src/generator/config.rs                        @pharmacolog
+
+# CompiledPlan (Issue #88 — новый модуль)
+/src/plan/                                      @pharmacolog
+
+# Payload / template / schema (Issue #85 sub-task 6, F4-F6)
+/src/payload.rs                                 @pharmacolog
+/src/payload_proptests.rs                       @pharmacolog
+/src/template.rs                                @pharmacolog
+/src/schema.rs                                  @pharmacolog
+/src/schema_check.rs                            @pharmacolog
+
+# Anomalies (F17, Issue #100)
+/src/anomaly.rs                                 @pharmacolog
+/src/anomaly_proptests.rs                       @pharmacolog
+
+# Load shape (F3)
+/src/load_shape.rs                              @pharmacolog
+/src/load_shape_proptests.rs                    @pharmacolog
+
+# Observability (Prometheus + OTel)
+/src/observability/                             @pharmacolog
+/src/metrics.rs                                 @pharmacolog
+/src/metrics_server.rs                          @pharmacolog
+
+# Shutdown / error handling (N7, PR-2)
+/src/shutdown.rs                                @pharmacolog
+/src/error.rs                                   @pharmacolog
+
+# Validation (F13)
+/src/validate.rs                                @pharmacolog
+/src/validate_proptests.rs                      @pharmacolog
+
+# Lib entrypoint
+/src/lib.rs                                     @pharmacolog
+/src/main.rs                                    @pharmacolog
+
+# CI/CD workflows
+/.github/workflows/                             @pharmacolog
+
+# Documentation
+/docs/                                          @pharmacolog
+/PLAN-*.md                                     @pharmacolog
+/CLAUDE_HANDOFF.md                             @pharmacolog
+/CHANGELOG.md                                  @pharmacolog
+/AUDIT.md                                      @pharmacolog
+/README.md                                     @pharmacolog
+
+# API snapshot (PR-3)
+/api-snapshot.txt                              @pharmacolog
+
+# Build / project metadata
+/Cargo.toml                                    @pharmacolog
+/Cargo.lock                                    @pharmacolog
+/rust-toolchain.toml                           @pharmacolog
+/deny.toml                                     @pharmacolog
+/docker-compose.yml                            @pharmacolog
+/Dockerfile                                    @pharmacolog
+
+# Scripts
+/scripts/                                      @pharmacolog
+
+# Tests
+/tests/                                        @pharmacolog
+
+# Examples
+/examples/                                     @pharmacolog
+
+# Fuzzing
+/fuzz/                                         @pharmacolog
+
+# Benches
+/benches/                                      @pharmacolog
+
+# Perf baselines
+/perf/                                         @pharmacolog

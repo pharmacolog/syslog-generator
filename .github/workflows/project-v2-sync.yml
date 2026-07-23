@@ -1,0 +1,258 @@
+# Project V2 auto-update workflow.
+#
+# Auto-updates the "Roadmap: syslog-generator (v11.0 → v13.0)" Project V2
+# based on issue/PR lifecycle events:
+#   - Issue closed → Status: "Done"
+#   - Issue reopened → Status: "In Progress" (если был Backlog)
+#   - PR opened with "Closes #N" / "Fixes #N" → Status: "In Review"
+#   - PR merged → Status: "Done" (для issue, упомянутых в PR)
+#
+# Project: PVT_kwHOACFRws4BeOKz
+# Repo: pharmacolog/syslog-generator
+
+name: project-v2-sync
+
+on:
+  issues:
+    types: [closed, reopened]
+  pull_request:
+    types: [opened, reopened, closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  sync-issue-status:
+    name: Sync issue status to Project V2
+    runs-on: ubuntu-latest
+    if: github.repository == 'pharmacolog/syslog-generator'
+    steps:
+      - name: Update issue status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const PROJECT_ID = 'PVT_kwHOACFRws4BeOKz';
+            const STATUS_FIELD_ID = 'PVTSSF_lAHOACFRws4BeOKzzhYqAJg';
+
+            const STATUS_OPTIONS = {
+              BACKLOG: '611219f7',
+              READY: 'c1a1deba',
+              IN_PROGRESS: '42999fc0',
+              IN_REVIEW: '821a0baa',
+              BLOCKED: 'bef227e3',
+              DONE: 'f708a6ab',
+            };
+
+            const issueNumber = context.issue.number;
+            const issueNodeId = context.payload.issue?.node_id;
+
+            if (!issueNodeId) {
+              core.warning(`No issue node_id for #${issueNumber}`);
+              return;
+            }
+
+            // Определяем целевой статус по типу события.
+            let targetStatus = null;
+            if (context.eventName === 'issues') {
+              const action = context.payload.action;
+              if (action === 'closed' && context.payload.issue?.state_reason === 'completed') {
+                targetStatus = STATUS_OPTIONS.DONE;
+              } else if (action === 'reopened') {
+                targetStatus = STATUS_OPTIONS.IN_PROGRESS;
+              }
+            }
+
+            if (!targetStatus) {
+              core.info(`No status update needed for ${context.eventName}/${context.payload.action}`);
+              return;
+            }
+
+            // Найти item в Project V2.
+            const query = `
+              query($projectId: ID!, $itemId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    item(id: $itemId) {
+                      id
+                      fieldValue: fieldValueByName(name: "Status") {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                          optionId
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const lookup = await github.graphql(query, {
+              projectId: PROJECT_ID,
+              itemId: issueNodeId,
+            });
+
+            // Если item нет в Project — skip (не все issues трекаем в Roadmap).
+            if (!lookup.node || !lookup.node.item) {
+              core.info(`Issue #${issueNumber} not in Project V2 — skipping`);
+              return;
+            }
+
+            const itemId = lookup.node.item.id;
+            const currentOption = lookup.node.item.fieldValue?.optionId;
+
+            if (currentOption === targetStatus) {
+              core.info(`Issue #${issueNumber} already at target status`);
+              return;
+            }
+
+            // Update status.
+            const mutation = `
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }
+            `;
+
+            await github.graphql(mutation, {
+              projectId: PROJECT_ID,
+              itemId: itemId,
+              fieldId: STATUS_FIELD_ID,
+              optionId: targetStatus,
+            });
+
+            core.info(`✅ Issue #${issueNumber} → Status: ${targetStatus}`);
+
+  sync-pr-status:
+    name: Sync PR-linked issues to "In Review" / "Done"
+    runs-on: ubuntu-latest
+    if: github.repository == 'pharmacolog/syslog-generator' && github.event.pull_request
+    steps:
+      - name: Extract linked issues from PR
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+
+            // Regex для keyword-based linking: Closes #N, Fixes #N, Resolves #N
+            const re = /(?:close[sd]?|fixe[sd]?|resolve[sd]?)\s+#(\d+)/gi;
+            const matches = [...body.matchAll(re)];
+
+            const issueNumbers = [...new Set(matches.map(m => parseInt(m[1], 10)))];
+
+            core.info(`PR #${pr.number} linked to issues: ${issueNumbers.join(', ') || '(none)'}`);
+            core.setOutput('linked_issues', JSON.stringify(issueNumbers));
+            core.setOutput('action', context.payload.action);
+
+      - name: Update linked issues in Project V2
+        if: steps.extract.outputs.linked_issues != '[]'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const PROJECT_ID = 'PVT_kwHOACFRws4BeOKz';
+            const STATUS_FIELD_ID = 'PVTSSF_lAHOACFRws4BeOKzzhYqAJg';
+
+            const STATUS_OPTIONS = {
+              BACKLOG: '611219f7',
+              READY: 'c1a1deba',
+              IN_PROGRESS: '42999fc0',
+              IN_REVIEW: '821a0baa',
+              BLOCKED: 'bef227e3',
+              DONE: 'f708a6ab',
+            };
+
+            const linkedIssues = JSON.parse(process.env.LINKED_ISSUES || '[]');
+            const action = process.env.ACTION;
+
+            // Определяем целевой статус:
+            //   - PR opened/reopened → In Review
+            //   - PR closed + merged → Done
+            let targetStatus = null;
+            if (action === 'opened' || action === 'reopened') {
+              targetStatus = STATUS_OPTIONS.IN_REVIEW;
+            } else if (action === 'closed' && process.env.PR_MERGED === 'true') {
+              targetStatus = STATUS_OPTIONS.DONE;
+            }
+
+            if (!targetStatus) {
+              core.info(`No status update for action: ${action} (merged: ${process.env.PR_MERGED})`);
+              return;
+            }
+
+            for (const issueNum of linkedIssues) {
+              try {
+                // Получаем node_id issue.
+                const issueQuery = `
+                  query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                      issue(number: $number) { id }
+                    }
+                  }
+                `;
+                const issueResult = await github.graphql(issueQuery, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: issueNum,
+                });
+                const issueNodeId = issueResult.repository?.issue?.id;
+                if (!issueNodeId) {
+                  core.warning(`Issue #${issueNum} not found`);
+                  continue;
+                }
+
+                // Ищем item в Project V2.
+                const itemQuery = `
+                  query($projectId: ID!, $itemId: ID!) {
+                    node(id: $projectId) {
+                      ... on ProjectV2 {
+                        item(id: $itemId) { id }
+                      }
+                    }
+                  }
+                `;
+                const itemResult = await github.graphql(itemQuery, {
+                  projectId: PROJECT_ID,
+                  itemId: issueNodeId,
+                });
+                const itemId = itemResult.node?.item?.id;
+                if (!itemId) {
+                  core.info(`Issue #${issueNum} not in Project V2 — skipping`);
+                  continue;
+                }
+
+                // Update status.
+                const mutation = `
+                  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                    updateProjectV2ItemFieldValue(input: {
+                      projectId: $projectId,
+                      itemId: $itemId,
+                      fieldId: $fieldId,
+                      value: { singleSelectOptionId: $optionId }
+                    }) {
+                      projectV2Item { id }
+                    }
+                  }
+                `;
+                await github.graphql(mutation, {
+                  projectId: PROJECT_ID,
+                  itemId: itemId,
+                  fieldId: STATUS_FIELD_ID,
+                  optionId: targetStatus,
+                });
+                core.info(`✅ Issue #${issueNum} → ${targetStatus} (PR action: ${action})`);
+              } catch (e) {
+                core.warning(`Failed to update #${issueNum}: ${e.message}`);
+              }
+            }
+        env:
+          LINKED_ISSUES: ${{ steps.extract.outputs.linked_issues }}
+          ACTION: ${{ steps.extract.outputs.action }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}

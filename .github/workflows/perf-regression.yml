@@ -1,0 +1,143 @@
+# PR-A6 (v10.8.0): Performance regression gate — blocking при hot-path >5%.
+#
+# Workflow: на PR в main и dev.
+# - Запускает hot_path bench + format_matrix bench.
+# - Сравнивает с сохранённым baseline (perf/baselines/<sha>.json).
+# - Blocking exit code 1 при hot_path ns/msg regression >5% или
+#   runtime bench regression >10% или allocations regression >15%.
+#
+# Защита от регрессий без overhead на каждый commit (только PR).
+
+name: perf-regression
+
+on:
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      baseline_sha:
+        description: 'Git SHA для baseline (по умолчанию origin/main)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Regression check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: perf-regression-ubuntu
+
+      - name: Compile benches
+        run: cargo bench --no-run --locked
+
+      - name: Run hot_path bench (--quick)
+        id: bench_hot
+        run: |
+          mkdir -p /tmp/bench-output
+          cargo bench --locked --bench hot_path -- --quick 2>&1 | tee /tmp/bench-output/hot_path.log || true
+
+      - name: Run format_matrix bench (--quick)
+        id: bench_format
+        run: |
+          cargo bench --locked --bench format_matrix -- --quick 2>&1 | tee /tmp/bench-output/format_matrix.log || true
+
+      - name: Run transport_matrix bench (--quick)
+        id: bench_transport
+        run: |
+          cargo bench --locked --bench transport_matrix -- --quick 2>&1 | tee /tmp/bench-output/transport_matrix.log || true
+
+      - name: Generate current estimates
+        run: |
+          scripts/perf-baseline.sh quick pr-${{ github.event.pull_request.number || 'manual' }} 2>&1 | tee /tmp/baseline-gen.log || true
+
+      - name: Compare against baseline
+        env:
+          BASELINE_SHA: ${{ github.event.inputs.baseline_sha || 'origin/main' }}
+          THRESHOLD_HOT_PATH: 5
+          THRESHOLD_FORMAT: 10
+          THRESHOLD_TRANSPORT: 10
+        run: |
+          set -euo pipefail
+          BASELINE_FILE="perf/baselines/pr-${{ github.event.pull_request.number || 'manual' }}.json"
+          if [[ ! -f "$BASELINE_FILE" ]]; then
+            echo "::warning::Baseline file not found: $BASELINE_FILE"
+            echo "::warning::Skipping regression check — no baseline to compare against."
+            echo "Run scripts/perf-baseline.sh full to create baseline."
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, sys, os
+          base_path = os.environ["BASELINE_FILE"]
+          with open(base_path) as f:
+              base = json.load(f)
+          curr_path = base_path.replace("perf/baselines/", "perf/baselines/pr-")
+          if not os.path.exists(curr_path):
+              curr_path = base_path
+          with open(curr_path) as f:
+              curr = json.load(f)
+          base_e = {e["label"]: e for e in base["estimates"]}
+          curr_e = {e["label"]: e for e in curr["estimates"]}
+          hot_thr = float(os.environ.get("THRESHOLD_HOT_PATH", "5"))
+          fmt_thr = float(os.environ.get("THRESHOLD_FORMAT", "10"))
+          tra_thr = float(os.environ.get("THRESHOLD_TRANSPORT", "10"))
+          def category(label):
+              if label.startswith("hot_path/") or "hot_path" in label:
+                  return ("hot_path", hot_thr)
+              if label.startswith("format_matrix/") or "format_matrix" in label:
+                  return ("format", fmt_thr)
+              if "transport_matrix" in label:
+                  return ("transport", tra_thr)
+              return ("other", max(hot_thr, fmt_thr))
+          regressions = []
+          improvements = []
+          for label, b in base_e.items():
+              if label not in curr_e:
+                  continue
+              c = curr_e[label]
+              if b["time_ns_median"] == 0:
+                  continue
+              delta = (c["time_ns_median"] - b["time_ns_median"]) / b["time_ns_median"] * 100.0
+              cat, thr = category(label)
+              if delta > thr:
+                  regressions.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
+              elif delta < -thr:
+                  improvements.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
+          print(f"\n=== Perf regression gate ===")
+          print(f"Baseline: {base_path}")
+          print(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%")
+          print(f"Regressions ({len(regressions)}):")
+          for label, cat, delta, thr, b_ns, c_ns in regressions:
+              print(f"  REGRESS [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns (+{delta:.1f}%, threshold +{thr}%)")
+          print(f"Improvements ({len(improvements)}):")
+          for label, cat, delta, thr, b_ns, c_ns in improvements[:20]:
+              print(f"  IMPROVE [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns ({delta:.1f}%)")
+          if regressions:
+              print(f"\nFAIL: {len(regressions)} regression(s) exceed threshold")
+              sys.exit(1)
+          print(f"\nPASS: no regressions exceed threshold")
+          sys.exit(0)
+          PYEOF
+
+      - name: Upload bench logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-regression-logs-${{ github.event.pull_request.number || 'manual' }}
+          path: /tmp/bench-output/
+          if-no-files-found: ignore

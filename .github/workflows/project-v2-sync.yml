@@ -69,17 +69,17 @@ jobs:
               return;
             }
 
-            // Найти item в Project V2.
+            // Резолвить item через `node(id:)` напрямую — ProjectV2.item(id:)
+            // не поддерживается в GraphQL schema, нужно использовать node(id:) →
+            // ProjectV2Item.
             const query = `
-              query($projectId: ID!, $itemId: ID!) {
-                node(id: $projectId) {
-                  ... on ProjectV2 {
-                    item(id: $itemId) {
-                      id
-                      fieldValue: fieldValueByName(name: "Status") {
-                        ... on ProjectV2ItemFieldSingleSelectValue {
-                          optionId
-                        }
+              query($itemId: ID!) {
+                node(id: $itemId) {
+                  ... on ProjectV2Item {
+                    id
+                    fieldValue: fieldValueByName(name: "Status") {
+                      ... on ProjectV2ItemFieldSingleSelectValue {
+                        optionId
                       }
                     }
                   }
@@ -88,18 +88,17 @@ jobs:
             `;
 
             const lookup = await github.graphql(query, {
-              projectId: PROJECT_ID,
               itemId: issueNodeId,
             });
 
             // Если item нет в Project — skip (не все issues трекаем в Roadmap).
-            if (!lookup.node || !lookup.node.item) {
+            if (!lookup.node) {
               core.info(`Issue #${issueNumber} not in Project V2 — skipping`);
               return;
             }
 
-            const itemId = lookup.node.item.id;
-            const currentOption = lookup.node.item.fieldValue?.optionId;
+            const itemId = lookup.node.id;
+            const currentOption = lookup.node.fieldValue?.optionId;
 
             if (currentOption === targetStatus) {
               core.info(`Issue #${issueNumber} already at target status`);

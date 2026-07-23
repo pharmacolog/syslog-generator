@@ -1204,6 +1204,7 @@ pub mod syslog_generator::format::rfc3164
 pub fn syslog_generator::format::rfc3164::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
 pub mod syslog_generator::format::rfc5424
 pub fn syslog_generator::format::rfc5424::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
+pub fn syslog_generator::format::rfc5424::build_into(&mut bytes::bytes_mut::BytesMut, &syslog_generator::format::Header, &[u8])
 pub enum syslog_generator::format::FormatKind
 pub syslog_generator::format::FormatKind::Cef
 pub syslog_generator::format::FormatKind::JsonLines
@@ -3802,6 +3803,7 @@ pub mod syslog_generator::rfc3164
 pub fn syslog_generator::rfc3164::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
 pub mod syslog_generator::rfc5424
 pub fn syslog_generator::rfc5424::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
+pub fn syslog_generator::rfc5424::build_into(&mut bytes::bytes_mut::BytesMut, &syslog_generator::format::Header, &[u8])
 pub mod syslog_generator::schema
 pub struct syslog_generator::schema::Schema
 pub syslog_generator::schema::Schema::fields: std::collections::hash::map::HashMap<alloc::string::String, syslog_generator::schema::SchemaField>
@@ -4211,6 +4213,7 @@ pub mod syslog_generator::syslog::rfc3164
 pub fn syslog_generator::syslog::rfc3164::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
 pub mod syslog_generator::syslog::rfc5424
 pub fn syslog_generator::syslog::rfc5424::build(&syslog_generator::format::Header, &[u8]) -> alloc::vec::Vec<u8>
+pub fn syslog_generator::syslog::rfc5424::build_into(&mut bytes::bytes_mut::BytesMut, &syslog_generator::format::Header, &[u8])
 pub struct syslog_generator::syslog::Header
 pub syslog_generator::syslog::Header::app_name: alloc::sync::Arc<str>
 pub syslog_generator::syslog::Header::bom: bool

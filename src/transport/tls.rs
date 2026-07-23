@@ -565,6 +565,46 @@ mod tests {
         let _cfg2 = Arc::clone(&cfg);
     }
 
+    /// Issue #85 \[A1\] sub-task 9: `build_tls_connector` возвращает
+    /// \`Arc<ClientConfig>\`, который переиспользуется через \`Arc::clone\`
+    /// без повторного чтения файлов. Это ликвидирует \`fs::read\` на каждое
+    /// TLS-подключение (one-time setup, not per-message).
+    #[test]
+    fn a1_subtask9_build_tls_connector_returns_arc_reusable() {
+        use std::sync::Arc;
+
+        let p = TlsParams {
+            domain: "example.com".into(),
+            ..Default::default()
+        };
+
+        // Первый вызов — создаёт Arc<ClientConfig> (один раз).
+        let cfg1 = build_tls_connector(&p).expect("primary connector");
+
+        // Проверяем: Arc<ClientConfig> имеет Arc semantics — clone это atomic
+        // increment, не новый build_tls_connector() вызов.
+        let cfg2 = Arc::clone(&cfg1);
+
+        // Оба Arc указателя указывают на ОДИН ClientConfig (same pointer).
+        assert_eq!(
+            Arc::strong_count(&cfg1),
+            2,
+            "после Arc::clone должно быть 2 strong references"
+        );
+        assert_eq!(
+            Arc::strong_count(&cfg2),
+            2,
+            "cfg2 тоже должен иметь 2 strong references"
+        );
+
+        // Raw pointer equality — гарантия что Clone не создал новый ClientConfig.
+        assert_eq!(
+            Arc::as_ptr(&cfg1),
+            Arc::as_ptr(&cfg2),
+            "Arc::clone должен разделять underlying ClientConfig, не создавать новый"
+        );
+    }
+
     #[test]
     fn build_connector_with_empty_ca_pem_fails() {
         let p = TlsParams {

@@ -22,7 +22,7 @@ pub async fn target_sender_udp(
     while let Some(msg) = next_msg(&rx).await {
         let t0 = std::time::Instant::now();
         if socket.send_to(&msg, &addr).await.is_err() {
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
         } else {
             record_send_latency(&metrics, t0.elapsed());
             record_send(
@@ -32,8 +32,7 @@ pub async fn target_sender_udp(
                 &addr,
                 msg.len() as u64,
                 &shutdown,
-            )
-            .await;
+            );
         }
     }
     Ok(())

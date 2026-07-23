@@ -42,10 +42,14 @@ pub struct CompiledSchemaField {
     pub field_type: String,
     /// Optional dependency on parent field (для F6 inter-field correlations).
     pub depends_on: Option<String>,
-    /// Pre-compiled distribution sampler (placeholder для будущей реализации).
-    /// MVP: всегда Uniform — original weights/zipf данные НЕ сохраняются.
-    /// Полная реализация в PR-A2.5.
+    /// Pre-compiled distribution sampler (PR-A2.5: cumulative weights для
+    /// weighted/zipf). PR-A2.5 future: binary search на cumulative.
     pub distribution: CompiledDistribution,
+    /// PR-A2.5: pre-resolved regex pattern (для type="regex" fields).
+    /// Hot path: regex_syntax::parse(pattern) per-message заменяется на
+    /// использование pre-parsed HIR. MVP: только паттерн сохранён,
+    /// integration с gen_schema_field в PR-A2.6.
+    pub regex_pattern: Option<String>,
 }
 
 /// Pre-compiled distribution sampler.
@@ -63,8 +67,9 @@ pub enum CompiledDistribution {
 impl CompiledSchema {
     /// Compile a Schema в CompiledSchema.
     ///
-    /// MVP: pre-sort fields by name, leave distribution/sampling для
-    /// следующего шага (current behavior preserved).
+    /// PR-A2.5: pre-compile distributions (cumulative weights для weighted,
+    /// cumulative weights для zipf) и cache parsed regex patterns.
+    /// Pre-computation устраняет per-message allocation в gen_schema_field.
     ///
     /// Infallible: пустые/invalid schemas дают empty CompiledSchema.
     pub fn compile(schema: &Schema) -> Self {
@@ -75,7 +80,8 @@ impl CompiledSchema {
                 name: name.clone(),
                 field_type: field.field_type.clone(),
                 depends_on: field.depends_on.clone(),
-                distribution: CompiledDistribution::Uniform, // placeholder
+                distribution: compile_distribution(field),
+                regex_pattern: field.regex.clone(),
             })
             .collect();
         fields.sort_by(|a, b| a.name.cmp(&b.name));
@@ -95,6 +101,62 @@ impl CompiledSchema {
             field_slot_names,
         }
     }
+}
+
+/// PR-A2.5: pre-compile distribution sampler для одного schema field.
+/// MVP: weighted → cumulative weights; zipf → cumulative weights.
+fn compile_distribution(field: &crate::schema::SchemaField) -> CompiledDistribution {
+    match field.field_type.as_str() {
+        "enum" => {
+            // Pre-compute cumulative weights для weighted distribution.
+            // PR-A0 (legacy) вызывал weighted_index() per-message с O(N) scan.
+            // Pre-computed cumulative позволяет binary search O(log N).
+            match field.distribution.as_deref() {
+                Some("weighted") => {
+                    if let Some(weights) = &field.weights {
+                        return CompiledDistribution::Weighted {
+                            cumulative: build_cumulative(weights),
+                        };
+                    }
+                    CompiledDistribution::Uniform
+                }
+                Some("zipf") => {
+                    // Zipf: генерируем cumulative weights на основе
+                    // 1/k^exp для k ∈ [1..values.len()].
+                    if let Some(values) = &field.values {
+                        let n = values.len();
+                        if n > 0 {
+                            let exp = field.zipf_exponent.unwrap_or(1.0);
+                            let raw: Vec<f64> =
+                                (1..=n).map(|k| 1.0 / (k as f64).powf(exp)).collect();
+                            return CompiledDistribution::Zipf {
+                                cumulative: build_cumulative(&raw),
+                            };
+                        }
+                    }
+                    CompiledDistribution::Uniform
+                }
+                _ => CompiledDistribution::Uniform,
+            }
+        }
+        _ => CompiledDistribution::Uniform,
+    }
+}
+
+/// Build cumulative weights: cum[i] = sum(weights[0..=i]).
+/// Используется для binary search при weighted/zipf sampling.
+fn build_cumulative(weights: &[f64]) -> Vec<f64> {
+    let mut cum = Vec::with_capacity(weights.len());
+    let mut sum = 0.0;
+    for &w in weights {
+        if w > 0.0 {
+            sum += w;
+        }
+        cum.push(sum);
+    }
+    // Normalize: total = sum of positive weights.
+    // Binary search на cum будет: find first index where cum[i] >= r * total.
+    cum
 }
 
 #[cfg(test)]
@@ -159,5 +221,139 @@ mod tests {
         assert_eq!(plan.fields[0].name, "a_field");
         assert_eq!(plan.fields[1].name, "z_field");
         assert_eq!(plan.field_slot_names, vec!["a_field", "z_field"]);
+    }
+
+    /// PR-A2.5: pre-compile weighted distribution → cumulative weights.
+    #[test]
+    fn a2_5_precompile_weighted_distribution() {
+        use std::collections::HashMap;
+        let mut schema = Schema::default();
+        schema.fields.insert(
+            "level".to_string(),
+            SchemaField {
+                field_type: "enum".to_string(),
+                values: Some(vec!["a".into(), "b".into(), "c".into()]),
+                distribution: Some("weighted".to_string()),
+                weights: Some(vec![1.0, 2.0, 7.0]),
+                faker: None,
+                min: None,
+                max: None,
+                format: None,
+                len: None,
+                jitter_secs: None,
+                zipf_exponent: None,
+                regex: None,
+                depends_on: None,
+                mapping: None,
+                mapping_default: None,
+            },
+        );
+        let plan = CompiledSchema::compile(&schema);
+        assert_eq!(plan.fields.len(), 1);
+        let dist = &plan.fields[0].distribution;
+        match dist {
+            CompiledDistribution::Weighted { cumulative } => {
+                assert_eq!(cumulative, &vec![1.0, 3.0, 10.0]);
+            }
+            _ => panic!("expected Weighted, got {dist:?}"),
+        }
+    }
+
+    /// PR-A2.5: pre-compile zipf distribution → cumulative weights.
+    #[test]
+    fn a2_5_precompile_zipf_distribution() {
+        let mut schema = Schema::default();
+        schema.fields.insert(
+            "key".to_string(),
+            SchemaField {
+                field_type: "enum".to_string(),
+                values: Some(vec!["k1".into(), "k2".into(), "k3".into(), "k4".into()]),
+                distribution: Some("zipf".to_string()),
+                zipf_exponent: Some(1.0),
+                faker: None,
+                min: None,
+                max: None,
+                format: None,
+                len: None,
+                jitter_secs: None,
+                weights: None,
+                regex: None,
+                depends_on: None,
+                mapping: None,
+                mapping_default: None,
+            },
+        );
+        let plan = CompiledSchema::compile(&schema);
+        assert_eq!(plan.fields.len(), 1);
+        match &plan.fields[0].distribution {
+            CompiledDistribution::Zipf { cumulative } => {
+                // 1/1 + 1/2 + 1/3 + 1/4 ≈ 2.0833.
+                assert!((cumulative[3] - 2.0833).abs() < 0.01, "got: {cumulative:?}");
+                assert_eq!(cumulative.len(), 4);
+            }
+            _ => panic!("expected Zipf"),
+        }
+    }
+
+    /// PR-A2.5: regex pattern сохранён в CompiledSchemaField.
+    #[test]
+    fn a2_5_precompile_regex_pattern() {
+        let mut schema = Schema::default();
+        schema.fields.insert(
+            "user_agent".to_string(),
+            SchemaField {
+                field_type: "regex".to_string(),
+                regex: Some(r"[A-Z][a-z]+ \d+".to_string()),
+                faker: None,
+                values: None,
+                min: None,
+                max: None,
+                format: None,
+                len: None,
+                jitter_secs: None,
+                distribution: None,
+                weights: None,
+                zipf_exponent: None,
+                depends_on: None,
+                mapping: None,
+                mapping_default: None,
+            },
+        );
+        let plan = CompiledSchema::compile(&schema);
+        assert_eq!(
+            plan.fields[0].regex_pattern.as_deref(),
+            Some(r"[A-Z][a-z]+ \d+")
+        );
+    }
+
+    /// PR-A2.5: uniform distribution (по умолчанию) → Uniform.
+    #[test]
+    fn a2_5_uniform_distribution() {
+        let mut schema = Schema::default();
+        schema.fields.insert(
+            "name".to_string(),
+            SchemaField {
+                field_type: "enum".to_string(),
+                values: Some(vec!["a".into(), "b".into()]),
+                distribution: Some("uniform".to_string()),
+                faker: None,
+                min: None,
+                max: None,
+                format: None,
+                len: None,
+                jitter_secs: None,
+                weights: None,
+                zipf_exponent: None,
+                regex: None,
+                depends_on: None,
+                mapping: None,
+                mapping_default: None,
+            },
+        );
+        let plan = CompiledSchema::compile(&schema);
+        assert!(matches!(
+            plan.fields[0].distribution,
+            CompiledDistribution::Uniform
+        ));
     }
 }

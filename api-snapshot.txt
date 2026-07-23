@@ -2870,6 +2870,7 @@ pub syslog_generator::plan::schema::CompiledSchemaField::depends_on: core::optio
 pub syslog_generator::plan::schema::CompiledSchemaField::distribution: syslog_generator::plan::schema::CompiledDistribution
 pub syslog_generator::plan::schema::CompiledSchemaField::field_type: alloc::string::String
 pub syslog_generator::plan::schema::CompiledSchemaField::name: alloc::string::String
+pub syslog_generator::plan::schema::CompiledSchemaField::regex_pattern: core::option::Option<alloc::string::String>
 impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchemaField
 pub fn syslog_generator::plan::schema::CompiledSchemaField::clone(&self) -> syslog_generator::plan::schema::CompiledSchemaField
 impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchemaField
@@ -3472,6 +3473,7 @@ pub syslog_generator::plan::CompiledSchemaField::depends_on: core::option::Optio
 pub syslog_generator::plan::CompiledSchemaField::distribution: syslog_generator::plan::schema::CompiledDistribution
 pub syslog_generator::plan::CompiledSchemaField::field_type: alloc::string::String
 pub syslog_generator::plan::CompiledSchemaField::name: alloc::string::String
+pub syslog_generator::plan::CompiledSchemaField::regex_pattern: core::option::Option<alloc::string::String>
 impl core::clone::Clone for syslog_generator::plan::schema::CompiledSchemaField
 pub fn syslog_generator::plan::schema::CompiledSchemaField::clone(&self) -> syslog_generator::plan::schema::CompiledSchemaField
 impl core::fmt::Debug for syslog_generator::plan::schema::CompiledSchemaField

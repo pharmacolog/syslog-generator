@@ -175,11 +175,16 @@ mod tests {
     }
 
     /// PR-A2.4: `build_into` должен давать identical output к `build`
-    /// byte-for-byte для всех test cases.
+    /// byte-for-byte. Все тесты используют pre-computed timestamp чтобы
+    /// избежать timing dependency (legacy `build` и `build_into` делают
+    /// `Utc::now()` в разное время → разные ms → flaky test на MSRV runner).
     #[test]
     fn a2_4_build_into_matches_build() {
+        let ts = "2026-07-23T14:30:00.000Z";
+
         // Test 1: minimal header
-        let h1 = hdr();
+        let mut h1 = hdr();
+        h1.timestamp = ts.into();
         let legacy = build(&h1, b"hello world");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h1, b"hello world");
@@ -188,6 +193,7 @@ mod tests {
         // Test 2: with BOM
         let mut h2 = hdr();
         h2.bom = true;
+        h2.timestamp = ts.into();
         let legacy = build(&h2, b"x");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h2, b"x");
@@ -196,6 +202,7 @@ mod tests {
         // Test 3: empty SD
         let mut h3 = hdr();
         h3.structured_data = "".into();
+        h3.timestamp = ts.into();
         let legacy = build(&h3, b"test");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h3, b"test");
@@ -204,6 +211,7 @@ mod tests {
         // Test 4: custom SD
         let mut h4 = hdr();
         h4.structured_data = "[example@32473 iut=\"3\"]".into();
+        h4.timestamp = ts.into();
         let legacy = build(&h4, b"x");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h4, b"x");
@@ -217,6 +225,7 @@ mod tests {
         let mut h5 = hdr();
         h5.facility = 23;
         h5.severity = 7;
+        h5.timestamp = ts.into();
         let legacy = build(&h5, b"x");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h5, b"x");
@@ -227,7 +236,8 @@ mod tests {
         );
 
         // Test 6: empty msg
-        let h6 = hdr();
+        let mut h6 = hdr();
+        h6.timestamp = ts.into();
         let legacy = build(&h6, b"");
         let mut bm = bytes::BytesMut::new();
         build_into(&mut bm, &h6, b"");
@@ -235,18 +245,6 @@ mod tests {
             legacy.as_slice(),
             &bm[..],
             "empty msg: legacy vs build_into"
-        );
-
-        // Test 7: pre-computed timestamp (PR-17c path)
-        let mut h7 = hdr();
-        h7.timestamp = "2026-07-23T14:30:00.000Z".into();
-        let legacy = build(&h7, b"data");
-        let mut bm = bytes::BytesMut::new();
-        build_into(&mut bm, &h7, b"data");
-        assert_eq!(
-            legacy.as_slice(),
-            &bm[..],
-            "pre-computed ts: legacy vs build_into"
         );
     }
 

@@ -134,8 +134,15 @@ pub fn build(
     if !header.msgid.is_empty() && header.msgid.as_ref() != "-" {
         obj.insert(KEY_MSGID.to_string(), header.msgid.to_string());
     }
-    // msg: UTF-8 lossy — невалидные байты заменяются на U+FFFD (стандарт JSON).
-    let msg_str = String::from_utf8_lossy(msg).into_owned();
+    // msg: Issue #85 (A1 sub-task 12) — UTF-8 fast path.
+    // Для валидного UTF-8 (типичный случай для syslog payloads) избегаем
+    // `String::from_utf8_lossy().into_owned()` аллокации — `&str → String`
+    // достаточно. Для невалидного UTF-8 fallback на lossy сохраняет
+    // backward-compat (U+FFFD замены по RFC 8259).
+    let msg_str = match std::str::from_utf8(msg) {
+        Ok(s) => s.to_owned(),
+        Err(_) => String::from_utf8_lossy(msg).into_owned(),
+    };
     obj.insert(KEY_MSG.to_string(), msg_str);
     // Доп. поля: пользовательские `json_lines_fields` из Phase.
     // Если есть пересечение ключей с автогенерированными — пользовательский

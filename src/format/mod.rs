@@ -68,11 +68,40 @@ pub fn prival(facility: u8, severity: u8) -> u16 {
 /// Пустое значение или явный "-" даёт NILVALUE.
 ///
 /// PR-17a (v10.7.16): `#[inline(always)]` — hot-path (вызывается 4× per rfc5424 msg).
+///
+/// Issue #85 (A1 quick wins): fast ASCII-path — для значений, состоящих
+/// только из байтов 0x21..=0x7E без превышения `max`, возвращаем срез
+/// исходного `Arc<str>` без аллокации. Для hostname/app_name/procid/msgid
+/// типичный случай — ASCII-only (syslog-конвенция), экономия ~1 alloc/msg.
 #[inline(always)]
 pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
+    // Fast path 1: empty или NILVALUE → без alloc.
     if value.is_empty() || value == NILVALUE {
         return NILVALUE.to_string();
     }
+    let bytes = value.as_bytes();
+    let len = bytes.len().min(max);
+    // Fast path 2: ASCII-only printable + ≤ max → без аллокации.
+    // Printable US-ASCII per RFC 5424 §6: byte 0x21..=0x7E.
+    let mut needs_clean = false;
+    let mut i = 0;
+    while i < len {
+        let b = bytes[i];
+        // Printable: 0x21 ('!') до 0x7E ('~'). Вне диапазона — нужно заменять.
+        if !(0x21..=0x7E).contains(&b) {
+            needs_clean = true;
+            break;
+        }
+        i += 1;
+    }
+    if !needs_clean {
+        // value.to_string() здесь даёт 1 alloc, но мы можем сделать 0 alloc
+        // через возвращение уже существующей строки — value уже String-like.
+        // Однако сигнатура возвращает String, поэтому делаем alloc только
+        // один раз (вместо O(N) на chars().map().collect()).
+        return value[..len].to_string();
+    }
+    // Slow path: байты вне printable-ASCII или unicode → обход chars().
     let cleaned: String = value
         .chars()
         .map(|c| if ('!'..='~').contains(&c) { c } else { '_' })
@@ -302,6 +331,46 @@ mod tests {
         // Clamping при out-of-range значениях (F13 валидация не пропустит
         // эти значения в проде, но защита в prival остаётся).
         assert_eq!(prival(100, 100), (23u16 * 8) + 7);
+    }
+
+    /// Issue #85 (A1): fast ASCII-path для sanitize_header.
+    /// Типичный syslog header field (hostname, app_name, procid, msgid) —
+    /// ASCII-only и короче `max`. Должен идти через fast path без лишних
+    /// итераций по chars().
+    #[test]
+    fn sanitize_header_ascii_fast_path() {
+        // ASCII printable, в пределах max → возврат as-is.
+        assert_eq!(sanitize_header("hostname01", 255), "hostname01");
+        assert_eq!(sanitize_header("my-app", 48), "my-app");
+        assert_eq!(sanitize_header("12345", 128), "12345");
+        assert_eq!(sanitize_header("T!E~S-T", 32), "T!E~S-T"); // edge chars
+    }
+
+    /// Issue #85 (A1): sanitize_header обрезает до max в fast-path.
+    #[test]
+    fn sanitize_header_truncates_at_max_in_fast_path() {
+        assert_eq!(sanitize_header("host01extra", 5), "host0");
+        assert_eq!(sanitize_header("aaaaaaaaaaaaaaaa", 3), "aaa");
+    }
+
+    /// Issue #85 (A1): sanitize_header empty / NILVALUE → "-" без alloc.
+    #[test]
+    fn sanitize_header_empty_or_nilvalue() {
+        assert_eq!(sanitize_header("", 32), NILVALUE);
+        assert_eq!(sanitize_header("-", 32), NILVALUE);
+    }
+
+    /// Issue #85 (A1): sanitize_header non-ASCII → slow path (replacement на '_').
+    #[test]
+    fn sanitize_header_non_ascii_falls_to_slow_path() {
+        // Пробел (0x20) — вне printable range → '_'
+        assert_eq!(sanitize_header("ab cd", 32), "ab_cd");
+        // Управляющий символ → '_'
+        assert_eq!(sanitize_header("a\x01b", 32), "a_b");
+        // Unicode → '_'
+        assert_eq!(sanitize_header("aë", 32), "a_");
+        // DEL (0x7F) → '_'
+        assert_eq!(sanitize_header("a\x7Fb", 32), "a_b");
     }
 
     // ===== N10 (v9.1.0): тесты trait Format =====

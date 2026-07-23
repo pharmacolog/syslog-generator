@@ -118,6 +118,13 @@ pub struct Args {
     /// Переопределяет metrics_addr из профиля.
     #[arg(long)]
     pub metrics_addr: Option<String>,
+
+    /// PR-B2 (Issue #83): --set KEY=VALUE для точечного override любого
+    /// публичного поля профиля. KEY — точечный JSON path:
+    /// `targets[0].connections`, `phases[0].messages_per_second`, etc.
+    /// Может повторяться. Сначала применяется profile → затем --set overrides.
+    #[arg(long, value_name = "KEY=VALUE")]
+    pub set: Vec<String>,
 }
 
 /// «Чистое» представление CLI-оверрайдов, не зависящее от clap.
@@ -132,6 +139,9 @@ pub struct Overrides {
     pub seed: Option<u64>,
     pub messages: Vec<String>,
     pub metrics_addr: Option<String>,
+    /// PR-B2: KEY=VALUE точечные overrides, применённые после parsing
+    /// профиля и стандартных overrides.
+    pub set_overrides: Vec<(String, String)>,
 }
 
 /// Ошибка разбора спецификации цели `--target`.
@@ -220,6 +230,20 @@ impl Args {
             seed: self.seed,
             messages: self.message.clone(),
             metrics_addr: self.metrics_addr.clone(),
+            set_overrides: self
+                .set
+                .iter()
+                .filter_map(|s| {
+                    let mut parts = s.splitn(2, '=');
+                    let key = parts.next()?.to_string();
+                    let value = parts.next()?.to_string();
+                    if key.is_empty() || value.is_empty() {
+                        None
+                    } else {
+                        Some((key, value))
+                    }
+                })
+                .collect(),
         })
     }
 }
@@ -272,6 +296,15 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
         }
         if let Some(s) = o.seed {
             p.seed = Some(s);
+        }
+    }
+
+    // PR-B2 (Issue #83): apply --set точечные overrides (последний шаг,
+    // перезаписывает всё предыдущее). Errors логируются в stderr, но
+    // не паникуют — N7 invariant запрещает .expect()/.unwrap() в prod.
+    if !o.set_overrides.is_empty() {
+        if let Err(e) = crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides) {
+            eprintln!("warning: --set overrides failed: {e}");
         }
     }
 }
@@ -502,3 +535,4 @@ fn apply_overrides_no_targets_keeps_existing() {
 
 // === v10.6.0 (Usability ч.1): тесты subcommand'ов живут в `mod tests`
 //     выше (top-level дубликаты удалены в PR-Q.1). ===
+pub mod set_override;

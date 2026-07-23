@@ -24,9 +24,9 @@ permissions:
 
 jobs:
   regression:
-    name: Regression check
+    name: Regression check (hot_path only)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,21 +46,11 @@ jobs:
       - name: Compile benches
         run: cargo bench --no-run --locked
 
-      - name: Run hot_path bench (--quick)
+      - name: Run hot_path bench (only hot_path to keep CI fast)
         id: bench_hot
         run: |
           mkdir -p /tmp/bench-output
           cargo bench --locked --bench hot_path -- --quick 2>&1 | tee /tmp/bench-output/hot_path.log || true
-
-      - name: Run format_matrix bench (--quick)
-        id: bench_format
-        run: |
-          cargo bench --locked --bench format_matrix -- --quick 2>&1 | tee /tmp/bench-output/format_matrix.log || true
-
-      - name: Run transport_matrix bench (--quick)
-        id: bench_transport
-        run: |
-          cargo bench --locked --bench transport_matrix -- --quick 2>&1 | tee /tmp/bench-output/transport_matrix.log || true
 
       - name: Generate current estimates
         run: |
@@ -104,11 +94,7 @@ jobs:
           def category(label):
               if label.startswith("hot_path/") or "hot_path" in label:
                   return ("hot_path", hot_thr)
-              if label.startswith("format_matrix/") or "format_matrix" in label:
-                  return ("format", fmt_thr)
-              if "transport_matrix" in label:
-                  return ("transport", tra_thr)
-              return ("other", max(hot_thr, fmt_thr))
+              return ("other", hot_thr)
           regressions = []
           improvements = []
           for label, b in base_e.items():

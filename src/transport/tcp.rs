@@ -1087,7 +1087,7 @@ mod tests {
         let (server_done_tx, server_done_rx) = tokio::sync::oneshot::channel();
 
         // Spawn server side accept.
-        let server = tokio::spawn(async move {
+        let _server = tokio::spawn(async move {
             let (_server_stream, _) = listener.accept().await.unwrap();
             server_done_tx.send(()).unwrap();
         });

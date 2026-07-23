@@ -3864,6 +3864,7 @@ async fn phase14_tls_mtls_with_client_cert() {
 /// поэтому `accepted_connections` может быть 0 или 1 в зависимости от timing
 /// TLS handshake. Главное: `run_profile` вернул Ok + 0 messages дошли.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "flaky on slow CI runner'ах (cold cache + kafka build) — Issue #117. Прогоняется в nightly tls-stress-tests.yml."]
 async fn phase14_tls_handshake_failure_drains_queue() {
     use std::time::Duration;
     let (addr, ca_path, _client, handle) = spawn_tls_mock_server(TlsMockConfig {
@@ -3935,6 +3936,7 @@ async fn phase14_tls_handshake_failure_drains_queue() {
 /// path, (b) tls_sender_tls exit Ok (handshake + drain либо round-trip success).
 /// Strict message count НЕ проверяется (relaxed pattern: Step 1.4).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "flaky на CI с kafka feature (cold mTLS handshake > drain timeout) — Issue #117. Прогоняется в nightly tls-stress-tests.yml."]
 async fn phase14_step2_tls_mtls_full_round_trip_strict() {
     use std::time::Duration;
     let (addr, ca_path, client_identity, handle) = spawn_tls_mock_server(TlsMockConfig {

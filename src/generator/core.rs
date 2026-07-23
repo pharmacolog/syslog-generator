@@ -14,7 +14,7 @@ use crate::transport::kafka::{
 use crate::transport::reconnect::ReconnectConfig;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
-    target_sender_udp, Framing,
+    target_sender_udp, BroadcastPolicy, Framing,
 };
 use anyhow::Result;
 use governor::{Quota, RateLimiter};
@@ -799,6 +799,46 @@ fn resolve_correlated_field(
     gen_schema_field(field, rng)
 }
 
+/// PR-A3 (Issue #89) + PR-A4 (Issue #86): broadcast dispatch с policy.
+///
+/// Strict: sequential `tx.send().await` per target (backward-compat default).
+/// Independent: параллельный send через tokio::JoinSet.
+/// BestEffort: `tx.try_send()` без await — drop newest при переполнении.
+#[allow(dead_code)]
+pub async fn broadcast_dispatch(
+    txs: &[mpsc::Sender<bytes::Bytes>],
+    msg_bytes: bytes::Bytes,
+    policy: BroadcastPolicy,
+) {
+    match policy {
+        BroadcastPolicy::Strict => {
+            for tx in txs {
+                let _ = tx.send(msg_bytes.clone()).await;
+            }
+        }
+        BroadcastPolicy::Independent => {
+            // Параллельный send через tokio::JoinSet — без futures crate.
+            // Sender::send() future borrows self, поэтому клонируем sender
+            // в owned value для spawned task. Также клонируем msg_bytes
+            // внутри closure (Bytes::clone = atomic increment).
+            let mut set = tokio::task::JoinSet::new();
+            for tx in txs {
+                let tx = tx.clone();
+                let value = msg_bytes.clone();
+                set.spawn(async move { tx.send(value).await });
+            }
+            while set.join_next().await.is_some() {}
+        }
+        BroadcastPolicy::BestEffort => {
+            // try_send без await — самый низкий latency. Drop newest при
+            // переполнении очереди. Receiver не блокируется.
+            for tx in txs {
+                let _ = tx.try_send(msg_bytes.clone());
+            }
+        }
+    }
+}
+
 /// Обёртка syslog + F6-паддинг тела до целевого размера (если задан).
 ///
 /// PR-17c (v10.7.18): принимает `now: Option<DateTime<Utc>>` — если Some,
@@ -916,6 +956,7 @@ fn wrap_syslog(
 pub async fn run_phase_multi(
     phase: &Phase,
     targets: &[TargetConfig],
+    broadcast_policy: BroadcastPolicy,
     distribution: &str,
     shutdown_cfg: &crate::config::ShutdownConfig,
     metrics: Metrics,
@@ -1368,9 +1409,9 @@ pub async fn run_phase_multi(
         // не memcpy. Для broadcast это экономит N-1 memcpys payload'а.
         let msg_bytes: bytes::Bytes = bytes::Bytes::from(msg);
         if distribution == "broadcast" {
-            for tx in &txs {
-                let _ = tx.send(msg_bytes.clone()).await;
-            }
+            // PR-A3 (Issue #89) + PR-A4 (Issue #86): BroadcastPolicy dispatch.
+            // Strict = sequential await; Independent = parallel; BestEffort = try_send.
+            broadcast_dispatch(&txs, msg_bytes, broadcast_policy).await;
         } else if !dispatch.is_empty() {
             let idx = dispatch[(seq - 1) % dispatch.len()];
             if let Some(tx) = txs.get(idx) {
@@ -1443,6 +1484,11 @@ pub async fn run_profile(profile: &Profile, metrics: Metrics) -> Result<()> {
             run_phase_multi(
                 phase,
                 &profile.targets,
+                profile
+                    .broadcast_policy
+                    .as_deref()
+                    .and_then(crate::transport::BroadcastPolicy::parse)
+                    .unwrap_or(crate::transport::BroadcastPolicy::Strict),
                 &profile.distribution,
                 &profile.shutdown,
                 metrics.clone(),
@@ -1979,6 +2025,7 @@ phases:
         let result = run_phase_multi(
             &phase,
             &targets,
+            BroadcastPolicy::Strict,
             "round-robin",
             &ShutdownConfig::default(),
             metrics,
@@ -2018,6 +2065,7 @@ phases:
         run_phase_multi(
             &phase,
             &targets,
+            BroadcastPolicy::Strict,
             "round-robin",
             &ShutdownConfig::default(),
             metrics,

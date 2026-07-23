@@ -303,9 +303,7 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
     // перезаписывает всё предыдущее). Errors логируются в stderr, но
     // не паникуют — N7 invariant запрещает .expect()/.unwrap() в prod.
     if !o.set_overrides.is_empty() {
-        if let Err(e) =
-            crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides)
-        {
+        if let Err(e) = crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides) {
             eprintln!("warning: --set overrides failed: {e}");
         }
     }

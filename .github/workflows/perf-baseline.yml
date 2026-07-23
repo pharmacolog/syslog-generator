@@ -1,0 +1,70 @@
+# PR-A0 (v10.8.0): Perf baseline — nightly bench run + baseline artifact.
+#
+# - Nightly cron (каждый день в 04:00 UTC).
+# - on-tag: baseline для tagged releases.
+# - workflow_dispatch: ручной запуск.
+# - Default branch: PUSH baseline JSON + comparison log as artifacts.
+
+name: perf-baseline
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Bench baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: perf-baseline-ubuntu
+
+      - name: Compile benches
+        run: cargo bench --no-run --locked
+
+      - name: Run baseline + save artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p perf/baselines bench-output
+          SHA="$(git rev-parse HEAD)"
+          ./scripts/perf-baseline.sh update "${SHA}" 2>&1 | tee bench-output/perf-baseline.log
+
+      - name: Upload bench output (artifact)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-baseline-${{ github.run_id }}
+          path: |
+            bench-output/
+            perf/baselines/*.json
+          if-no-files-found: error
+
+      - name: Upload combined log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-baseline-log-${{ github.run_id }}
+          path: bench-output/perf-baseline.log
+          if-no-files-found: ignore

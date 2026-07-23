@@ -88,7 +88,7 @@ pub(crate) fn sanitize_header(value: &str, max: usize) -> String {
     while i < len {
         let b = bytes[i];
         // Printable: 0x21 ('!') до 0x7E ('~'). Вне диапазона — нужно заменять.
-        if b < 0x21 || b > 0x7E {
+        if !(0x21..=0x7E).contains(&b) {
             needs_clean = true;
             break;
         }

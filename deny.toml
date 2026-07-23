@@ -17,7 +17,9 @@ all-features = false
 # indicatif — наш выбор для progress bar (PR-3). Прямого dependency у нас нет,
 # ignore остаётся до обновления indicatif или перехода на zeroize-only progress bar.
 # Reason: indicatif pulls number_prefix transitively; not user-input reachable.
-ignore = ["RUSTSEC-2025-0119"]
+ignore = [
+    { id = "RUSTSEC-2025-0119", reason = "Transitive through indicatif; not user-input reachable; expires: 2027-01-23; review Issue #90." },
+]
 # PR-12: yanked = "deny" — yanks signal upstream compromise / CVE disclosure.
 # Блокирующий gate через cargo-deny в CI.
 yanked = "deny"

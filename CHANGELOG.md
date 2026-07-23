@@ -43,6 +43,9 @@
 
 ### Changed
 
+- CI/CD hardening for Issue #90: cache cargo-installed tools and LLVM PGO tarball, add CI job timeouts, fix the macOS Cargo cache key, and enforce expiry dates for advisory ignores.
+- `release-pgo.yml` reports whether the LLVM tarball came from cache, download duration, and the Rust toolchain used.
+
 - `Cargo.toml`: добавлен `[profile.bench]` (inherits release, debug=false).
 - `src/generator/core.rs:463-488`: faker-scan теперь всегда инициализирует
   пустое множество; см. "Fixed" выше.

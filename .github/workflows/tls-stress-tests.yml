@@ -1,0 +1,107 @@
+# Nightly TLS stress tests (Issue #117).
+#
+# Goal: отдельный CI cycle для flaky TLS / TCP counter-race integration
+# тестов, помеченных `#[ignore = "flaky on slow CI, see Issue #117"]`. Обычный
+# `ci.yml` их не запускает (`cargo test` пропускает ignored), поэтому без
+# этого workflow тесты не проверяются нигде. Здесь — полный `--include-ignored`
+# в single-thread режиме (чтобы counter-race не маскировал реальные падения),
+# с extended timeout и без пайплайнного parallelism между jobs.
+#
+# Cadence:
+# - schedule: каждый день в 03:00 UTC (раньше perf-baseline).
+# - workflow_dispatch: ручной запуск для подтверждения фиксов.
+# - on-merge-to-dev: немедленный прогон после merge PR, помеченного
+#   `flaky-tls-fix`, чтобы ловить регрессии в тот же день.
+
+name: TLS stress tests (nightly, Issue #117)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (default: dev)'
+        required: false
+        default: 'dev'
+  pull_request:
+    types: [closed]
+    branches: [dev]
+
+permissions:
+  contents: read
+
+# PR-merges на dev не запускают nightly stress — только direct triggers.
+# Это разгружает CI и не задерживает merge gate.
+
+jobs:
+  tls-stress:
+    name: TLS + TCP race stress (Issue #117)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RUST_BACKTRACE: short
+      RUST_LOG: debug
+      # Issue #117 #3: race condition на prometheus counter в multi-thread runner'ах.
+      # Single-thread mode даёт детерминированную последовательность inc.
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-cargo-tls-stress
+
+      - name: Install OpenSSL dev headers (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Run ignored TLS + TCP integration tests
+        # Issue #117 acceptance: 3 consecutive successful CI runs.
+        # Один nightly прогон = один зачёт. Запускаем все ignored тесты
+        # из integration_tests.rs одновременно; успех = все они зелёные в
+        # single-thread режиме.
+        run: |
+          set -euo pipefail
+          cargo test --locked --features kafka,test-helpers \
+            --test integration_tests \
+            -- --ignored --test-threads=1 --nocapture \
+            2>&1 | tee tls-stress.log
+        env:
+          # Удлиненный drain для медленных CI runner'ов — тесты уже используют
+          # 300s в profile.shutdown.drain_timeout_secs, но RUST_TEST_THREADS=1
+          # плюс kafka feature build требует запас.
+          TEST_TIMEOUT_SECS: 600
+
+      - name: Summarize results
+        if: always()
+        run: |
+          {
+            echo "## TLS stress summary"
+            echo "- Result: ${{ job.status }}"
+            echo "- SHA: ${GITHUB_SHA}"
+            echo "- Trigger: ${GITHUB_EVENT_NAME}"
+            echo "- Run: ${{ github.run_id }}"
+            echo ""
+            echo "### Last 30 lines"
+            echo '```'
+            tail -30 tls-stress.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload stress log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tls-stress-log-${{ github.run_id }}
+          path: tls-stress.log
+          if-no-files-found: ignore

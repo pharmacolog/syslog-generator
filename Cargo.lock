@@ -2591,7 +2591,7 @@ dependencies = [
 
 [[package]]
 name = "syslog-generator"
-version = "10.7.18"
+version = "10.7.19"
 dependencies = [
  "anyhow",
  "assert_cmd",

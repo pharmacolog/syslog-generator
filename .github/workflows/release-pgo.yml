@@ -53,7 +53,6 @@ jobs:
           # Latest stable rustc (1.97 на момент 22.07.2026) — используется
           # для production binary build. Generates .profraw в raw format v10.
           components: rustfmt, clippy
-          profile: minimal
 
       - name: Download matching llvm-profdata tarball
         env:
@@ -115,9 +114,12 @@ jobs:
           PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           # Прогон benches для сбора representative profile данных.
-          # Criterion binary сам по себе нагружает hot-path достаточно для профиля.
+          # Используем `cargo bench --bench hot_path` (а не прямой вызов
+          # ./hot_path-* binary) — criterion требует explicit bench name,
+          # иначе fail "no benchmark specified". `.profraw` файлы записываются
+          # в $PGO_DIR при запуске бинаря.
           RUSTFLAGS="-Cprofile-generate=$PGO_DIR" \
-            ./target/release/deps/hot_path-* --bench --quick
+            cargo bench --bench hot_path -- --quick
 
       - name: PGO step 3/3 — merge profdata + final build
         env:
@@ -179,9 +181,16 @@ jobs:
           echo "::endgroup::"
 
       - name: Verify PGO improvement (sanity bench)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          PGO_DIR: ${{ github.workspace }}/pgo
         run: |
           echo "::group::PGO verification — bench should show ~1.65 µs/msg (vs ~1.74 без PGO)"
-          ./target/release/deps/hot_path-* --bench --quick 2>&1 \
+          # Используем уже собранный с `-Cprofile-use=$PGO_DIR/merged.profdata`
+          # binary из step 3/3. cargo bench найдет binary в target/release/deps/.
+          # Если bench binary не пересобран с PGO profile — sanity check покажет
+          # ~1.74 µs/msg (то же что без PGO).
+          cargo bench --bench hot_path -- --quick 2>&1 \
             | grep -E "rfc5424_with_faker|thrpt" \
             | head -5
           echo "::endgroup::"

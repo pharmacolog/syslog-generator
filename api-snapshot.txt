@@ -1832,7 +1832,53 @@ pub fn syslog_generator::generator::config::load_profile_from_json_str(&str) -> 
 pub fn syslog_generator::generator::config::load_profile_from_path(&std::path::Path) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub fn syslog_generator::generator::config::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub mod syslog_generator::generator::core
+pub struct syslog_generator::generator::core::CachedAnomalyHandles
+pub syslog_generator::generator::core::CachedAnomalyHandles::applied: prometheus::counter::Counter
+pub syslog_generator::generator::core::CachedAnomalyHandles::dropped: core::option::Option<prometheus::counter::Counter>
+pub syslog_generator::generator::core::CachedAnomalyHandles::type_name: &'static str
+impl core::clone::Clone for syslog_generator::generator::core::CachedAnomalyHandles
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::clone(&self) -> syslog_generator::generator::core::CachedAnomalyHandles
+impl core::marker::Freeze for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::marker::Send for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::marker::Sync for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::marker::Unpin for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::marker::UnsafeUnpin for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::core::CachedAnomalyHandles
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::core::CachedAnomalyHandles
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::core::CachedAnomalyHandles where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::core::CachedAnomalyHandles where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::core::CachedAnomalyHandles where U: core::convert::From<T>
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::core::CachedAnomalyHandles where U: core::convert::Into<T>
+pub type syslog_generator::generator::core::CachedAnomalyHandles::Error = core::convert::Infallible
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::core::CachedAnomalyHandles where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::core::CachedAnomalyHandles::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::core::CachedAnomalyHandles where T: core::clone::Clone
+pub type syslog_generator::generator::core::CachedAnomalyHandles::Owned = T
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::core::CachedAnomalyHandles where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::core::CachedAnomalyHandles where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::core::CachedAnomalyHandles where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::core::CachedAnomalyHandles where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::core::CachedAnomalyHandles::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::core::CachedAnomalyHandles
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::core::CachedAnomalyHandles where T: ?core::marker::Sized
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::core::CachedAnomalyHandles
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::core::CachedAnomalyHandles
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::CachedAnomalyHandles where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::CachedAnomalyHandles where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::core::CachedAnomalyHandles::vzip(self) -> V
 pub struct syslog_generator::generator::core::PhaseContext
+pub syslog_generator::generator::core::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
 pub syslog_generator::generator::core::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::core::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::generator::core::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -1842,6 +1888,7 @@ pub syslog_generator::generator::core::PhaseContext::referenced_fakers: core::op
 pub syslog_generator::generator::core::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::core::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)
 pub fn syslog_generator::generator::core::PhaseContext::resolve(&syslog_generator::generator::config::Phase) -> anyhow::Result<Self>
 impl core::marker::Freeze for syslog_generator::generator::core::PhaseContext
 impl core::marker::Send for syslog_generator::generator::core::PhaseContext
@@ -2124,6 +2171,7 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::generator::PhaseContext
+pub syslog_generator::generator::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
 pub syslog_generator::generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -2133,6 +2181,7 @@ pub syslog_generator::generator::PhaseContext::referenced_fakers: core::option::
 pub syslog_generator::generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)
 pub fn syslog_generator::generator::core::PhaseContext::resolve(&syslog_generator::generator::config::Phase) -> anyhow::Result<Self>
 impl core::marker::Freeze for syslog_generator::generator::core::PhaseContext
 impl core::marker::Send for syslog_generator::generator::core::PhaseContext
@@ -6308,6 +6357,7 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::Phase where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::PhaseContext
+pub syslog_generator::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
 pub syslog_generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -6317,6 +6367,7 @@ pub syslog_generator::PhaseContext::referenced_fakers: core::option::Option<std:
 pub syslog_generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
+pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)
 pub fn syslog_generator::generator::core::PhaseContext::resolve(&syslog_generator::generator::config::Phase) -> anyhow::Result<Self>
 impl core::marker::Freeze for syslog_generator::generator::core::PhaseContext
 impl core::marker::Send for syslog_generator::generator::core::PhaseContext

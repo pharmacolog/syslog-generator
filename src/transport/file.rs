@@ -278,8 +278,7 @@ pub async fn target_sender_file_with_rotation(
             path.to_string_lossy().as_ref(),
             msg.len() as u64,
             &shutdown,
-        )
-        .await;
+        );
 
         // Проверка size-триггера ПОСЛЕ записи.
         if let Some(threshold) = rotation.size_threshold_bytes() {

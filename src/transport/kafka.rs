@@ -215,8 +215,7 @@ pub async fn target_sender_kafka(
                     &addr,
                     bytes as u64,
                     &shutdown,
-                )
-                .await;
+                );
             }
             Err(e) => {
                 metrics.errors_total.with_label_values(&[&addr]).inc();

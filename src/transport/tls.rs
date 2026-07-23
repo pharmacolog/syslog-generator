@@ -339,7 +339,7 @@ pub async fn target_sender_tls(
         Ok(c) => c,
         Err(e) => {
             eprintln!("TLS ({addr}): не удалось построить connector: {e}");
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             drain_as_errors(&rx, &metrics, &addr).await;
             return Ok(());
         }
@@ -351,7 +351,7 @@ pub async fn target_sender_tls(
             // Backward-compat (F16): первая неудача connect'а → drain + return.
             // Backoff-retry НЕ применяется (иначе при max_attempts=None
             // sender зависнет на бесконечном backoff'е).
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             drain_as_errors(&rx, &metrics, &addr).await;
             return Ok(());
         }
@@ -362,7 +362,7 @@ pub async fn target_sender_tls(
         Ok(sn) => sn,
         Err(e) => {
             eprintln!("TLS ({addr}): невалидный server_name {domain:?}: {e}");
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             drain_as_errors(&rx, &metrics, &addr).await;
             return Ok(());
         }
@@ -407,7 +407,7 @@ async fn run_send_loop(
         frame_into(&mut buf, &msg, framing);
         let t0 = std::time::Instant::now();
         if tls.write_all(&buf).await.is_err() {
-            record_error(&metrics, &addr).await;
+            record_error(&metrics, &addr);
             buf.clear();
             // F16: reconnect через exponential backoff (rustls API).
             let outcome =
@@ -426,10 +426,9 @@ async fn run_send_loop(
                             &addr,
                             msg.len() as u64,
                             &shutdown,
-                        )
-                        .await;
+                        );
                     } else {
-                        record_error(&metrics, &addr).await;
+                        record_error(&metrics, &addr);
                     }
                 }
                 Some(Err(_)) | None => {
@@ -446,8 +445,7 @@ async fn run_send_loop(
                 &addr,
                 msg.len() as u64,
                 &shutdown,
-            )
-            .await;
+            );
         }
         buf.clear();
     }

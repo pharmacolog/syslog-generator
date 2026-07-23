@@ -37,7 +37,7 @@
 //!
 //! Backward-compat: legacy `HashMap<String, String>` path сохранён как
 //! `PhaseContext::default_values_into` и используется fallback'ом если
-//! план отсутствует (см. `PhaseContext::legacy_values()`).
+//! план отсутствует (см. `PhaseContext::default_values_into`).
 
 pub mod schema;
 pub mod template;
@@ -48,7 +48,6 @@ pub use template::CompiledTemplateV2;
 pub use value::{FakerKind, Value, ValueArena, ValueSlot};
 
 use crate::generator::config::Phase;
-use anyhow::Result;
 
 /// Pre-compiled per-phase execution plan.
 ///
@@ -97,20 +96,23 @@ impl SyslogHeaderTemplates {
         // Заглушка — реализация в PR-A2.5 (caller-owned buffer для rfc5424).
     }
 }
-
 /// Compile a Phase в CompiledPhase.
 ///
 /// MVP: компилирует только body_template в slot-based form. Syslog header
 /// compilation, schema pre-resolution — следующие шаги.
-pub fn compile_phase(phase: &Phase) -> Result<CompiledPhase> {
+///
+/// Infallible: пустые/invalid шаблоны дают empty `CompiledPhase` без
+/// аллокаций. Если в будущем потребуется fallible variant — возвращаем
+/// `Result<CompiledPhase>` через явный `try_compile_phase`.
+pub fn compile_phase(phase: &Phase) -> CompiledPhase {
     let mut slots: Vec<String> = Vec::new();
     let body_template = CompiledTemplateV2::compile_from_strings(&phase.templates, &mut slots);
     let value_slot_count = slots.len();
-    Ok(CompiledPhase {
+    CompiledPhase {
         body_template,
         syslog_templates: None, // PR-A2.5: compile from phase.syslog
         value_slot_count,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -135,7 +137,7 @@ mod tests {
     #[test]
     fn compile_phase_basic() {
         let phase = test_phase();
-        let plan = compile_phase(&phase).expect("compile");
+        let plan = compile_phase(&phase);
         assert_eq!(plan.value_slot_count, 4);
         assert!(plan.body_template.part_count() > 0);
     }
@@ -143,7 +145,7 @@ mod tests {
     #[test]
     fn compile_phase_empty_templates() {
         let phase = Phase::default();
-        let plan = compile_phase(&phase).expect("compile");
+        let plan = compile_phase(&phase);
         assert_eq!(plan.value_slot_count, 0);
         assert_eq!(plan.body_template.part_count(), 0);
     }
@@ -153,7 +155,7 @@ mod tests {
     #[test]
     fn snapshot_slot_based_render_smoke() {
         let phase = test_phase();
-        let plan = compile_phase(&phase).expect("compile");
+        let plan = compile_phase(&phase);
 
         // Populate arena matching slot order (real_app, sequence, faker.username, faker.ipv4).
         let mut arena = ValueArena::new(plan.value_slot_count);
@@ -184,5 +186,25 @@ mod tests {
         let mut out = bytes::BytesMut::with_capacity(64);
         tpl.render_into_bytes(&arena, &mut out);
         assert_eq!(&out[..], b"<13>hello world\n");
+    }
+
+    /// Smoke test: snapshot_slot_based_render_smoke дополнительно проверяет
+    /// что slot indices совпадают с position в input templates.
+    #[test]
+    fn smoke_slot_based_render_smoke() {
+        let phase = test_phase();
+        let plan = compile_phase(&phase);
+
+        let mut arena = ValueArena::new(plan.value_slot_count);
+        arena.push(Value::from("test"));
+        arena.push(Value::from("42"));
+        arena.push(Value::from("alice"));
+        arena.push(Value::from("192.168.1.10"));
+
+        let mut out = String::new();
+        plan.body_template.render_into(&arena, &mut out);
+
+        assert!(out.contains("user=test seq=42"), "got: {out}");
+        assert!(out.contains("alice from 192.168.1.10"), "got: {out}");
     }
 }

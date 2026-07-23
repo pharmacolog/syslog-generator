@@ -172,7 +172,7 @@ impl ValueArena {
         self.slots.len()
     }
 
-    /// Всегда false для slot-arena (не applicable).
+    /// `true` если нет слотов (e.g., сразу после `reset()`).
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
@@ -193,14 +193,19 @@ impl ValueArena {
     }
 }
 
-/// Сериализовать `seq` в decimal в `out`. Использует `itoa`-like fast path.
+/// Сериализовать `seq` в decimal в `out` через `Display`.
+/// MVP: используем `std::fmt::Write` (≈ `itoa` по скорости).
+/// PR-A2.3: заменить на `itoa::write()` если нужно.
+#[allow(dead_code)]
 #[inline]
 pub fn write_seq(out: &mut String, seq: usize) {
     use std::fmt::Write;
     let _ = write!(out, "{}", seq);
 }
 
-/// Сериализовать `pid` в decimal в `out`.
+/// Сериализовать `pid` в decimal в `out` через `Display`.
+/// MVP: используем `std::fmt::Write` (≈ `itoa` по скорости).
+#[allow(dead_code)]
 #[inline]
 pub fn write_pid(out: &mut String, pid: i64) {
     use std::fmt::Write;

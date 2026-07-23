@@ -29,11 +29,12 @@ pub struct CompiledTemplateV2 {
 #[allow(dead_code)] // Static reserved for PR-A2.5 syslog header pre-rendering.
 enum Part {
     /// Литеральный кусок текста — копируется напрямую в output.
-    Literal(&'static str),
+    /// `Arc<str>` для shared ownership без memory leak (vs `Box::leak`).
+    Literal(std::sync::Arc<str>),
     /// Static placeholder (например `{{hostname}}` в syslog header).
     /// Value pre-resolved при компиляции, в render просто пушится в arena
     /// и берётся без lookup.
-    Static(&'static str),
+    Static(std::sync::Arc<str>),
     /// Dynamic placeholder (sequence, pid, faker, schema).
     /// Render читает значение из `arena[idx]` (slot pre-populated).
     Slot(usize),
@@ -95,11 +96,10 @@ impl CompiledTemplateV2 {
         let mut lit_start = 0;
         while i + 1 < bytes.len() {
             if bytes[i] == b'{' && bytes[i + 1] == b'{' {
-                // Flush литерала до placeholder.
+                // Flush литерала до placeholder. ASCII-границы (`{`, `}`)
+                // гарантируют валидный UTF-8 slicing.
                 if lit_start < i {
-                    // SAFETY: bytes utf-8 — template валидный.
-                    let lit = &template[lit_start..i];
-                    parts.push(Part::Literal(Box::leak(lit.to_string().into_boxed_str())));
+                    parts.push(Part::Literal(std::sync::Arc::from(&template[lit_start..i])));
                 }
                 i += 2;
                 let key_start = i;
@@ -108,8 +108,9 @@ impl CompiledTemplateV2 {
                 }
                 if i + 1 >= bytes.len() {
                     // No closing `}}` — остаток как литерал.
-                    let lit = &template[key_start.saturating_sub(2)..];
-                    parts.push(Part::Literal(Box::leak(lit.to_string().into_boxed_str())));
+                    parts.push(Part::Literal(std::sync::Arc::from(
+                        &template[key_start.saturating_sub(2)..],
+                    )));
                     break;
                 }
                 let key = template[key_start..i].to_string();
@@ -117,7 +118,7 @@ impl CompiledTemplateV2 {
                 lit_start = i;
                 if key.is_empty() {
                     // Пустой placeholder `{{}}` — оставляем как литерал.
-                    parts.push(Part::Literal("{{}}"));
+                    parts.push(Part::Literal(std::sync::Arc::from("{{}}")));
                     continue;
                 }
                 parts.push(Part::Slot(arena_slots.len()));
@@ -127,8 +128,7 @@ impl CompiledTemplateV2 {
             i += 1;
         }
         if lit_start < bytes.len() {
-            let lit = &template[lit_start..];
-            parts.push(Part::Literal(Box::leak(lit.to_string().into_boxed_str())));
+            parts.push(Part::Literal(std::sync::Arc::from(&template[lit_start..])));
         }
     }
 

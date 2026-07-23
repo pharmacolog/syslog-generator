@@ -538,7 +538,7 @@ impl PhaseContext {
             // PR-A2 (v10.8.0): compile plan для slot-based render path.
             // MVP: compile для всех phases (план сам решает когда применим).
             // Полная миграция hot path в generate_message_with_plan — PR-A2.3.
-            compiled_plan: crate::plan::compile_phase(phase).ok(),
+            compiled_plan: Some(crate::plan::compile_phase(phase)),
         })
     }
 }

@@ -715,6 +715,7 @@ mod tests {
     /// снова). Главное здесь — что sender УЖЕ зашёл в ветку re-send (lines
     /// 107-125), независимо от того, success или fail был re-send.
     #[tokio::test]
+    #[ignore = "race condition между sender re-write и server RST-drop — Issue #117. Прогоняется в nightly tls-stress-tests.yml с RUST_TEST_THREADS=1."]
     async fn phase8a_tcp_write_failure_after_reconnect_records_error() {
         // PR-fix (v10.7.16+): hard timeout на весь тест (15s) — safety net для
         // CI race conditions в reconnect path (Phase 8a deadlock).

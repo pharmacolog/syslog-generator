@@ -15,7 +15,6 @@
 //! regex HIR, pre-sorted fields, pre-compiled samplers) — следующий PR.
 
 use crate::schema::Schema;
-use anyhow::Result;
 
 /// Pre-compiled schema execution plan.
 ///
@@ -44,6 +43,8 @@ pub struct CompiledSchemaField {
     /// Optional dependency on parent field (для F6 inter-field correlations).
     pub depends_on: Option<String>,
     /// Pre-compiled distribution sampler (placeholder для будущей реализации).
+    /// MVP: всегда Uniform — original weights/zipf данные НЕ сохраняются.
+    /// Полная реализация в PR-A2.5.
     pub distribution: CompiledDistribution,
 }
 
@@ -64,7 +65,9 @@ impl CompiledSchema {
     ///
     /// MVP: pre-sort fields by name, leave distribution/sampling для
     /// следующего шага (current behavior preserved).
-    pub fn compile(schema: &Schema) -> Result<Self> {
+    ///
+    /// Infallible: пустые/invalid schemas дают empty CompiledSchema.
+    pub fn compile(schema: &Schema) -> Self {
         let mut fields: Vec<_> = schema
             .fields
             .iter()
@@ -86,11 +89,11 @@ impl CompiledSchema {
             )
         });
 
-        Ok(Self {
+        Self {
             fields,
             body_template,
             field_slot_names,
-        })
+        }
     }
 }
 
@@ -102,7 +105,7 @@ mod tests {
     #[test]
     fn compile_empty_schema() {
         let schema = Schema::default();
-        let plan = CompiledSchema::compile(&schema).expect("compile");
+        let plan = CompiledSchema::compile(&schema);
         assert_eq!(plan.fields.len(), 0);
         assert!(plan.body_template.is_none());
     }
@@ -151,7 +154,7 @@ mod tests {
             },
         );
 
-        let plan = CompiledSchema::compile(&schema).expect("compile");
+        let plan = CompiledSchema::compile(&schema);
         assert_eq!(plan.fields.len(), 2);
         assert_eq!(plan.fields[0].name, "a_field");
         assert_eq!(plan.fields[1].name, "z_field");

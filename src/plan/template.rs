@@ -108,9 +108,12 @@ impl CompiledTemplateV2 {
                 }
                 if i + 1 >= bytes.len() {
                     // No closing `}}` — остаток как литерал.
+                    // Capture от `{{` (key_start - 2) до конца template.
+                    // lit_start = bytes.len() чтобы trailing flush не дублировал.
                     parts.push(Part::Literal(std::sync::Arc::from(
                         &template[key_start.saturating_sub(2)..],
                     )));
+                    lit_start = bytes.len();
                     break;
                 }
                 let key = template[key_start..i].to_string();
@@ -212,6 +215,15 @@ mod tests {
         );
         assert_eq!(slots.len(), 0, "unclosed placeholder must not be a slot");
         assert!(tpl.part_count() >= 1);
+
+        // Bug #1 regression test: trailing literal must not duplicate.
+        let arena = ValueArena::new(0);
+        let mut out = String::new();
+        tpl.render_into(&arena, &mut out);
+        assert_eq!(
+            out, "hello {{unfinished",
+            "unclosed placeholder must not duplicate literal"
+        );
     }
 
     #[test]

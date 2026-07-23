@@ -371,12 +371,26 @@ pub struct Profile {
     /// HTTP-сервер метрик не запускается.
     #[serde(default)]
     pub metrics_addr: Option<String>,
+    /// PR-A3: policy для broadcast distribution (strict | independent |
+    /// best-effort). None → strict (backward-compat default).
+    #[serde(default)]
+    pub broadcast_policy: Option<String>,
+    /// PR-A3: per-target queue capacity (для broadcast). None → 1024.
+    #[serde(default)]
+    pub queue_capacity: Option<usize>,
+    /// PR-A3: policy для target failure (fail-phase | continue | disable-target).
+    /// None → fail-phase (backward-compat default).
+    #[serde(default)]
+    pub on_target_failure: Option<String>,
 }
 impl Default for Profile {
     fn default() -> Self {
         Self {
             targets: Vec::new(),
             distribution: default_distribution(),
+            broadcast_policy: None,
+            queue_capacity: None,
+            on_target_failure: None,
             shutdown: ShutdownConfig::default(),
             phases: Vec::new(),
             metrics_addr: None,

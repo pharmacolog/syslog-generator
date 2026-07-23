@@ -1056,6 +1056,9 @@ mod tests {
             targets: vec![valid_target()],
             distribution: "round-robin".to_string(),
             shutdown: ShutdownConfig::default(),
+            broadcast_policy: None,
+            queue_capacity: None,
+            on_target_failure: None,
             phases: vec![valid_phase()],
             metrics_addr: None,
         }

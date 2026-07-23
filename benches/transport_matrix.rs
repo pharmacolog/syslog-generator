@@ -29,6 +29,9 @@ fn make_profile(target: TargetConfig) -> Profile {
         targets: vec![target],
         distribution: "round-robin".into(),
         shutdown: ShutdownConfig::default(),
+        broadcast_policy: None,
+        queue_capacity: None,
+        on_target_failure: None,
         phases: vec![Phase {
             name: "bench".into(),
             messages_per_second: 0,

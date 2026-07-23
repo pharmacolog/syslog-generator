@@ -1,6 +1,62 @@
 
 # Changelog
 
+## Unreleased (PR-A0 baseline)
+
+### Added
+
+- **Bench matrix expansion (Issue #87, PR-A0)**: 4 новых bench-файла
+  дополняют существующий `hot_path.rs` и измеряют реальный runtime:
+  - `benches/runtime.rs` — end-to-end `run_profile` (file transport, 20K msg).
+  - `benches/format_matrix.rs` — 7 форматов × {static, faker} payloads.
+  - `benches/transport_matrix.rs` — TCP/UDP × {1, 4, 16} connections (с реальным listener/receiver).
+  - `benches/dispatch_matrix.rs` — round-robin/weighted/broadcast × {1, 4, 16} targets.
+- **Bench profile (`[profile.bench]` в `Cargo.toml`)**: inherits = "release",
+  `debug=false`. Bench теперь компилируется с теми же оптимизациями, что
+  и release (LTO, codegen-units=1, opt-level=3). Ранее benches работали
+  в debug-режиме, что искажало цифры.
+- **`scripts/perf-baseline.sh`**: единый запуск всех benches с сохранением
+  baseline в `perf/baselines/<sha>.json` (Criterion bencher → JSON).
+- **`scripts/compare-baseline.sh`**: сравнение текущего прогона с baseline,
+  exit 1 при регрессии > threshold (5%/10%/15% по категориям).
+- **`.github/workflows/perf-baseline.yml`**: nightly cron (ежедневно 04:00 UTC) +
+  on-tag + workflow_dispatch, с сохранением baseline JSON artifact.
+- **`docs/perf-baseline.md`**: baseline таблицы для всех 4 новых bench
+  групп + наблюдения + roadmap.
+
+### Fixed (побочное открытие PR-A0)
+
+- **`src/generator/core.rs:463` (`referenced_fakers`)**: инициализируется
+  теперь как `Some(empty HashSet)`, не `None`. Без этого fix шаблоны без
+  `{{faker.*}}` ошибочно генерировали ВСЕ 9 fakers (default_values_into
+  fallback ветка). Удалось замерить это через benchmark: −34..−66% ns/msg
+  на static templates (см. docs/perf-baseline.md). Семантика backwards-compatible
+  (генерировались 9 faker-полей, которые никто не использовал → пустая трата).
+
+### Baseline observations (v10.8.0-A0)
+
+- `runtime/rfc5424_static`     ~400 K msg/s
+- `runtime/rfc5424_faker`      ~385 K msg/s
+- `transport_matrix_tcp/16` vs tcp/1: −1.3× (SharedRx mutex, цель PR-A4)
+- `dispatch_matrix/broadcast/16` vs broadcast/1: −5× (serial send().await, цель PR-A3)
+- `format_matrix/protobuf_static` теперь самый быстрый (677 ns, 1477 K msg/s)
+
+### Changed
+
+- `Cargo.toml`: добавлен `[profile.bench]` (inherits release, debug=false).
+- `src/generator/core.rs:463-488`: faker-scan теперь всегда инициализирует
+  пустое множество; см. "Fixed" выше.
+
+### Quality Gates
+
+- ✅ Tests: 400 unit + integration — все зелёные.
+- ✅ Clippy clean (`-D warnings`) на всех targets.
+- ✅ Bench-файлы компилируются в release-режиме.
+- Без изменений в публичном API.
+- Изменение в `default_values_into` (referenced_fakers fix) — не меняет
+  семантику для шаблонов с `{{faker.*}}` (только устраняет избыточную
+  генерацию для шаблонов без них).
+
 ## v10.7.19 - 2026-07-22
 
 **Patch-release: Phase 14 Step 1+2 Tier 2 coverage + release-pgo.yml infra fix.**

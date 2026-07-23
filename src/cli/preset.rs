@@ -22,7 +22,7 @@
 //!
 //! ## Архитектура
 //!
-//! Preset — это struct с Option<String> для каждого параметра. None
+//! Preset — это struct с `Option<String>` для каждого параметра. None
 //! означает "не изменять" (allow user override to take effect).
 //! `apply_preset()` мутирует Profile через set_override::apply_set_overrides
 //! (тот же механизм, что и --set).

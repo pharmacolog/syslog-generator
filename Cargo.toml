@@ -15,6 +15,21 @@ rust-version = "1.95"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+
+# PR-A0 (v10.8.0): release-like profile для benches.
+# Criterion benches ранее компилировались в debug-режиме (no opt, debug assertions),
+# что искажало цифры throughput. Теперь benches собираются с LTO + opt-level=3
+# без debug-информации, как release, но без strip (для возможности профилирования).
+[profile.bench]
+inherits = "release"
+debug = false
+strip = "none"
+
+# PR-C1: test profile — opt-level=1 для ускорения компиляции без
+# потери coverage gates. debug=true сохраняет debug info.
+[profile.test]
+opt-level = 1
+debug = true
 # PR-17d (v10.7.19): PGO (Profile-Guided Optimization) opt-in via env var.
 # Production release builds НЕ используют PGO по умолчанию (для скорости CI).
 # Включение для release: `RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release`.
@@ -123,6 +138,26 @@ harness = false
 # Target: ≤ 2 µs/msg на generate_message_with_format (PR-10).
 [[bench]]
 name = "hot_path"
+harness = false
+
+# PR-A0: runtime bench — реальный `run_profile` end-to-end (вместо только helper).
+[[bench]]
+name = "runtime"
+harness = false
+
+# PR-A0: format matrix — 7 форматов × {static, faker}.
+[[bench]]
+name = "format_matrix"
+harness = false
+
+# PR-A0: transport matrix — TCP/UDP × {1, 4, 16} connections.
+[[bench]]
+name = "transport_matrix"
+harness = false
+
+# PR-A0: dispatch matrix — round-robin/weighted/broadcast × {1, 4, 16} targets.
+[[bench]]
+name = "dispatch_matrix"
 harness = false
 
 # PR-6 (v10.7.8): расширенное bench-coverage. Иерархическая структура:

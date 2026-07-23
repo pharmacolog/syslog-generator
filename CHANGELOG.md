@@ -1,6 +1,50 @@
 
 # Changelog
 
+## Unreleased (PR-A0 baseline)
+
+### Added
+
+- **Bench matrix expansion (Issue #81, PR-A0)**: 4 новых bench-файла
+  дополняют существующий `hot_path.rs` и измеряют реальный runtime:
+  - `benches/runtime.rs` — end-to-end `run_profile` (file transport, 20K msg).
+  - `benches/format_matrix.rs` — 7 форматов × {static, faker} payloads.
+  - `benches/transport_matrix.rs` — TCP/UDP × {1, 4, 16} connections.
+  - `benches/dispatch_matrix.rs` — round-robin/weighted/broadcast × {1, 4, 16} targets.
+- **Bench profile (`[profile.bench]` в `Cargo.toml`)**: inherits = "release",
+  `debug=false`. Bench теперь компилируется с теми же оптимизациями, что
+  и release (LTO, codegen-units=1, opt-level=3). Ранее benches работали
+  в debug-режиме, что искажало цифры.
+- **`scripts/perf-baseline.sh`**: единый запуск всех benches с сохранением
+  baseline в `perf/baselines/<sha>.json`.
+- **`scripts/compare-baseline.sh`**: stub для сравнения с baseline
+  (полный парсер bencher output — в PR-A6).
+- **`.github/workflows/perf-baseline.yml`**: nightly + on-tag bench run,
+  non-blocking artifact upload.
+- **`docs/perf-baseline.md`**: baseline таблицы для всех 4 новых bench
+  групп + наблюдения из baseline (см. ниже).
+
+### Baseline observations (v10.7.19 reference)
+
+- `runtime/rfc5424_static`  ≈ 323 K msg/s (61.9 ms для 20K msg).
+- `runtime/json_lines_static` ≈ 326 K msg/s (≈ одинаковый с rfc5424 static).
+- `transport_matrix_tcp/16` падает в 30× vs `tcp/1` — подтверждает
+  архитектурный bottleneck `SharedRx` mutex. Цель PR-A4.
+- `dispatch_matrix/broadcast/16` падает в 3.5× vs `broadcast/1` —
+  подтверждает serial `send().await` per target. Цель PR-A3.
+
+### Changed
+
+- `Cargo.toml`: добавлен `[profile.bench]` (inherits release, debug=false).
+
+### Quality Gates
+
+- ✅ Tests: 400 unit + integration — все зелёные.
+- ✅ Clippy clean (`-D warnings`) на всех targets.
+- ✅ Bench-файлы компилируются в release-режиме.
+- Без изменений в публичном API.
+- Без изменений в production коде (только benches + scripts + docs + CI).
+
 ## v10.7.19 - 2026-07-22
 
 **Patch-release: Phase 14 Step 1+2 Tier 2 coverage + release-pgo.yml infra fix.**

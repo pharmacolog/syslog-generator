@@ -1,0 +1,61 @@
+# PR-A0 (v10.8.0): Perf baseline — nightly + on-tag bench run.
+#
+# Не блокирующий PR: собирает baseline цифры и публикует как artifact.
+# Blocking gate появится в PR-A6.
+
+name: perf-baseline
+
+on:
+  schedule:
+    # Каждый понедельник в 04:00 UTC (после dependabot).
+    - cron: '0 4 * * 1'
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Bench baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: perf-baseline-ubuntu
+
+      - name: Compile benches
+        run: cargo bench --no-run --locked
+
+      - name: Run baseline (quick mode)
+        continue-on-error: true
+        run: |
+          set -e
+          mkdir -p bench-output
+          for bench in hot_path runtime format_matrix transport_matrix dispatch_matrix; do
+            echo "=== ${bench} ===" | tee -a bench-output/combined.txt
+            cargo bench --locked --bench "${bench}" -- --quick 2>&1 | tee -a bench-output/combined.txt || true
+            echo | tee -a bench-output/combined.txt
+          done
+
+      - name: Upload bench output (artifact)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-baseline-${{ github.run_id }}
+          path: bench-output/combined.txt
+          if-no-files-found: ignore

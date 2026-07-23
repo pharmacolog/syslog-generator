@@ -21,6 +21,41 @@ use super::{
     record_send_latency, Framing, SharedRx,
 };
 
+/// Issue #85 \[A1\] sub-task 10: оптимальная capacity для \`BytesMut\`.
+///
+/// Возвращает capacity ≥ \`msg_len + framing_overhead\` (≥ \`MIN_BUF_SIZE\`) с
+/// округлением вверх до степени 2. Это минимизирует realloc при адаптивном
+/// росте буфера под большие сообщения.
+///
+/// Возвращаемые значения — степени 2 (1KB, 2KB, 4KB, ..., 1MB, 2MB, ...),
+/// что совпадает с типичными размерами slab allocator'ов.
+pub(crate) fn optimal_buffer_capacity(msg_len: usize, framing: Framing) -> usize {
+    // Размер overhead фрейминга: non-transparent = +1 (LF байт),
+    // octet-counting = +N (varint длины, worst case 10 байт для usize::MAX).
+    let framing_overhead: usize = match framing {
+        Framing::NonTransparent => 1,
+        Framing::OctetCounting => 10,
+    };
+    let required = msg_len.saturating_add(framing_overhead);
+    let min_size = 8 * 1024; // N6 baseline: 8 KiB для typical syslog (RFC 5424 ≤ 1KB + headers).
+    let target = required.max(min_size);
+    // Round up до степени 2.
+    target.next_power_of_two()
+}
+
+/// Issue #85 \[A1\] sub-task 10: realloc \`BytesMut\` если capacity < required.
+///
+/// Если capacity достаточна — возвращает исходный буфер (zero-cost).
+/// Если capacity недостаточна — выделяет новый с оптимальной capacity.
+/// В обоих случаях буфер очищен (готов к записи).
+fn ensure_capacity(buf: &mut BytesMut, required: usize) {
+    if buf.capacity() < required {
+        *buf = BytesMut::with_capacity(required);
+    } else {
+        buf.clear();
+    }
+}
+
 /// F16: TCP sender с настраиваемой reconnect-стратегией.
 ///
 /// Используется как из `target_sender_tcp` (default reconnect = без лимита
@@ -75,9 +110,14 @@ async fn run_send_loop(
     rcfg: ReconnectConfig,
 ) -> Result<()> {
     // N6 (v8.7.0): `BytesMut` (8 KiB) переиспользуется между сообщениями.
+    // Issue #85 \[A1\] sub-task 10: адаптивный sizing — если сообщение больше
+    // текущей capacity, realloc на оптимальную capacity (power-of-2).
     let mut buf = BytesMut::with_capacity(8 * 1024);
     while let Some(msg) = next_msg(&rx).await {
-        // 1. Фреймим сообщение в переиспользуемый буфер.
+        // 1. Адаптивный realloc под размер сообщения (Issue #85 sub-task 10).
+        let needed = optimal_buffer_capacity(msg.len(), framing);
+        ensure_capacity(&mut buf, needed);
+        // 2. Фреймим сообщение в переиспользуемый буфер.
         frame_into(&mut buf, &msg, framing);
         let t0 = std::time::Instant::now();
         if stream.write_all(&buf).await.is_err() {
@@ -158,6 +198,84 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
+
+    /// Issue #85 \[A1\] sub-task 10: optimal_buffer_capacity для маленького
+    /// сообщения → минимум 8 KiB (power-of-2).
+    #[test]
+    fn a1_subtask10_optimal_capacity_small_message() {
+        let cap = optimal_buffer_capacity(100, Framing::NonTransparent);
+        assert!(
+            cap >= 8 * 1024,
+            "маленькое сообщение должно получить минимум 8 KiB, got {cap}"
+        );
+        assert!(
+            cap.is_power_of_two(),
+            "capacity должна быть power-of-2, got {cap}"
+        );
+    }
+
+    /// Issue #85 \[A1\] sub-task 10: optimal_buffer_capacity для среднего
+    /// сообщения → минимум 8 KiB (power-of-2 baseline).
+    #[test]
+    fn a1_subtask10_optimal_capacity_medium_message() {
+        // 1000 байт < 8 KiB → minimum 8 KiB.
+        let cap = optimal_buffer_capacity(1000, Framing::NonTransparent);
+        assert_eq!(
+            cap, 8192,
+            "1000-байтное сообщение получает минимум 8 KiB, got {cap}"
+        );
+    }
+
+    /// Issue #85 \[A1\] sub-task 10: optimal_buffer_capacity для большого
+    /// сообщения > 8 KiB → next power-of-2 ≥ msg_len + overhead.
+    #[test]
+    fn a1_subtask10_optimal_capacity_large_message() {
+        // 16 KiB + 11 overhead = 16403 → next power-of-2 = 32 KiB.
+        let cap = optimal_buffer_capacity(16 * 1024, Framing::OctetCounting);
+        assert_eq!(
+            cap,
+            32 * 1024,
+            "16 KiB сообщение должно получить 32 KiB (с overhead), got {cap}"
+        );
+        // 100 KiB + 11 overhead = 102411 → next power-of-2 = 128 KiB.
+        let cap2 = optimal_buffer_capacity(100 * 1024, Framing::NonTransparent);
+        assert_eq!(
+            cap2, 131072,
+            "100 KiB сообщение должно получить 128 KiB, got {cap2}"
+        );
+    }
+
+    /// Issue #85 \[A1\] sub-task 10: ensure_capacity reuses buffer если хватает.
+    #[test]
+    fn a1_subtask10_ensure_capacity_reuses_when_sufficient() {
+        let mut buf = BytesMut::with_capacity(8192);
+        ensure_capacity(&mut buf, 1000);
+        // capacity должна сохраниться (нет realloc).
+        assert_eq!(buf.capacity(), 8192, "capacity должна сохраниться");
+        // После clear длина 0, но capacity та же.
+        assert_eq!(buf.len(), 0, "буфер должен быть очищен");
+    }
+
+    /// Issue #85 \[A1\] sub-task 10: ensure_capacity reallocates если недостаточно.
+    #[test]
+    fn a1_subtask10_ensure_capacity_reallocates_when_insufficient() {
+        let mut buf = BytesMut::with_capacity(1024);
+        ensure_capacity(&mut buf, 8192);
+        // capacity должна увеличиться.
+        assert!(
+            buf.capacity() >= 8192,
+            "capacity должна быть >= 8192, got {}",
+            buf.capacity()
+        );
+        assert_eq!(buf.len(), 0, "буфер должен быть очищен");
+    }
+
+    /// Issue #85 \[A1\] sub-task 10: optimal_buffer_capacity(0) → minimum 8 KiB.
+    #[test]
+    fn a1_subtask10_optimal_capacity_zero_message() {
+        let cap = optimal_buffer_capacity(0, Framing::NonTransparent);
+        assert_eq!(cap, 8192, "empty message → 8 KiB minimum");
+    }
 
     /// TCP sender: connect → write → drain → exit.
     /// End-to-end: sender → реальный TCP listener.

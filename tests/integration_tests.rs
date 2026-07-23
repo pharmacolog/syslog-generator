@@ -3869,9 +3869,16 @@ async fn phase14_step2_tls_mtls_full_round_trip_strict() {
     // (cold-start mTLS handshake может занимать >15s с rustls + ring).
     // PR-A2: дополнительно увеличен до 60s — PR #94 CI показал что 30s всё
     // ещё мало на shared runners при cold cache + параллельных jobs.
+    // PR-A2 (Round 3): drain timeout_secs увеличен с 15s до 60s — на CI с
+    // kafka feature build workers не успевают drain'ить за 15s.
+    let mut profile_with_long_drain = profile;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 60;
     let res = tokio::time::timeout(
         Duration::from_secs(60),
-        run_profile(&profile, create_metrics().expect("metrics ok")),
+        run_profile(
+            &profile_with_long_drain,
+            create_metrics().expect("metrics ok"),
+        ),
     )
     .await
     .expect("tls sender не завис");
@@ -3916,9 +3923,15 @@ async fn phase14_step2_tls_reconnect_after_write_failure() {
     // Покрытие run_send_loop path через metric `reconnects_total`.
     // PR-A0 (v10.8.0): таймаут 30s — flaky на shared CI runners.
     // PR-A2: дополнительно увеличен до 60s.
+    // PR-A2 (Round 3): drain timeout_secs увеличен с 15s до 60s.
+    let mut profile_with_long_drain = profile;
+    profile_with_long_drain.shutdown.drain_timeout_secs = 60;
     let res = tokio::time::timeout(
         Duration::from_secs(60),
-        run_profile(&profile, create_metrics().expect("metrics ok")),
+        run_profile(
+            &profile_with_long_drain,
+            create_metrics().expect("metrics ok"),
+        ),
     )
     .await
     .expect("tls sender не завис");

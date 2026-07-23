@@ -300,10 +300,14 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
     }
 
     // PR-B2 (Issue #83): apply --set точечные overrides (последний шаг,
-    // перезаписывает всё предыдущее).
+    // перезаписывает всё предыдущее). Errors логируются в stderr, но
+    // не паникуют — N7 invariant запрещает .expect()/.unwrap() в prod.
     if !o.set_overrides.is_empty() {
-        crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides)
-            .expect("failed to apply --set overrides");
+        if let Err(e) =
+            crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides)
+        {
+            eprintln!("warning: --set overrides failed: {e}");
+        }
     }
 }
 

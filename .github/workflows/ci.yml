@@ -56,6 +56,7 @@ jobs:
     # `test-macos` с continue-on-error, чтобы он не блокировал release.
     name: Test (ubuntu-latest)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -211,7 +212,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: ${{ runner.os }}-cargo-${{ matrix.os }}
+          shared-key: ${{ runner.os }}-cargo-macos
       - name: Install OpenSSL dev headers (Linux only)
         if: runner.os != 'macOS'
         run: |
@@ -239,6 +240,7 @@ jobs:
     # PR, который поднимает MSRV, CI упадёт и merge заблокируется.
     name: MSRV check (blocking, v10.5.0)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -287,6 +289,7 @@ jobs:
   cargo-deny:
     name: cargo-deny (advisories + licenses, blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -300,13 +303,25 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-deny
+      - name: Cache cargo-deny
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-tool-${{ runner.os }}-cargo-deny-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-deny-
       - name: Install cargo-deny
         # v10.4.3: cargo install вместо third-party action (taiki-e).
         # Аналогично fix в coverage job.
-        run: cargo install cargo-deny --locked
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-deny" ]; then
+            cargo install cargo-deny --locked
+          fi
       - name: Run cargo-deny check
         # Проверяет advisories, bans, sources, licenses по deny.toml.
         run: cargo deny check
+      - name: Check advisory ignore expiry
+        run: bash scripts/check-advisory-expiry.sh
 
   # v10.5.0: cargo-machete — unused dependencies detection.
   # Блокирует merge при наличии unused deps в Cargo.toml (которые
@@ -315,6 +330,7 @@ jobs:
   cargo-machete:
     name: cargo-machete (unused deps, blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -328,9 +344,19 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-machete
+      - name: Cache cargo-machete
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-machete
+          key: cargo-tool-${{ runner.os }}-cargo-machete-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-machete-
       - name: Install cargo-machete
         # v10.4.3: cargo install вместо third-party action.
-        run: cargo install cargo-machete --locked
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-machete" ]; then
+            cargo install cargo-machete --locked
+          fi
       - name: Run cargo-machete
         # cargo-machete по умолчанию проверяет все crates в workspace.
         # exit code 1 = найдены unused deps (блокирует merge).
@@ -345,6 +371,7 @@ jobs:
   test-kafka:
     name: Test kafka feature (ubuntu-latest)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -427,6 +454,7 @@ jobs:
   coverage:
     name: Coverage (cargo-llvm-cov + codecov upload)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -444,9 +472,18 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-cov
 
+      - name: Cache cargo-llvm-cov
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-llvm-cov
+          key: cargo-tool-${{ runner.os }}-cargo-llvm-cov-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-llvm-cov-
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
-
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]; then
+            cargo install cargo-llvm-cov --locked
+          fi
       - name: Run coverage
         # v10.3.0: baseline. v10.4.0: blocking gate с проверкой ≥ 97% (PR-11).
         # LCOV-формат для codecov.io upload.
@@ -514,6 +551,7 @@ jobs:
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-doc
       - name: Build docs (--no-deps, warnings = errors)
         env:
@@ -549,6 +587,7 @@ jobs:
   public-api:
     name: cargo public-api snapshot (blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -560,8 +599,18 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-public-api
+      - name: Cache cargo-public-api
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-public-api
+          key: cargo-tool-${{ runner.os }}-cargo-public-api-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-public-api-
       - name: Install cargo-public-api
-        run: cargo install cargo-public-api --locked
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-public-api" ]; then
+            cargo install cargo-public-api --locked
+          fi
       - name: Run public-api diff (STRICT GATE)
         # PR-15 (CI Failure Mitigation): жёсткий gate.
         # Если snapshot отсутствует → init baseline и warning

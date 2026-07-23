@@ -25,13 +25,27 @@ inherits = "release"
 debug = false
 strip = "none"
 
-# PR-C1: test profile — opt-level=1 для ускорения компиляции без
-# потери coverage gates. debug=true сохраняет debug info.
-# PR-A0 (v10.8.0): НЕ применяется в этом PR — выделен в отдельный PR-C1
-# чтобы изолировать его влияние от bench profile changes.
-# [profile.test]
-# opt-level = 1
-# debug = true
+# PR-C1.3 (Issue #90): explicit `opt-level=3` + `lto="thin"` для benches.
+# `release` profile использует `lto="fat"` (~30-50% более медленная компиляция
+# release binary), что увеличивает время прогона benches в CI без выигрыша
+# на per-message overhead (fat vs thin LTO обычно даёт ~1-3% performance,
+# а здесь бенчим hot-path, где fat LTO не даёт значимого преимущества).
+# `codegen-units=1` уже наследуется от release и сохраняется.
+# Acceptable by PR-A0 baseline: hot_path tolerance ±5%, perf-budget gate
+# подтверждает регрессию при >5% ns/msg. Наши targeted benches не должны
+# регрессировать >2% после перехода на thin LTO.
+opt-level = 3
+lto = "thin"
+
+# PR-C1.4 (Issue #90): test profile — opt-level=1 для ускорения компиляции
+# тестов без потери coverage gates. debug=true сохраняет debug info.
+# Совместимо с coverage `--fail-under-lines=97` (coverage собирается по
+# branch coverage, не зависит от оптимизации).
+# Validation: cargo test --locked --features test-helpers в pre-pr-check.sh.
+[profile.test]
+opt-level = 1
+debug = true
+
 # PR-17d (v10.7.19): PGO (Profile-Guided Optimization) opt-in via env var.
 # Production release builds НЕ используют PGO по умолчанию (для скорости CI).
 # Включение для release: `RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release`.

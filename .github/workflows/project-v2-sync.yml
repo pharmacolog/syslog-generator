@@ -48,6 +48,16 @@ jobs:
             const issueNumber = context.issue.number;
             const issueNodeId = context.payload.issue?.node_id;
 
+            // Early return если это PR, а не issue event. Sync-issue-status
+            // job срабатывает только на `issues` events, но context.issue
+            // может быть undefined если workflow триггерится от push в main
+            // через sync-main-to-dev PR. В этом случае skip без action.
+            if (context.eventName !== 'issues') {
+              core.info(
+                `sync-issue-status: skip non-issue event (${context.eventName})`
+              );
+              return;
+            }
             if (!issueNodeId) {
               core.warning(`No issue node_id for #${issueNumber}`);
               return;
@@ -55,13 +65,11 @@ jobs:
 
             // Определяем целевой статус по типу события.
             let targetStatus = null;
-            if (context.eventName === 'issues') {
-              const action = context.payload.action;
-              if (action === 'closed' && context.payload.issue?.state_reason === 'completed') {
-                targetStatus = STATUS_OPTIONS.DONE;
-              } else if (action === 'reopened') {
-                targetStatus = STATUS_OPTIONS.IN_PROGRESS;
-              }
+            const action = context.payload.action;
+            if (action === 'closed' && context.payload.issue?.state_reason === 'completed') {
+              targetStatus = STATUS_OPTIONS.DONE;
+            } else if (action === 'reopened') {
+              targetStatus = STATUS_OPTIONS.IN_PROGRESS;
             }
 
             if (!targetStatus) {

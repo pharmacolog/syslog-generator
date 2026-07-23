@@ -84,7 +84,11 @@ run_check "N7 invariant" \
 run_check "cargo deny" \
     bash -c 'cargo deny check'
 
-# 10. cargo machete
+# 10. Advisory ignore expiry
+run_check "advisory ignore expiry" \
+    bash -c 'bash scripts/check-advisory-expiry.sh'
+
+# 11. cargo machete
 run_check "cargo machete" \
     bash -c 'cargo machete'
 

@@ -81,6 +81,10 @@ jobs:
             echo "Run scripts/perf-baseline.sh full to create baseline."
             exit 0
           fi
+          BASELINE_FILE="$BASELINE_FILE" \
+          THRESHOLD_HOT_PATH="$THRESHOLD_HOT_PATH" \
+          THRESHOLD_FORMAT="$THRESHOLD_FORMAT" \
+          THRESHOLD_TRANSPORT="$THRESHOLD_TRANSPORT" \
           python3 - <<'PYEOF'
           import json, sys, os
           base_path = os.environ["BASELINE_FILE"]

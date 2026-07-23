@@ -1424,6 +1424,44 @@ mod tests {
         assert!(cached.procid_is_static);
     }
 
+    /// PR-A0 (v10.8.0): шаблон без `{{faker.*}}` инициализирует `referenced_fakers`
+    /// как `Some(empty HashSet)`, не `None`. Иначе default_values_into ошибочно
+    /// генерирует ВСЕ 9 fakers per message (downstream fallback ветка).
+    /// Бенчмарки static templates подтверждают: −34..−66% ns/msg после fix.
+    #[test]
+    fn phase_context_with_no_fakers_initializes_empty_set() {
+        let phase = Phase {
+            name: "no-fakers".to_string(),
+            duration_secs: 0,
+            total_messages: Some(1),
+            messages_per_second: 0,
+            templates: vec!["user=alice seq={{sequence}}".to_string()],
+            syslog: SyslogConfig {
+                facility: 16,
+                severity: 6,
+                hostname: "h".to_string(),
+                app_name: "a".to_string(),
+                procid: "1".to_string(),
+                msgid: "ID".to_string(),
+                structured_data: "-".to_string(),
+                bom: false,
+            },
+            seed: Some(42),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        // Без `{{faker.*}}` referenced_fakers должен быть Some(empty), не None.
+        let referenced = ctx
+            .referenced_fakers
+            .as_ref()
+            .expect("must be Some, not None (PR-A0)");
+        assert_eq!(
+            referenced.len(),
+            0,
+            "no fakers referenced, but set should be empty"
+        );
+    }
+
     /// PhaseContext::resolve НЕ кэширует syslog header если procid содержит {{pid}}.
     #[test]
     fn phase_context_does_not_cache_dynamic_procid() {

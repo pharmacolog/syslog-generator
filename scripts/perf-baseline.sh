@@ -7,7 +7,6 @@
 #   scripts/perf-baseline.sh update <git-sha>      # сохранить baseline в perf/baselines/<sha>.json
 #
 # Выходы:
-#   - stdout: criterion output
 #   - perf/baselines/<sha>.json: structured baseline с estimates per benchmark
 #   - exit 0 при успехе всех bench, exit 1 при любом failure
 
@@ -21,21 +20,32 @@ if [[ "${MODE}" != "quick" && "${MODE}" != "full" && "${MODE}" != "update" ]]; t
     exit 2
 fi
 
-BENCHES=(
+# Имена bench-таргетов из Cargo.toml.
+BENCHES_QUICK=(
     hot_path
     runtime
     format_matrix
     transport_matrix
     dispatch_matrix
+)
+
+BENCHES_FULL=(
+    "${BENCHES_QUICK[@]}"
     message_generation
     sender_throughput
-    format/cef
-    format/leef
-    format/json_lines
-    transport/tls
-    transport/file_rotation
-    transport/reconnect
+    format_cef
+    format_leef
+    format_json_lines
+    transport_tls
+    transport_file_rotation
+    transport_reconnect
 )
+
+if [[ "${MODE}" == "quick" ]]; then
+    BENCHES=("${BENCHES_QUICK[@]}")
+else
+    BENCHES=("${BENCHES_FULL[@]}")
+fi
 
 QUICK_FLAG="--quick"
 if [[ "${MODE}" == "full" || "${MODE}" == "update" ]]; then
@@ -45,67 +55,92 @@ fi
 mkdir -p perf/baselines
 OUT="perf/baselines/${SHA}.json"
 
-# Используем Criterion machine summary через --output-format.
-# Это формат `bench -- "${BENCH} ${KIND} ${ARGS} ..."` который легко парсить.
+# Парсим Criterion native JSON estimates.json (надёжнее bencher text format).
 
-TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"' EXIT
-
-JSON_OUT="${TMP}/estimates.jsonl"
-: > "${JSON_OUT}"
+ESTIMATES_JSONL="$(mktemp)"
+trap 'rm -f "${ESTIMATES_JSONL}"' EXIT
+: > "${ESTIMATES_JSONL}"
 
 OVERALL_STATUS=0
 
 for bench in "${BENCHES[@]}"; do
     echo "=== Running ${bench} ===" >&2
-    # Criterion не имеет стабильного JSON-output, но --output-format bencher даёт CSV-подобный формат:
-    #   group,N,label,time_lower,time_median,time_upper,thrpt_lower,thrpt_median,thrpt_upper
-    if ! cargo bench --locked --bench "${bench}" -- ${QUICK_FLAG} --output-format bencher \
-        > "${TMP}/${bench}.bencher" 2> "${TMP}/${bench}.err"; then
+    # Очищаем старые estimates чтобы получить только новые.
+    rm -rf "target/criterion/${bench}"
+
+    if ! cargo bench --locked --bench "${bench}" -- ${QUICK_FLAG} >/dev/null 2>&1; then
         echo "FAILED: ${bench}" >&2
         OVERALL_STATUS=1
         continue
     fi
-    # Преобразуем bencher CSV → JSONL.
-    awk -F',' -v bench="${bench}" 'NR > 1 && NF >= 6 {
-        gsub(/[\[\] ]/, "", $0);
-        split($0, a, ",");
-        printf("{\"bench\":\"%s\",\"group\":\"%s\",\"label\":\"%s\",\"time_ns_lower\":%s,\"time_ns_median\":%s,\"time_ns_upper\":%s,\"thrpt_lower\":%s,\"thrpt_median\":%s,\"thrpt_upper\":%s}\n",
-            bench, a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]);
-    }' "${TMP}/${bench}.bencher" >> "${JSON_OUT}" || true
+
+    if [[ ! -d "target/criterion/${bench}" ]]; then
+        echo "  no estimates dir for ${bench}" >&2
+        continue
+    fi
+
+    # Парсим все estimates.json файлы рекурсивно.
+    while IFS= read -r estimates; do
+        # path: target/criterion/<bench>/<group>/<sub>/<kind>/estimates.json
+        # или:  target/criterion/<bench>/<group>/<kind>/estimates.json
+        python3 -c "
+import json, os, sys
+path = '${estimates}'
+parts = path.split('/')
+# последний = 'estimates.json', предпоследний = 'base|change|new',
+# остальное = group/sub.
+# Берём group/sub = все между 'criterion/<bench>/' и '<kind>/'.
+try:
+    idx = parts.index('criterion')
+    bench_name = parts[idx + 1]
+    rest = parts[idx + 2:-2]  # exclude 'kind' and 'estimates.json'
+except ValueError:
+    sys.exit(0)
+label = '/'.join(rest) if rest else bench_name
+data = json.load(open(path))
+ns = data['mean']['point_estimate']
+lower = data['mean']['confidence_interval']['lower_bound']
+upper = data['mean']['confidence_interval']['upper_bound']
+print(json.dumps({
+    'bench': bench_name,
+    'label': label,
+    'time_ns_median': ns,
+    'time_ns_lower': lower,
+    'time_ns_upper': upper,
+}))
+" >> "${ESTIMATES_JSONL}" 2>/dev/null || true
+    done < <(find "target/criterion/${bench}" -name "estimates.json" -type f 2>/dev/null)
 done
 
-# Сериализуем JSONL в единый JSON-массив.
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+COUNT=$(wc -l < "${ESTIMATES_JSONL}" | tr -d ' ')
 {
     echo "{"
     echo "  \"sha\": \"${SHA}\","
     echo "  \"mode\": \"${MODE}\","
     echo "  \"timestamp\": \"${TIMESTAMP}\","
     echo "  \"status\": \"$([ ${OVERALL_STATUS} -eq 0 ] && echo ok || echo partial)\","
+    echo "  \"estimate_count\": ${COUNT},"
     echo "  \"estimates\": ["
     FIRST=1
     while IFS= read -r line; do
+        if [[ -z "${line}" ]]; then continue; fi
         if [[ ${FIRST} -eq 0 ]]; then echo ","; fi
         FIRST=0
         printf "    %s" "${line}"
-    done < "${JSON_OUT}"
+    done < "${ESTIMATES_JSONL}"
     echo
     echo "  ]"
     echo "}"
 } > "${OUT}.tmp"
 
-# Проверяем валидность JSON через python (если есть), иначе перемещаем as-is.
-if command -v python3 >/dev/null 2>&1; then
-    if ! python3 -c "import json,sys; json.load(open('${OUT}.tmp'))" 2>/dev/null; then
-        echo "WARN: output JSON failed validation, saving anyway" >&2
-    fi
+if ! python3 -c "import json; json.load(open('${OUT}.tmp'))" 2>/dev/null; then
+    echo "ERROR: invalid JSON output" >&2
+    rm -f "${OUT}.tmp"
+    exit 1
 fi
 
 mv "${OUT}.tmp" "${OUT}"
-
-if [[ ${OVERALL_STATUS} -eq 0 ]]; then
-    echo "Baseline saved to ${OUT}" >&2
-fi
+echo "Baseline saved to ${OUT} (${COUNT} estimates)" >&2
 
 exit ${OVERALL_STATUS}

@@ -106,9 +106,9 @@ Cargo используют `dev`-настройки; без `inherits = "release
 
 ## Известные ограничения
 
-- `transport_matrix/udp/16` пропущен в `--quick` (deadlock при быстром send):
-  bench остаётся доступным через `cargo bench --bench transport_matrix` без `--quick`.
-- `dhatch_heap` (PR-A0 issue #81) не реализован в этом PR — добавлен в backlog
+- `transport_matrix/udp/16` не реализован (deadlock при быстром send в нашей среде;
+  см. issue backlog). Доступны 1, 4 connections.
+- DHAT (PR-A0 issue #87 backlog) не реализован в этом PR — добавлен в backlog
   PR-A6 (perf governance) для DHAT integration.
 
 ## Roadmap

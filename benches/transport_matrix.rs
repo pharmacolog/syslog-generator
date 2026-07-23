@@ -18,6 +18,7 @@ use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::runtime::Runtime;
 
@@ -72,8 +73,6 @@ async fn tcp_drain_collector(listener: TcpListener, conns: usize, total_bytes: A
     }
 }
 
-use tokio::io::AsyncReadExt;
-
 fn bench_tcp_connections(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("transport_matrix_tcp");
@@ -112,8 +111,6 @@ fn bench_udp_throughput(c: &mut Criterion) {
             b.to_async(&rt).iter(|| async move {
                 let receiver = UdpSocket::bind("127.0.0.1:0").await.unwrap();
                 let recv_addr = receiver.local_addr().unwrap();
-                let sender = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-                let send_addr = sender.local_addr().unwrap();
                 // Drain datagrams in background to avoid ENOBUFS.
                 let drain = tokio::spawn(async move {
                     let mut buf = [0u8; 64 * 1024];
@@ -133,9 +130,7 @@ fn bench_udp_throughput(c: &mut Criterion) {
                     ..Default::default()
                 });
                 let _ = run_one_async(black_box(profile)).await;
-                drop(sender);
                 let _ = drain.await;
-                let _ = send_addr;
             });
         });
     }

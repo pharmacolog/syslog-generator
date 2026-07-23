@@ -7,7 +7,7 @@
 # Exit codes:
 #   0 — в пределах threshold
 #   1 — регрессия превысила threshold
-#   2 — usage error / missing files
+#   2 — usage error / missing files / invalid input
 #
 # Thresholds (default):
 #   HOT_PATH_THRESHOLD=5 (%)
@@ -48,7 +48,7 @@ scripts/perf-baseline.sh quick "${CURRENT_SHA}" > "${TMP_DIR}/run.log" 2>&1 || t
 CURRENT_FILE="perf/baselines/${CURRENT_SHA}.json"
 if [[ ! -f "${CURRENT_FILE}" ]]; then
     echo "failed to produce current baseline; see ${TMP_DIR}/run.log" >&2
-    exit 1
+    exit 2
 fi
 
 # Сравниваем через python.
@@ -64,22 +64,30 @@ with open(base_file) as f:
 with open(curr_file) as f:
     curr = json.load(f)
 
-base_e = {e["label"]: e for e in base["estimates"]}
-curr_e = {e["label"]: e for e in curr["estimates"]}
+# Sanity: убеждаемся что есть реальные данные.
+if len(base.get("estimates", [])) == 0:
+    print(f"ERROR: baseline {base_file} contains 0 estimates", file=sys.stderr)
+    sys.exit(2)
+if len(curr.get("estimates", [])) == 0:
+    print(f"ERROR: current {curr_file} contains 0 estimates", file=sys.stderr)
+    sys.exit(2)
 
 # Группируем benchmarks по категории.
 def category(label):
-    if label.startswith("hot_path/"):
+    if label.startswith("hot_path/") or "hot_path" in label:
         return ("hot_path", hot_t)
-    if label.startswith("runtime/"):
+    if label.startswith("runtime/") or label.startswith("runtime_"):
         return ("runtime", run_t)
-    if label.startswith("transport_matrix_"):
+    if "transport_matrix_tcp" in label or "transport_matrix_udp" in label:
         return ("transport", trans_t)
-    if label.startswith("format_matrix/"):
+    if "format_matrix" in label:
         return ("format", run_t)
-    if label.startswith("dispatch_matrix/"):
+    if "dispatch_matrix" in label:
         return ("dispatch", run_t)
     return ("other", run_t)
+
+base_e = {e["label"]: e for e in base["estimates"]}
+curr_e = {e["label"]: e for e in curr["estimates"]}
 
 regressions = []
 improvements = []

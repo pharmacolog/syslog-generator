@@ -10,9 +10,8 @@
 //!
 //! Все runtime benches используют:
 //! - Fixed seed (42) для воспроизводимости.
-//! - Single warmup + main iter (steady-state отдельно от setup/teardown).
-//! - File target в /tmp.
-//! - Assert на `run_profile` Ok + доставленные messages.
+//! - Уникальный tempfile на каждый case (cleanup в конце).
+//! - Assert на `run_profile` Ok.
 //!
 //! Примеры запуска:
 //!     cargo bench --bench runtime
@@ -20,17 +19,16 @@
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::hint::black_box;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
-use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 
 const MESSAGES_PER_ITER: u64 = 20_000;
 
-fn profile_static(format: &str, body: &str) -> Profile {
+fn profile_for(path: &Path, format: &str, body: &str) -> Profile {
     Profile {
         targets: vec![TargetConfig {
-            address: "/tmp/a0-runtime-bench.log".into(),
+            address: path.to_string_lossy().to_string(),
             transport: "file".into(),
             ..Default::default()
         }],
@@ -60,12 +58,16 @@ async fn run_one_async(profile: Profile) -> u64 {
 
 fn runtime_bench(c: &mut Criterion, name: &str, format: &str, body: &str) {
     let tmp = tempfile_in_tmp(name);
-    let profile = profile_static(format, body);
+    let profile = profile_for(&tmp, format, body);
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("runtime");
     group.throughput(Throughput::Elements(MESSAGES_PER_ITER));
+    let tmp_for_iter = tmp.clone();
     group.bench_function(name, move |b| {
         b.to_async(&rt).iter(|| async {
+            // Удаляем предыдущий файл перед каждой итерацией чтобы измерить
+            // cold-write performance, а не append-to-growing-file.
+            let _ = std::fs::remove_file(&tmp_for_iter);
             let _ = run_one_async(black_box(profile.clone())).await;
         });
     });
@@ -74,7 +76,6 @@ fn runtime_bench(c: &mut Criterion, name: &str, format: &str, body: &str) {
 }
 
 fn bench_runtime_rfc5424_static(c: &mut Criterion) {
-    // Body-only: format wrapper добавит RFC 5424 header.
     let body = "user=alice seq={{sequence}}";
     runtime_bench(c, "rfc5424_static", "rfc5424", body);
 }
@@ -102,14 +103,6 @@ fn tempfile_in_tmp(name: &str) -> PathBuf {
         .unwrap_or(0);
     p.push(format!("sg_a0_{nanos}_{name}.log"));
     p
-}
-
-// Sanity listener for unused-mut warning suppression.
-#[allow(dead_code)]
-fn _no_op_listener() -> std::io::Result<TcpListener> {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async { TcpListener::bind("127.0.0.1:0").await })
-        .map(|_| unreachable!())
 }
 
 criterion_group!(

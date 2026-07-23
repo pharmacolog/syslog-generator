@@ -381,7 +381,12 @@ pub struct PhaseContext {
     /// Detected at phase setup: scan for "dangerous" placeholders.
     /// Если None — wrap_syslog re-renders per message.
     pub cached_syslog_header: Option<Arc<SyslogHeaderParts>>,
-    /// PR-10: pre-built faker keys (статический `&'static [String; 9]`).
+    /// PR-A2 (v10.8.0): optional slot-based CompiledPhase. Some — путь через
+    /// `plan::ValueArena` + slot-based render (без hash lookups, без String
+    /// allocs на сообщение). None — legacy HashMap-based path.
+    /// MVP: opt-in, выставляется через `compile_plan()` если schema/template
+    /// are simple enough.
+    pub compiled_plan: Option<crate::plan::CompiledPhase>,
     /// Используется в `default_values` чтобы избежать 9× `format!("faker.{kind}")`
     /// allocations per message (~135-180 ns/msg).
     pub faker_keys: [String; 9],
@@ -530,6 +535,10 @@ impl PhaseContext {
             faker_keys,
             referenced_fakers,
             schema,
+            // PR-A2 (v10.8.0): compile plan для slot-based render path.
+            // MVP: compile для всех phases (план сам решает когда применим).
+            // Полная миграция hot path в generate_message_with_plan — PR-A2.3.
+            compiled_plan: Some(crate::plan::compile_phase(phase)),
         })
     }
 }
@@ -1715,6 +1724,7 @@ phases:
             faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
+            compiled_plan: None,
         };
         // Resolved FormatKind::Rfc5424 (default).
         let format_kind = FormatKind::Rfc5424;
@@ -1753,6 +1763,7 @@ phases:
             faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
+            compiled_plan: None,
         };
         let format_kind = FormatKind::Raw;
         let msg =

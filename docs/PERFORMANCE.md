@@ -1,7 +1,7 @@
 # PERFORMANCE
 
-> **Версия:** v10.7.4. Документ описывает оптимизации производительности
-> и методику замера.
+> **Версия:** v10.7.19 + Issue #85 sub-tasks (v11.0). Документ описывает
+> оптимизации производительности и методику замера.
 
 ## 1. Стратегия
 
@@ -13,19 +13,62 @@
    `format!()` в критических местах.
 3. **Async I/O через tokio multi-thread runtime** — нативная параллельность.
 4. **Compile-time оптимизации** — `lto = "fat"` + `codegen-units = 1`.
+5. **Pre-cache metric handles** — атомарный inc вместо HashMap+Mutex lookup
+   в hot path (Issue #85 sub-tasks 2/4).
+6. **Pre-compiled templates** — `CompiledTemplate` создаётся ОДИН раз
+   на фазу, per-message `render()` через slots (Issue #85 sub-task 7; #88 Plan).
 
 ## 2. Реализованные оптимизации
 
-### 2.1 Zero-copy / буферизация (N6, v8.7.0)
+### 2.1 Zero-copy / буферизация (N6, v8.7.0) + adaptive sizing (Issue #85 sub-task 10)
 
 | Транспорт | Буфер | Размер | Эффект |
 |-----------|-------|--------|--------|
 | `file` | `BufWriter<File>` | 8 KiB | Уменьшение write-syscall'ов в ~50-100x |
-| `tcp` | `BytesMut` | 8 KiB | Один write на N сообщений (вместо N writes) |
-| `tls` | `BytesMut` | 8 KiB | Аналогично TCP + TLS overhead |
+| `tcp` | `BytesMut` (adaptive) | 8 KiB baseline → power-of-2 на рост | Один write на N сообщений; realloc только если msg > capacity (sub-task 10) |
+| `tls` | `BytesMut` + `Arc<ClientConfig>` | 8 KiB | Один `build_tls_connector` per sender (sub-task 9); config переиспользуется через `Arc::clone` — zero fs::read per message |
 | `udp` | none (zero-copy by design) | — | `send_to(&[u8])` без копий |
 
 Hot-path benchmark: throughput вырос в **5-10x** по сравнению с pre-N6 версией.
+
+**Adaptive BytesMut (Issue #85 sub-task 10, v11.0)**: ёмкость буфера
+увеличивается power-of-2 при превышении текущей ёмкости (>8 KiB).
+Маленькие сообщения (≤8 KiB) — zero realloc.
+Большие сообщения — один realloc при первом большом msg, далее reuse.
+
+**TLS connector caching (Issue #85 sub-task 9, v11.0)**: `build_tls_connector(&TlsParams)`
+вызывается ОДИН раз per sender setup. Возвращает `Arc<rustls::ClientConfig>`,
+который клонируется через `Arc::clone` (atomic increment) — zero cost.
+
+### 2.1.1 Hot-path micro-optimizations (Issue #85 sub-tasks 8/11/12)
+
+Дополнительные микро-оптимизации:
+
+- **Sanitize header fast ASCII-path (sub-task 8)**: `sanitize_header` в `src/format/mod.rs`
+  использует byte-level ASCII check (0x21..=0x7E) перед fallback на
+  char-iteration. Для типичных syslog headers (ASCII-only) избегаем
+  `chars().map().collect()`.
+- **LEEF fast Vec<u8> (sub-task 11)**: `build()` в `src/format/leef.rs`
+  собирает сообщение в pre-allocated `Vec<u8>` через direct writes
+  вместо промежуточных `String` аллокаций. Аналогично CEF (PR-17a).
+- **UTF-8 fast path json_lines (sub-task 12)**: `std::str::from_utf8(msg)`
+  + `to_owned()` для валидного UTF-8 (типичный случай syslog) вместо
+  `String::from_utf8_lossy().into_owned()`. Fallback на lossy сохранён.
+
+### 2.1.2 Pre-cached metric handles (Issue #85 sub-tasks 2/4)
+
+PhaseContext кэширует pre-resolved Counter handles для anomaly метрик
+(`anomalies_applied_total`, `anomalies_dropped_total`). На setup
+один раз `with_label_values()` lookup + Mutex lock. В hot-path —
+atomic `inc()` без lookup/lock. На типичной фазе с 1-2 anomalies ×
+100k msg/s → ~50-100 ns/msg savings.
+
+### 2.1.3 Sync record_send/record_error (Issue #85 sub-task 3)
+
+`record_send` и `record_error` в `src/transport/mod.rs` были async
+функциями без await-операций внутри. После удаления `async` —
+это sync функции, callers убрали `.await`. ~80-100 ns/msg savings
+на каждом сообщении.
 
 ### 2.2 Performance ч.1 (v10.1.0): LTO + codegen-units
 

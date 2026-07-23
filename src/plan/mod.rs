@@ -66,6 +66,9 @@ pub struct CompiledPhase {
     pub syslog_templates: Option<SyslogHeaderTemplates>,
     /// Общее число slot'ов — pre-computed для `ValueArena::with_capacity`.
     pub value_slot_count: usize,
+    /// Slot names для body_template (parallel to arena_slots в
+    /// `compile_from_strings`). PR-A2.3: caller-side slot mapping.
+    pub body_slot_names: Vec<String>,
 }
 
 /// Compiled syslog header templates.
@@ -112,6 +115,7 @@ pub fn compile_phase(phase: &Phase) -> CompiledPhase {
         body_template,
         syslog_templates: None, // PR-A2.5: compile from phase.syslog
         value_slot_count,
+        body_slot_names: slots,
     }
 }
 

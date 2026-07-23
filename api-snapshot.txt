@@ -1932,6 +1932,7 @@ pub fn syslog_generator::generator::core::default_values_into(&mut std::collecti
 pub fn syslog_generator::generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::generate_message_with_format(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::generate_message_with_format_cached(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize, &mut std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> anyhow::Result<alloc::vec::Vec<u8>>
+pub fn syslog_generator::generator::core::generate_message_with_plan(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize, &mut syslog_generator::plan::value::ValueArena, &mut alloc::string::String) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
 pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
@@ -3370,6 +3371,7 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::plan::value::ValueSlot where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::plan::value::ValueSlot::vzip(self) -> V
 pub struct syslog_generator::plan::CompiledPhase
+pub syslog_generator::plan::CompiledPhase::body_slot_names: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::plan::CompiledPhase::body_template: syslog_generator::plan::template::CompiledTemplateV2
 pub syslog_generator::plan::CompiledPhase::syslog_templates: core::option::Option<syslog_generator::plan::SyslogHeaderTemplates>
 pub syslog_generator::plan::CompiledPhase::value_slot_count: usize

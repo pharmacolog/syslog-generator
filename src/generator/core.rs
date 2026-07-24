@@ -2759,12 +2759,14 @@ phases:
         use crate::format::FormatKind;
         use crate::plan::ValueArena;
 
+        // PR-A2.6: используем template без `{{timestamp}}` чтобы избежать
+        // Utc::now() timing race в CI (1ms offset между calls).
         let phase = Phase {
             name: "byte_eq".into(),
             duration_secs: 0,
             messages_per_second: 0,
             total_messages: Some(1),
-            templates: vec!["user=alice seq={{sequence}} ts={{timestamp}} pid={{pid}}".to_string()],
+            templates: vec!["user=alice seq={{sequence}} pid={{pid}}".to_string()],
             seed: Some(42),
             ..Default::default()
         };

@@ -98,7 +98,7 @@ pub fn apply_preset(profile: &mut Profile, preset: &Preset) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Phase, ShutdownConfig, SyslogConfig, TargetConfig};
+    use crate::config::{Phase, ShutdownConfig, TargetConfig};
 
     fn empty_profile() -> Profile {
         Profile {

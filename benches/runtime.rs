@@ -98,6 +98,14 @@ fn bench_runtime_json_lines(c: &mut Criterion) {
     runtime_bench(c, "json_lines_static", "json_lines", body);
 }
 
+/// PR-C3 (Issue #81): warmup bench — verifies cold-cache numbers,
+/// reports warm-cache numbers. Полезно для отделения compilation cost
+/// от steady-state performance.
+fn bench_runtime_warmup(c: &mut Criterion) {
+    let body = "warmup seq={{sequence}}";
+    runtime_bench(c, "warmup_static", "raw", body);
+}
+
 fn tempfile_in_tmp(name: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
     let nanos = std::time::SystemTime::now()
@@ -114,5 +122,6 @@ criterion_group!(
     bench_runtime_rfc5424_faker,
     bench_runtime_rfc3164_static,
     bench_runtime_json_lines,
+    bench_runtime_warmup,
 );
 criterion_main!(benches);

@@ -125,6 +125,16 @@ pub struct Args {
     /// Может повторяться. Сначала применяется profile → затем --set overrides.
     #[arg(long, value_name = "KEY=VALUE")]
     pub set: Vec<String>,
+
+    /// PR-B3 (Issue #92): --preset NAME — применить named preset с готовыми
+    /// defaults. Доступные presets:
+    /// - `max-throughput`: generator_threads=max, batch_size=large,
+    ///   broadcast_policy=independent, metrics=minimal.
+    /// - `balanced`: defaults (default).
+    /// - `low-latency`: generator_threads=1, batch_size=1,
+    ///   broadcast_policy=strict, metrics=sampled.
+    #[arg(long, value_name = "NAME")]
+    pub preset: Option<String>,
 }
 
 /// «Чистое» представление CLI-оверрайдов, не зависящее от clap.
@@ -142,6 +152,8 @@ pub struct Overrides {
     /// PR-B2: KEY=VALUE точечные overrides, применённые после parsing
     /// профиля и стандартных overrides.
     pub set_overrides: Vec<(String, String)>,
+    /// PR-B3: имя preset для применения готовых defaults.
+    pub preset: Option<String>,
 }
 
 /// Ошибка разбора спецификации цели `--target`.
@@ -244,6 +256,7 @@ impl Args {
                     }
                 })
                 .collect(),
+            preset: self.preset.clone(),
         })
     }
 }
@@ -298,6 +311,21 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
             p.seed = Some(s);
         }
     }
+    // PR-B3 (Issue #92): apply preset до --set overrides.
+    // Preset — это pre-configured bundle (например, max-throughput,
+    // low-latency), --set может override'ить отдельные поля preset'а.
+    if let Some(preset_name) = &o.preset {
+        match crate::cli::preset::parse_preset(preset_name) {
+            Ok(preset) => {
+                if let Err(e) = crate::cli::preset::apply_preset(profile, &preset) {
+                    eprintln!("warning: --preset {preset_name:?} failed: {e}");
+                }
+            }
+            Err(e) => {
+                eprintln!("warning: {e}");
+            }
+        }
+    }
 
     // PR-B2 (Issue #83): apply --set точечные overrides (последний шаг,
     // перезаписывает всё предыдущее). Errors логируются в stderr, но
@@ -308,7 +336,6 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,4 +562,5 @@ fn apply_overrides_no_targets_keeps_existing() {
 
 // === v10.6.0 (Usability ч.1): тесты subcommand'ов живут в `mod tests`
 //     выше (top-level дубликаты удалены в PR-Q.1). ===
+pub mod preset;
 pub mod set_override;

@@ -24,9 +24,14 @@ permissions:
 
 jobs:
   regression:
-    name: Regression check (hot_path only)
+    # PR-A6: perf regression — non-blocking пока perf-baseline.yml не
+    # используется для caching binary. Cargo bench cold cache занимает
+    # > 30min — не realistic для blocking gate. Анализируется отдельно
+    # через nightly perf-baseline workflow.
+    name: Regression check (hot_path only, non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:

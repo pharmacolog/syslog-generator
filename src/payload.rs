@@ -332,7 +332,10 @@ pub fn gen_from_regex(pattern: &str, rng: &mut StdRng) -> String {
 }
 
 /// Рекурсивный обход HIR с генерацией соответствующего текста.
-fn gen_hir(hir: &regex_syntax::hir::Hir, rng: &mut StdRng, out: &mut String) {
+///
+/// Issue #85 \[A1\] sub-task 6: используется в hot-path с pre-compiled HIR
+/// (вместо \`gen_from_regex\` который парсит pattern per-message).
+pub(crate) fn gen_hir(hir: &regex_syntax::hir::Hir, rng: &mut StdRng, out: &mut String) {
     use regex_syntax::hir::HirKind;
     match hir.kind() {
         HirKind::Empty | HirKind::Look(_) => {}

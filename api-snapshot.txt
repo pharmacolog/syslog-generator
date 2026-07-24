@@ -168,6 +168,64 @@ pub fn syslog_generator::anomaly::AnomalyPlanner<'a>::vzip(self) -> V
 pub fn syslog_generator::anomaly::rate_multiplier(&syslog_generator::anomaly::AnomalyKind, f64) -> f64
 pub fn syslog_generator::anomaly::should_drop_packet(&syslog_generator::anomaly::AnomalyKind, core::option::Option<u64>, usize) -> bool
 pub mod syslog_generator::cli
+pub mod syslog_generator::cli::preset
+pub struct syslog_generator::cli::preset::Preset
+pub syslog_generator::cli::preset::Preset::name: alloc::string::String
+pub syslog_generator::cli::preset::Preset::overrides: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+impl syslog_generator::cli::preset::Preset
+pub fn syslog_generator::cli::preset::Preset::balanced() -> Self
+pub fn syslog_generator::cli::preset::Preset::low_latency() -> Self
+pub fn syslog_generator::cli::preset::Preset::max_throughput() -> Self
+impl core::clone::Clone for syslog_generator::cli::preset::Preset
+pub fn syslog_generator::cli::preset::Preset::clone(&self) -> syslog_generator::cli::preset::Preset
+impl core::default::Default for syslog_generator::cli::preset::Preset
+pub fn syslog_generator::cli::preset::Preset::default() -> syslog_generator::cli::preset::Preset
+impl core::fmt::Debug for syslog_generator::cli::preset::Preset
+pub fn syslog_generator::cli::preset::Preset::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for syslog_generator::cli::preset::Preset
+impl core::marker::Send for syslog_generator::cli::preset::Preset
+impl core::marker::Sync for syslog_generator::cli::preset::Preset
+impl core::marker::Unpin for syslog_generator::cli::preset::Preset
+impl core::marker::UnsafeUnpin for syslog_generator::cli::preset::Preset
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::preset::Preset
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::preset::Preset
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::preset::Preset where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::preset::Preset where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::preset::Preset where U: core::convert::From<T>
+pub fn syslog_generator::cli::preset::Preset::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::preset::Preset where U: core::convert::Into<T>
+pub type syslog_generator::cli::preset::Preset::Error = core::convert::Infallible
+pub fn syslog_generator::cli::preset::Preset::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::preset::Preset where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::preset::Preset::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::preset::Preset::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::preset::Preset where T: core::clone::Clone
+pub type syslog_generator::cli::preset::Preset::Owned = T
+pub fn syslog_generator::cli::preset::Preset::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::preset::Preset::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::preset::Preset where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::preset::Preset::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::preset::Preset where T: ?core::marker::Sized
+pub fn syslog_generator::cli::preset::Preset::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::preset::Preset where T: ?core::marker::Sized
+pub fn syslog_generator::cli::preset::Preset::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::preset::Preset where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::preset::Preset::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::preset::Preset
+pub fn syslog_generator::cli::preset::Preset::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::preset::Preset where T: ?core::marker::Sized
+pub fn syslog_generator::cli::preset::Preset::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::preset::Preset::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::preset::Preset
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::preset::Preset
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::preset::Preset where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::preset::Preset where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::preset::Preset::vzip(self) -> V
+pub fn syslog_generator::cli::preset::apply_preset(&mut syslog_generator::generator::config::Profile, &syslog_generator::cli::preset::Preset) -> anyhow::Result<()>
+pub fn syslog_generator::cli::preset::parse_preset(&str) -> anyhow::Result<syslog_generator::cli::preset::Preset>
+pub mod syslog_generator::cli::set_override
+pub fn syslog_generator::cli::set_override::apply_set_overrides(&mut syslog_generator::generator::config::Profile, &[(alloc::string::String, alloc::string::String)]) -> anyhow::Result<()>
+pub fn syslog_generator::cli::set_override::parse_set_entry(&str) -> anyhow::Result<(alloc::string::String, alloc::string::String)>
 pub enum syslog_generator::cli::Command
 pub syslog_generator::cli::Command::Completions
 pub syslog_generator::cli::Command::Completions::shell: clap_complete::aot::shells::shell::Shell
@@ -269,18 +327,25 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::TargetParseErro
 pub fn syslog_generator::cli::TargetParseError::vzip(self) -> V
 pub struct syslog_generator::cli::Args
 pub syslog_generator::cli::Args::command: core::option::Option<syslog_generator::cli::Command>
+pub syslog_generator::cli::Args::connections: core::option::Option<usize>
 pub syslog_generator::cli::Args::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::dry_run: bool
 pub syslog_generator::cli::Args::duration: core::option::Option<u64>
 pub syslog_generator::cli::Args::format: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::framing: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::message: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::cli::Args::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::print_config: bool
 pub syslog_generator::cli::Args::profile: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::rate: core::option::Option<u64>
 pub syslog_generator::cli::Args::schema_strict: bool
 pub syslog_generator::cli::Args::seed: core::option::Option<u64>
+pub syslog_generator::cli::Args::set: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::cli::Args::target: alloc::vec::Vec<alloc::string::String>
+pub syslog_generator::cli::Args::tls_ca_file: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::tls_domain: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::tls_insecure: bool
 pub syslog_generator::cli::Args::total: core::option::Option<u64>
 pub syslog_generator::cli::Args::transport: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::validate: bool
@@ -337,14 +402,21 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::Args where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::cli::Args::vzip(self) -> V
 pub struct syslog_generator::cli::Overrides
+pub syslog_generator::cli::Overrides::connections: core::option::Option<usize>
 pub syslog_generator::cli::Overrides::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Overrides::duration: core::option::Option<u64>
 pub syslog_generator::cli::Overrides::format: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Overrides::framing: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Overrides::messages: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::cli::Overrides::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Overrides::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Overrides::rate: core::option::Option<u64>
 pub syslog_generator::cli::Overrides::seed: core::option::Option<u64>
+pub syslog_generator::cli::Overrides::set_overrides: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
 pub syslog_generator::cli::Overrides::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
+pub syslog_generator::cli::Overrides::tls_ca_file: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Overrides::tls_domain: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Overrides::tls_insecure: bool
 pub syslog_generator::cli::Overrides::total: core::option::Option<u64>
 impl core::clone::Clone for syslog_generator::cli::Overrides
 pub fn syslog_generator::cli::Overrides::clone(&self) -> syslog_generator::cli::Overrides
@@ -6067,18 +6139,25 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::anomaly::AnomalyPlan
 pub fn syslog_generator::anomaly::AnomalyPlanner<'a>::vzip(self) -> V
 pub struct syslog_generator::Args
 pub syslog_generator::Args::command: core::option::Option<syslog_generator::cli::Command>
+pub syslog_generator::Args::connections: core::option::Option<usize>
 pub syslog_generator::Args::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::dry_run: bool
 pub syslog_generator::Args::duration: core::option::Option<u64>
 pub syslog_generator::Args::format: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::framing: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::message: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::Args::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::print_config: bool
 pub syslog_generator::Args::profile: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::rate: core::option::Option<u64>
 pub syslog_generator::Args::schema_strict: bool
 pub syslog_generator::Args::seed: core::option::Option<u64>
+pub syslog_generator::Args::set: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::Args::target: alloc::vec::Vec<alloc::string::String>
+pub syslog_generator::Args::tls_ca_file: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::tls_domain: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::tls_insecure: bool
 pub syslog_generator::Args::total: core::option::Option<u64>
 pub syslog_generator::Args::transport: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::validate: bool
@@ -6365,14 +6444,21 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::observability::metrics::Metrics where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::observability::metrics::Metrics::vzip(self) -> V
 pub struct syslog_generator::Overrides
+pub syslog_generator::Overrides::connections: core::option::Option<usize>
 pub syslog_generator::Overrides::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::Overrides::duration: core::option::Option<u64>
 pub syslog_generator::Overrides::format: core::option::Option<alloc::string::String>
+pub syslog_generator::Overrides::framing: core::option::Option<alloc::string::String>
 pub syslog_generator::Overrides::messages: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::Overrides::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::Overrides::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::Overrides::rate: core::option::Option<u64>
 pub syslog_generator::Overrides::seed: core::option::Option<u64>
+pub syslog_generator::Overrides::set_overrides: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
 pub syslog_generator::Overrides::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
+pub syslog_generator::Overrides::tls_ca_file: core::option::Option<alloc::string::String>
+pub syslog_generator::Overrides::tls_domain: core::option::Option<alloc::string::String>
+pub syslog_generator::Overrides::tls_insecure: bool
 pub syslog_generator::Overrides::total: core::option::Option<u64>
 impl core::clone::Clone for syslog_generator::cli::Overrides
 pub fn syslog_generator::cli::Overrides::clone(&self) -> syslog_generator::cli::Overrides

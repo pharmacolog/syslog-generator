@@ -118,6 +118,44 @@ pub struct Args {
     /// Переопределяет metrics_addr из профиля.
     #[arg(long)]
     pub metrics_addr: Option<String>,
+
+    /// PR-B2 (Issue #83): --set KEY=VALUE для точечного override любого
+    /// публичного поля профиля. KEY — точечный JSON path:
+    /// `targets[0].connections`, `phases[0].messages_per_second`, etc.
+    /// Может повторяться. Сначала применяется profile → затем --set overrides.
+    #[arg(long, value_name = "KEY=VALUE")]
+    pub set: Vec<String>,
+
+    /// PR-B3 (Issue #92): --preset NAME — применить named preset с готовыми
+    /// defaults. Доступные presets:
+    /// - `max-throughput`: generator_threads=max, batch_size=large,
+    ///   broadcast_policy=independent, metrics=minimal.
+    /// - `balanced`: defaults (default).
+    /// - `low-latency`: generator_threads=1, batch_size=1,
+    ///   broadcast_policy=strict, metrics=sampled.
+    #[arg(long, value_name = "NAME")]
+    pub preset: Option<String>,
+
+    /// PR-B1 (Issue #93): --tls-ca-file PATH — переопределить TargetConfig::tls_ca_file.
+    #[arg(long, value_name = "PATH")]
+    pub tls_ca_file: Option<String>,
+
+    /// PR-B1: --tls-domain DOMAIN — переопределить TargetConfig::tls_domain.
+    #[arg(long, value_name = "DOMAIN")]
+    pub tls_domain: Option<String>,
+
+    /// PR-B1: --tls-insecure — переопределить TargetConfig::tls_insecure.
+    #[arg(long)]
+    pub tls_insecure: bool,
+
+    /// PR-B1: --connections N — переопределить TargetConfig::connections.
+    #[arg(long, value_name = "N")]
+    pub connections: Option<usize>,
+
+    /// PR-B1: --framing MODE — переопределить TargetConfig::framing
+    /// (octet-counting | non-transparent).
+    #[arg(long, value_name = "MODE")]
+    pub framing: Option<String>,
 }
 
 /// «Чистое» представление CLI-оверрайдов, не зависящее от clap.
@@ -132,6 +170,17 @@ pub struct Overrides {
     pub seed: Option<u64>,
     pub messages: Vec<String>,
     pub metrics_addr: Option<String>,
+    /// PR-B2: KEY=VALUE точечные overrides, применённые после parsing
+    /// профиля и стандартных overrides.
+    pub set_overrides: Vec<(String, String)>,
+    /// PR-B3: имя preset для применения готовых defaults.
+    pub preset: Option<String>,
+    /// PR-B1: per-target overrides из CLI.
+    pub tls_ca_file: Option<String>,
+    pub tls_domain: Option<String>,
+    pub tls_insecure: bool,
+    pub connections: Option<usize>,
+    pub framing: Option<String>,
 }
 
 /// Ошибка разбора спецификации цели `--target`.
@@ -208,7 +257,24 @@ impl Args {
     pub fn to_overrides(&self) -> Result<Overrides, TargetParseError> {
         let mut targets = Vec::new();
         for t in &self.target {
-            targets.push(parse_target_with_transport(t, self.transport.as_deref())?);
+            let mut tgt = parse_target_with_transport(t, self.transport.as_deref())?;
+            // PR-B1: apply per-target CLI overrides to ALL targets.
+            if let Some(ref ca) = self.tls_ca_file {
+                tgt.tls_ca_file = Some(ca.clone());
+            }
+            if let Some(ref domain) = self.tls_domain {
+                tgt.tls_domain = Some(domain.clone());
+            }
+            if self.tls_insecure {
+                tgt.tls_insecure = true;
+            }
+            if let Some(conns) = self.connections {
+                tgt.connections = conns;
+            }
+            if let Some(ref f) = self.framing {
+                tgt.framing = f.clone();
+            }
+            targets.push(tgt);
         }
         Ok(Overrides {
             targets,
@@ -220,6 +286,26 @@ impl Args {
             seed: self.seed,
             messages: self.message.clone(),
             metrics_addr: self.metrics_addr.clone(),
+            set_overrides: self
+                .set
+                .iter()
+                .filter_map(|s| {
+                    let mut parts = s.splitn(2, '=');
+                    let key = parts.next()?.to_string();
+                    let value = parts.next()?.to_string();
+                    if key.is_empty() || value.is_empty() {
+                        None
+                    } else {
+                        Some((key, value))
+                    }
+                })
+                .collect(),
+            preset: self.preset.clone(),
+            tls_ca_file: self.tls_ca_file.clone(),
+            tls_domain: self.tls_domain.clone(),
+            tls_insecure: self.tls_insecure,
+            connections: self.connections,
+            framing: self.framing.clone(),
         })
     }
 }
@@ -274,8 +360,31 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
             p.seed = Some(s);
         }
     }
-}
+    // PR-B3 (Issue #92): apply preset до --set overrides.
+    // Preset — это pre-configured bundle (например, max-throughput,
+    // low-latency), --set может override'ить отдельные поля preset'а.
+    if let Some(preset_name) = &o.preset {
+        match crate::cli::preset::parse_preset(preset_name) {
+            Ok(preset) => {
+                if let Err(e) = crate::cli::preset::apply_preset(profile, &preset) {
+                    eprintln!("warning: --preset {preset_name:?} failed: {e}");
+                }
+            }
+            Err(e) => {
+                eprintln!("warning: {e}");
+            }
+        }
+    }
 
+    // PR-B2 (Issue #83): apply --set точечные overrides (последний шаг,
+    // перезаписывает всё предыдущее). Errors логируются в stderr, но
+    // не паникуют — N7 invariant запрещает .expect()/.unwrap() в prod.
+    if !o.set_overrides.is_empty() {
+        if let Err(e) = crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides) {
+            eprintln!("warning: --set overrides failed: {e}");
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -502,3 +611,5 @@ fn apply_overrides_no_targets_keeps_existing() {
 
 // === v10.6.0 (Usability ч.1): тесты subcommand'ов живут в `mod tests`
 //     выше (top-level дубликаты удалены в PR-Q.1). ===
+pub mod preset;
+pub mod set_override;

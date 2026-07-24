@@ -47,6 +47,12 @@
 - **При выпуске версий обязательно обновлять документацию И changelog** (README.md, CHANGELOG.md,
   AUDIT.md, CLAUDE_HANDOFF.md, examples/). Каждая веха завершается compile-verified релизом.
 - Прежде чем заявлять результат/метрику — **проверять реальной компиляцией** (`cargo build/test/clippy`).
+- **Синхронизировать GitHub Projects при любом изменении состояния задачи.** Подробные правила
+  и триггеры — в `AGENTS.md` (раздел «Синхронизация состояния с GitHub Projects»). Вкратце:
+  каждый `gh issue edit`, `gh pr create/close/merge`, push в feature-ветку, change lock,
+  heartbeat, branch delete — сразу отражаются в Project #1 / #2 / Agent Operations #4
+  (Status, Owner, Lock State, CI State, Branch, Worktree, Blocked By, Handoff Summary).
+  Перед закрытием сессии делается reconciliation (см. `AGENTS.md` §«Перед завершением сессии»).
 
 ---
 

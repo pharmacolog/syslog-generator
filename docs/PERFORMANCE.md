@@ -1,7 +1,7 @@
 # PERFORMANCE
 
-> **Версия:** v10.7.19 + Issue #85 sub-tasks 2/3/4/7/8/10/11/12. Документ
-> описывает оптимизации производительности и методику замера.
+> **Версия:** v10.7.19 + Issue #85 sub-tasks 1/2/3/4/5/6/7/8/9/10/11/12/13 (v11.0).
+> Документ описывает оптимизации производительности и методику замера.
 
 ## 1. Стратегия
 
@@ -15,6 +15,8 @@
 4. **Compile-time оптимизации** — `lto = "fat"` + `codegen-units = 1`.
 5. **Pre-cache metric handles** — атомарный inc вместо HashMap+Mutex lookup
    в hot path (Issue #85 sub-tasks 2/4).
+6. **Pre-compiled templates** — `CompiledTemplate` создаётся ОДИН раз
+   на фазу, per-message `render()` через slots (Issue #85 sub-task 7; #88 Plan).
 
 ## 2. Реализованные оптимизации
 
@@ -33,6 +35,60 @@ Hot-path benchmark: throughput вырос в **5-10x** по сравнению �
 увеличивается power-of-2 при превышении текущей ёмкости (`>8 KiB`).
 Маленькие сообщения (≤8 KiB) — zero realloc (текущее поведение).
 Большие сообщения — один realloc при первом большом msg, далее reuse.
+
+**TLS connector caching (Issue #85 sub-task 9, v11.0)**: `build_tls_connector(&TlsParams)`
+вызывается ОДИН раз per sender setup. Возвращает `Arc<rustls::ClientConfig>`,
+который клонируется через `Arc::clone` (atomic increment) — zero cost.
+
+### 2.1.1 Hot-path micro-optimizations (Issue #85 sub-tasks 8/11/12)
+
+Дополнительные микро-оптимизации:
+
+- **Sanitize header fast ASCII-path (sub-task 8)**: `sanitize_header` в `src/format/mod.rs`
+  использует byte-level ASCII check (0x21..=0x7E) перед fallback на
+  char-iteration. Для типичных syslog headers (ASCII-only) избегаем
+  `chars().map().collect()`.
+- **LEEF fast Vec<u8> (sub-task 11)**: `build()` в `src/format/leef.rs`
+  собирает сообщение в pre-allocated `Vec<u8>` через direct writes
+  вместо промежуточных `String` аллокаций. Аналогично CEF (PR-17a).
+- **UTF-8 fast path json_lines (sub-task 12)**: `std::str::from_utf8(msg)`
+  + `to_owned()` для валидного UTF-8 (типичный случай syslog) вместо
+  `String::from_utf8_lossy().into_owned()`. Fallback на lossy сохранён.
+
+### 2.1.2 Pre-cached metric handles (Issue #85 sub-tasks 2/4)
+
+PhaseContext кэширует pre-resolved Counter handles для anomaly метрик
+(`anomalies_applied_total`, `anomalies_dropped_total`). На setup
+один раз `with_label_values()` lookup + Mutex lock. В hot-path —
+atomic `inc()` без lookup/lock. На типичной фазе с 1-2 anomalies ×
+100k msg/s → ~50-100 ns/msg savings.
+
+### 2.1.3 Sync record_send/record_error (Issue #85 sub-task 3)
+
+`record_send` и `record_error` в `src/transport/mod.rs` были async
+функциями без await-операций внутри. После удаления `async` —
+это sync функции, callers убрали `.await`. ~80-100 нс/msg savings
+на каждом сообщении.
+
+### 2.1.4 Hot-path integration (Issue #85 sub-tasks 1/5/6)
+
+В `run_phase_multi_inner` (hot-path) теперь:
+
+- **Sub-task 1**: `generate_message_with_format_cached` (caller-owned `HashMap`).
+  `HashMap::with_capacity(16)` вынесено ВНЕ цикла — переиспользуется
+  между сообщениями через `.clear()` (zero per-message alloc).
+  Экономия: ~80-150 нс/msg на каждой аллокации HashMap (PR-17b measurement).
+
+- **Sub-task 5**: `PhaseContext.pre_sorted_schema_field_names` хранит
+  pre-sorted `Vec<String>` (sort ОДИН раз в setup). Hot-path
+  использует cached sorted list вместо `schema.fields.keys().collect() +
+  sort_by` per message. Экономия: O(N log N) sort per message.
+
+- **Sub-task 6**: `PhaseContext.pre_compiled_regex_hir` хранит pre-parsed
+  `regex_syntax::hir::Hir` (parse ОДИН раз в setup). Hot-path использует
+  cached HIR через `gen_schema_field_with_hir(field, Some(&hir), rng)`
+  вместо `gen_from_regex(field.regex, rng)` per message. Экономия:
+  `regex_syntax::parse(pattern)` — O(pattern_length) per message.
 
 ### 2.2 Performance ч.1 (v10.1.0): LTO + codegen-units
 

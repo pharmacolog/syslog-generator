@@ -1963,6 +1963,8 @@ pub syslog_generator::generator::core::PhaseContext::compiled_fallback: alloc::s
 pub syslog_generator::generator::core::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::generator::core::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::generator::core::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::generator::core::PhaseContext::pre_compiled_regex_hir: alloc::sync::Arc<alloc::vec::Vec<core::option::Option<regex_syntax::hir::Hir>>>
+pub syslog_generator::generator::core::PhaseContext::pre_sorted_schema_field_names: core::option::Option<alloc::sync::Arc<alloc::vec::Vec<alloc::string::String>>>
 pub syslog_generator::generator::core::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::core::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::core::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
@@ -2257,6 +2259,8 @@ pub syslog_generator::generator::PhaseContext::compiled_fallback: alloc::sync::A
 pub syslog_generator::generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::generator::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::generator::PhaseContext::pre_compiled_regex_hir: alloc::sync::Arc<alloc::vec::Vec<core::option::Option<regex_syntax::hir::Hir>>>
+pub syslog_generator::generator::PhaseContext::pre_sorted_schema_field_names: core::option::Option<alloc::sync::Arc<alloc::vec::Vec<alloc::string::String>>>
 pub syslog_generator::generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
@@ -6584,6 +6588,8 @@ pub syslog_generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_g
 pub syslog_generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
 pub syslog_generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::sync::Arc<syslog_generator::template::CompiledTemplate>>
 pub syslog_generator::PhaseContext::faker_keys: [alloc::string::String; 9]
+pub syslog_generator::PhaseContext::pre_compiled_regex_hir: alloc::sync::Arc<alloc::vec::Vec<core::option::Option<regex_syntax::hir::Hir>>>
+pub syslog_generator::PhaseContext::pre_sorted_schema_field_names: core::option::Option<alloc::sync::Arc<alloc::vec::Vec<alloc::string::String>>>
 pub syslog_generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
 pub syslog_generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>

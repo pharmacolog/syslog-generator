@@ -1,8 +1,25 @@
 # Координация нескольких агентов в `syslog-generator`
 
-> **Дата создания**: 2026-07-23
-> **Автор**: AI-агент (pharmacolog/syslog-generator-agent2)
-> **Статус**: Рекомендации (draft v1)
+> **⚠️ DEPRECATED since 2026-07-24 (AGENTS.md v2.0)**
+>
+> Этот документ **заменён** [`AGENTS.md`](../AGENTS.md) — single source of truth
+> для AI-агентов. Все правила из §S1–S11 ниже были перенесены и унифицированы
+> в AGENTS.md. Содержимое ниже сохранено **исключительно как исторический
+> changelog**. **Не редактируйте** §S1–S11 напрямую — любые изменения
+> координации вносятся в `AGENTS.md`, а в этот файл попадают только
+> исторические ссылки.
+>
+> **Cross-references:**
+> - [`AGENTS.md`](../AGENTS.md) — single source of truth (lock state, file ownership, gates).
+> - [Issue #113](https://github.com/pharmacolog/syslog-generator/issues/113) — coordination hub.
+>
+> ---
+>
+> **Original headers (pre-AGENTS.md v2.0):**
+>
+> > **Дата создания**: 2026-07-23
+> > **Автор**: AI-агент (pharmacolog/syslog-generator-agent2)
+> > **Статус**: Рекомендации (draft v1)
 
 ## 1. Контекст
 
@@ -354,6 +371,21 @@ echo "ALL CHECKS PASSED ✅"
 ---
 
 ## История изменений
+
+### v1.2 (2026-07-24) — DEPRECATED, перенесено в AGENTS.md v2.0
+- Документ помечен как deprecated. Все правила из §S1–S11 унифицированы и
+  перенесены в [`AGENTS.md`](../AGENTS.md) — single source of truth.
+- **Изменения в унификации:**
+  - Lock state machine: добавлены transition rules и Heartbeat semantics.
+  - Issue Status: явное определение `Done` (6 условий) + Milestone closure.
+  - Merge strategy: `--squash` теперь обязателен (отменено старое правило "запрет squash").
+  - Test Coverage (S11/P9): скопирован в AGENTS.md §8 как часть SoT.
+  - Coordination docs (CLAUDE_HANDOFF, AGENTS, COORDINATION) могут мержиться в `main` напрямую через PR.
+  - Terminology: milestone/sprint/release — синонимы.
+  - cargo-deny warnings: явно OK при exit code 0.
+  - `scripts/coordinate.sh` помечен как TODO, описание сохранено.
+  - GitHub auth bootstrap секция добавлена.
+- Любые будущие изменения координации — в `AGENTS.md`, не здесь.
 
 ### v1.1 (2026-07-23 13:50) — добавили S11/P9: Test Coverage Requirement
 

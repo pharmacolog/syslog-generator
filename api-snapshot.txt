@@ -1958,6 +1958,7 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::Cac
 pub fn syslog_generator::generator::core::CachedAnomalyHandles::vzip(self) -> V
 pub struct syslog_generator::generator::core::PhaseContext
 pub syslog_generator::generator::core::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
+pub syslog_generator::generator::core::PhaseContext::cached_regex_hirs: std::collections::hash::map::HashMap<alloc::string::String, regex_syntax::hir::Hir>
 pub syslog_generator::generator::core::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::core::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::generator::core::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -1965,6 +1966,7 @@ pub syslog_generator::generator::core::PhaseContext::compiled_templates: alloc::
 pub syslog_generator::generator::core::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::generator::core::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::core::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
+pub syslog_generator::generator::core::PhaseContext::sorted_schema_fields: core::option::Option<alloc::vec::Vec<(alloc::string::String, syslog_generator::schema::SchemaField)>>
 pub syslog_generator::generator::core::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
 pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)
@@ -2252,6 +2254,7 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::P
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::generator::PhaseContext
 pub syslog_generator::generator::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
+pub syslog_generator::generator::PhaseContext::cached_regex_hirs: std::collections::hash::map::HashMap<alloc::string::String, regex_syntax::hir::Hir>
 pub syslog_generator::generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -2259,6 +2262,7 @@ pub syslog_generator::generator::PhaseContext::compiled_templates: alloc::vec::V
 pub syslog_generator::generator::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
+pub syslog_generator::generator::PhaseContext::sorted_schema_fields: core::option::Option<alloc::vec::Vec<(alloc::string::String, syslog_generator::schema::SchemaField)>>
 pub syslog_generator::generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
 pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)
@@ -2892,6 +2896,7 @@ pub fn syslog_generator::payload::datetime_now_jitter_at(chrono::datetime::DateT
 pub fn syslog_generator::payload::derive_rng(core::option::Option<u64>, usize) -> rand::rngs::std::StdRng
 pub fn syslog_generator::payload::faker(&str, &mut rand::rngs::std::StdRng) -> alloc::string::String
 pub fn syslog_generator::payload::gen_from_regex(&str, &mut rand::rngs::std::StdRng) -> alloc::string::String
+pub fn syslog_generator::payload::gen_from_regex_cached(&regex_syntax::hir::Hir, &mut rand::rngs::std::StdRng) -> alloc::string::String
 pub fn syslog_generator::payload::int_in_range(i64, i64, &mut rand::rngs::std::StdRng) -> i64
 pub fn syslog_generator::payload::pad_to_size(alloc::vec::Vec<u8>, usize, &mut rand::rngs::std::StdRng) -> alloc::vec::Vec<u8>
 pub fn syslog_generator::payload::random_string(usize, &mut rand::rngs::std::StdRng) -> alloc::string::String
@@ -6579,6 +6584,7 @@ impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::P
 pub fn syslog_generator::generator::config::Phase::vzip(self) -> V
 pub struct syslog_generator::PhaseContext
 pub syslog_generator::PhaseContext::cached_anomaly_handles: core::option::Option<alloc::vec::Vec<syslog_generator::generator::core::CachedAnomalyHandles>>
+pub syslog_generator::PhaseContext::cached_regex_hirs: std::collections::hash::map::HashMap<alloc::string::String, regex_syntax::hir::Hir>
 pub syslog_generator::PhaseContext::cached_syslog_header: core::option::Option<alloc::sync::Arc<syslog_generator::generator::core::SyslogHeaderParts>>
 pub syslog_generator::PhaseContext::compiled_fallback: alloc::sync::Arc<syslog_generator::template::CompiledTemplate>
 pub syslog_generator::PhaseContext::compiled_plan: core::option::Option<syslog_generator::plan::CompiledPhase>
@@ -6586,6 +6592,7 @@ pub syslog_generator::PhaseContext::compiled_templates: alloc::vec::Vec<alloc::s
 pub syslog_generator::PhaseContext::faker_keys: [alloc::string::String; 9]
 pub syslog_generator::PhaseContext::referenced_fakers: core::option::Option<std::collections::hash::set::HashSet<&'static str>>
 pub syslog_generator::PhaseContext::schema: core::option::Option<alloc::sync::Arc<syslog_generator::schema::Schema>>
+pub syslog_generator::PhaseContext::sorted_schema_fields: core::option::Option<alloc::vec::Vec<(alloc::string::String, syslog_generator::schema::SchemaField)>>
 pub syslog_generator::PhaseContext::templates: alloc::vec::Vec<alloc::string::String>
 impl syslog_generator::generator::core::PhaseContext
 pub fn syslog_generator::generator::core::PhaseContext::init_anomaly_handles(&mut self, &str, &[syslog_generator::anomaly::Anomaly], &syslog_generator::observability::metrics::Metrics)

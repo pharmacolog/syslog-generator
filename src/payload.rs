@@ -331,6 +331,14 @@ pub fn gen_from_regex(pattern: &str, rng: &mut StdRng) -> String {
     }
 }
 
+/// Issue #85 sub-task 6: pre-cached HIR variant — skip parsing per call.
+/// Используется в hot-path если pattern был pre-parsed в PhaseContext.
+pub fn gen_from_regex_cached(hir: &regex_syntax::hir::Hir, rng: &mut StdRng) -> String {
+    let mut out = String::new();
+    gen_hir(hir, rng, &mut out);
+    out
+}
+
 /// Рекурсивный обход HIR с генерацией соответствующего текста.
 fn gen_hir(hir: &regex_syntax::hir::Hir, rng: &mut StdRng, out: &mut String) {
     use regex_syntax::hir::HirKind;

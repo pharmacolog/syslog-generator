@@ -180,13 +180,13 @@ fn generate_message_with_format_inner(
         fields.sort_by(|a, b| a.0.cmp(b.0));
         for (name, field) in &fields {
             if field.depends_on.is_none() {
-                let value = gen_schema_field(field, &mut rng);
+                let value = gen_schema_field(field, ctx, &mut rng);
                 values.insert(name.to_string(), value);
             }
         }
         for (name, field) in &fields {
             if let Some(parent) = &field.depends_on {
-                let value = resolve_correlated_field(field, parent, &values, &mut rng);
+                let value = resolve_correlated_field(field, parent, &values, ctx, &mut rng);
                 values.insert(name.to_string(), value);
             }
         }
@@ -297,18 +297,36 @@ pub fn generate_message_with_format_cached(
     let now = Utc::now();
     let _ = default_values_into(values, ctx, phase, seq, &mut rng, now);
     if let Some(schema) = &ctx.schema {
-        let mut fields: Vec<_> = schema.fields.iter().collect();
-        fields.sort_by(|a, b| a.0.cmp(b.0));
-        for (name, field) in &fields {
-            if field.depends_on.is_none() {
-                let value = gen_schema_field(field, &mut rng);
-                values.insert(name.to_string(), value);
+        // Issue #85 sub-task 5: use pre-sorted fields (sorted at setup time in
+        // PhaseContext::resolve) instead of sorting per message. O(N) vs O(N log N).
+        if let Some(ref cached) = ctx.sorted_schema_fields {
+            for (name, field) in cached {
+                if field.depends_on.is_none() {
+                    let value = gen_schema_field(field, ctx, &mut rng);
+                    values.insert(name.clone(), value);
+                }
             }
-        }
-        for (name, field) in &fields {
-            if let Some(parent) = &field.depends_on {
-                let value = resolve_correlated_field(field, parent, values, &mut rng);
-                values.insert(name.to_string(), value);
+            for (name, field) in cached {
+                if let Some(parent) = &field.depends_on {
+                    let value = resolve_correlated_field(field, parent, values, ctx, &mut rng);
+                    values.insert(name.clone(), value);
+                }
+            }
+        } else {
+            // Fallback: schema without sorted cache (legacy PhaseContext).
+            let mut fields: Vec<_> = schema.fields.iter().collect();
+            fields.sort_by(|a, b| a.0.cmp(b.0));
+            for (name, field) in &fields {
+                if field.depends_on.is_none() {
+                    let value = gen_schema_field(field, ctx, &mut rng);
+                    values.insert(name.to_string(), value);
+                }
+            }
+            for (name, field) in &fields {
+                if let Some(parent) = &field.depends_on {
+                    let value = resolve_correlated_field(field, parent, values, ctx, &mut rng);
+                    values.insert(name.to_string(), value);
+                }
             }
         }
         if let Some(tpl) = &schema.template {
@@ -561,9 +579,17 @@ pub struct PhaseContext {
     /// Pre-loaded schema (если задано `schema_file`), либо None. `Arc` для
     /// cheap clone (используется в `Schema.fields.iter()`).
     pub schema: Option<Arc<Schema>>,
+    /// Issue #85 \[A1\] sub-task 5: pre-sorted schema fields (name → field).
+    /// Избегает O(N log N) sort в hot-path `generate_message_with_format_cached`
+    /// когда используется `ctx.schema`. None если schema отсутствует.
+    pub sorted_schema_fields: Option<Vec<(String, crate::schema::SchemaField)>>,
+    /// Issue #85 \[A1\] sub-task 6: cached regex HIR map (pattern → parsed HIR).
+    /// Избегает `regex_syntax::parse(pattern)` per message в `gen_from_regex`.
+    /// None если нет regex patterns. Empty Vec если patterns не используются.
+    pub cached_regex_hirs: std::collections::HashMap<String, regex_syntax::hir::Hir>,
     /// Issue #85 \[A1\] sub-tasks 2 + 4: pre-cached anomaly metric handles.
-    /// Каждый \`AnomalyKind\` имеет pre-resolved IntCounter handles —
-    /// без \`with_label_values()\` HashMap lookup + Mutex per msg.
+    /// Каждый `AnomalyKind` имеет pre-resolved IntCounter handles —
+    /// без `with_label_values()` HashMap lookup + Mutex per msg.
     ///
     /// None → не инициализировано (anomalies либо отсутствуют, либо setup
     /// не выполнен). Some(vec) → инициализировано для всех phase.anomalies.
@@ -625,6 +651,7 @@ impl PhaseContext {
         } else {
             None
         };
+        let schema_clone_for_pre = schema.clone();
 
         // PR-10: pre-compile ВСЕ templates. `Vec<Arc<CompiledTemplate>>` — Arc
         // cheap clone если понадобится шарить (не критично пока, но безопасно).
@@ -730,6 +757,41 @@ impl PhaseContext {
             // MVP: compile для всех phases (план сам решает когда применим).
             // Полная миграция hot path в generate_message_with_plan — PR-A2.3.
             compiled_plan: Some(crate::plan::compile_phase(phase)),
+            // Issue #85 sub-task 5: pre-sort schema fields (name → SchemaField)
+            // для избежания O(N log N) sort в hot-path. None если schema отсутствует.
+            sorted_schema_fields: if let Some(ref s) = schema_clone_for_pre {
+                let mut fields: Vec<_> = s
+                    .fields
+                    .iter()
+                    .map(|(n, f)| (n.clone(), f.clone()))
+                    .collect();
+                fields.sort_by(|a, b| a.0.cmp(&b.0));
+                Some(fields)
+            } else {
+                None
+            },
+            // Issue #85 sub-task 6: pre-parse regex HIR map (pattern → Hir).
+            // Избегает regex_syntax::parse(pattern) per message в gen_from_regex.
+            cached_regex_hirs: if let Some(ref s) = schema_clone_for_pre {
+                let mut cache = std::collections::HashMap::with_capacity(
+                    s.fields
+                        .iter()
+                        .filter(|(_, f)| f.field_type == "regex")
+                        .count(),
+                );
+                for (_, field) in s.fields.iter() {
+                    if field.field_type == "regex" {
+                        if let Some(pattern) = &field.regex {
+                            if let Ok(hir) = regex_syntax::parse(pattern) {
+                                cache.insert(pattern.clone(), hir);
+                            }
+                        }
+                    }
+                }
+                cache
+            } else {
+                std::collections::HashMap::new()
+            },
             // Issue #85 sub-tasks 2 + 4: anomaly handles инициализируются
             // отдельно через `init_anomaly_handles(anomalies, metrics)` в run_phase_multi_inner.
             cached_anomaly_handles: None,
@@ -810,7 +872,11 @@ fn pick_template_compiled<'a>(
 }
 
 /// Генерация значения поля schema с учётом типа и распределения (F5/F6).
-fn gen_schema_field(field: &crate::schema::SchemaField, rng: &mut rand::rngs::StdRng) -> String {
+fn gen_schema_field(
+    field: &crate::schema::SchemaField,
+    ctx: &PhaseContext,
+    rng: &mut rand::rngs::StdRng,
+) -> String {
     match field.field_type.as_str() {
         "enum" => {
             let vals = match &field.values {
@@ -837,7 +903,16 @@ fn gen_schema_field(field: &crate::schema::SchemaField, rng: &mut rand::rngs::St
         "datetime" => crate::payload::datetime_now_jitter(field.jitter_secs.unwrap_or(0), rng),
         "string" => crate::payload::random_string(field.len.unwrap_or(8), rng),
         "faker" => crate::payload::faker(field.faker.as_deref().unwrap_or(""), rng),
-        "regex" => crate::payload::gen_from_regex(field.regex.as_deref().unwrap_or(""), rng),
+        // Issue #85 sub-task 6: use pre-cached HIR if available (avoids
+        // regex_syntax::parse per message).
+        "regex" => {
+            let pattern = field.regex.as_deref().unwrap_or("");
+            if let Some(hir) = ctx.cached_regex_hirs.get(pattern) {
+                crate::payload::gen_from_regex_cached(hir, rng)
+            } else {
+                crate::payload::gen_from_regex(pattern, rng)
+            }
+        }
         _ => String::new(),
     }
 }
@@ -853,6 +928,7 @@ fn resolve_correlated_field(
     field: &crate::schema::SchemaField,
     parent: &str,
     values: &HashMap<String, String>,
+    _ctx: &PhaseContext,
     rng: &mut rand::rngs::StdRng,
 ) -> String {
     let parent_val = values.get(parent).map(|s| s.as_str()).unwrap_or("");
@@ -865,7 +941,7 @@ fn resolve_correlated_field(
         return def.clone();
     }
     // Нет соответствия и нет дефолта — генерируем базовым типом.
-    gen_schema_field(field, rng)
+    gen_schema_field(field, _ctx, rng)
 }
 
 /// PR-A3 (Issue #89) + PR-A4 (Issue #86): broadcast dispatch с policy.
@@ -2043,6 +2119,8 @@ phases:
             faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
+            sorted_schema_fields: None,
+            cached_regex_hirs: std::collections::HashMap::new(),
             compiled_plan: None,
             cached_anomaly_handles: None,
         };
@@ -2083,6 +2161,8 @@ phases:
             faker_keys: std::array::from_fn(|i| format!("faker.{}", i)),
             referenced_fakers: None,
             schema: Some(Arc::new(schema)),
+            sorted_schema_fields: None,
+            cached_regex_hirs: std::collections::HashMap::new(),
             compiled_plan: None,
             cached_anomaly_handles: None,
         };
@@ -2781,4 +2861,154 @@ phases:
         // Legacy path тоже Ok.
         assert!(!legacy_msg.is_empty());
     }
+}
+
+/// PR-A1 sub-task 5: sorted_schema_fields заполняется в resolve()
+/// при наличии schema_file. Проверяет что fields в правильном порядке.
+#[test]
+fn a1_subtask5_sorted_schema_fields_populated() {
+    use crate::schema::{Schema, SchemaField};
+    use std::collections::HashMap;
+    // Создаём schema во временном файле, чтобы PhaseContext::resolve
+    // загрузил её.
+    let mut fields = HashMap::new();
+    // Вставляем в обратном алфавитном порядке — resolve() должен
+    // отсортировать при populate sorted_schema_fields.
+    fields.insert(
+        "z_field".to_string(),
+        SchemaField {
+            field_type: "int".to_string(),
+            faker: None,
+            values: None,
+            min: Some(0),
+            max: Some(10),
+            format: None,
+            len: None,
+            jitter_secs: None,
+            distribution: None,
+            weights: None,
+            zipf_exponent: None,
+            regex: None,
+            depends_on: None,
+            mapping: None,
+            mapping_default: None,
+        },
+    );
+    fields.insert(
+        "a_field".to_string(),
+        SchemaField {
+            field_type: "int".to_string(),
+            faker: None,
+            values: None,
+            min: Some(0),
+            max: Some(10),
+            format: None,
+            len: None,
+            jitter_secs: None,
+            distribution: None,
+            weights: None,
+            zipf_exponent: None,
+            regex: None,
+            depends_on: None,
+            mapping: None,
+            mapping_default: None,
+        },
+    );
+    let schema = Schema {
+        fields: fields.clone(),
+        template: None,
+        output: None,
+    };
+    let schema_path =
+        std::env::temp_dir().join(format!("sg_a1_subtask5_{}.json", std::process::id()));
+    std::fs::write(&schema_path, serde_json::to_string(&schema).unwrap()).expect("write");
+    let phase = Phase {
+        name: "subtask5".to_string(),
+        duration_secs: 0,
+        messages_per_second: 0,
+        total_messages: Some(1),
+        templates: vec!["x".to_string()],
+        schema_file: Some(schema_path.to_string_lossy().to_string()),
+        seed: Some(42),
+        ..Default::default()
+    };
+    let ctx = PhaseContext::resolve(&phase).expect("resolve");
+    let sorted = ctx
+        .sorted_schema_fields
+        .as_ref()
+        .expect("sorted_schema_fields should be Some when schema set");
+    assert_eq!(sorted[0].0, "a_field");
+    assert_eq!(sorted[1].0, "z_field");
+    let _ = std::fs::remove_file(&schema_path);
+}
+
+/// PR-A1 sub-task 6: cached_regex_hirs парсит regex patterns в resolve().
+/// Проверяет что HIR кэшируется при наличии regex fields.
+#[test]
+fn a1_subtask6_cached_regex_hirs_populated() {
+    use crate::schema::{Schema, SchemaField};
+    use std::collections::HashMap;
+    let mut fields = HashMap::new();
+    fields.insert(
+        "user_agent".to_string(),
+        SchemaField {
+            field_type: "regex".to_string(),
+            regex: Some(r"[A-Z][a-z]+ \d+".to_string()),
+            faker: None,
+            values: None,
+            min: None,
+            max: None,
+            format: None,
+            len: None,
+            jitter_secs: None,
+            distribution: None,
+            weights: None,
+            zipf_exponent: None,
+            depends_on: None,
+            mapping: None,
+            mapping_default: None,
+        },
+    );
+    let schema = Schema {
+        fields,
+        template: None,
+        output: None,
+    };
+    let schema_path =
+        std::env::temp_dir().join(format!("sg_a1_subtask6_{}.json", std::process::id()));
+    std::fs::write(&schema_path, serde_json::to_string(&schema).unwrap()).expect("write");
+    let phase = Phase {
+        name: "subtask6".to_string(),
+        duration_secs: 0,
+        messages_per_second: 0,
+        total_messages: Some(1),
+        templates: vec!["x".to_string()],
+        schema_file: Some(schema_path.to_string_lossy().to_string()),
+        seed: Some(42),
+        ..Default::default()
+    };
+    let ctx = PhaseContext::resolve(&phase).expect("resolve");
+    assert!(
+        ctx.cached_regex_hirs.contains_key(r"[A-Z][a-z]+ \d+"),
+        "regex HIR should be cached for schema.regex fields"
+    );
+    let _ = std::fs::remove_file(&schema_path);
+}
+
+/// PR-A1 sub-task 6: gen_from_regex_cached использует pre-parsed HIR.
+/// Проверяет что output идентичен gen_from_regex (string match).
+#[test]
+fn a1_subtask6_gen_from_regex_cached_matches_legacy() {
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    let pattern = r"[A-Z]{3}-[0-9]{4}";
+    let mut rng1 = StdRng::seed_from_u64(42);
+    let legacy = crate::payload::gen_from_regex(pattern, &mut rng1);
+    let mut rng2 = StdRng::seed_from_u64(42);
+    let hir = regex_syntax::parse(pattern).expect("parse");
+    let cached = crate::payload::gen_from_regex_cached(&hir, &mut rng2);
+    assert_eq!(
+        legacy, cached,
+        "cached HIR must produce same output as legacy path"
+    );
 }

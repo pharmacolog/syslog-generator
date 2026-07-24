@@ -47,6 +47,12 @@
 - **При выпуске версий обязательно обновлять документацию И changelog** (README.md, CHANGELOG.md,
   AUDIT.md, CLAUDE_HANDOFF.md, examples/). Каждая веха завершается compile-verified релизом.
 - Прежде чем заявлять результат/метрику — **проверять реальной компиляцией** (`cargo build/test/clippy`).
+- **Синхронизировать GitHub Projects при любом изменении состояния задачи.** Подробные правила
+  и триггеры — в `AGENTS.md` (раздел «Синхронизация состояния с GitHub Projects»). Вкратце:
+  каждый `gh issue edit`, `gh pr create/close/merge`, push в feature-ветку, change lock,
+  heartbeat, branch delete — сразу отражаются в Project #1 / #2 / Agent Operations #4
+  (Status, Owner, Lock State, CI State, Branch, Worktree, Blocked By, Handoff Summary).
+  Перед закрытием сессии делается reconciliation (см. `AGENTS.md` §«Перед завершением сессии»).
 
 ---
 
@@ -98,15 +104,51 @@ feature/pr-N-* → PR → dev → CI green (7 checks) → merge
 - ❌ Force push в любую защищённую ветку
 - ❌ Merge PR с красными CI (strict mode enforced)
 - ❌ Merge без review для main (1 approval required)
-- ❌ Squash merge для dev (для traceability оставляем merge commits)
 - ❌ Локальный `git merge origin/main && git push origin dev` (используется auto-sync workflow)
+
+### Merge strategy
+
+**`gh pr merge <N> --squash --admin` — единственный корректный способ.**
+
+- `--squash` обязателен для traceability: один commit per issue в `dev`,
+  один commit per release в `main`. Накопление merge-коммитов ухудшает
+  readability и затрудняет bisect.
+- `--admin` — bypass branch protection для maintainer'ов (solo-maintainer
+  policy: PR-19/22).
+- `--delete-branch` — после успешного merge feature-ветка удаляется.
+
+**Устаревшее правило (больше НЕ действует):**
+> "Squash merge для dev запрещён, оставляем merge commits"
+
+Это правило было отменено в AGENTS.md v2.0 (см. §4.2 там). История —
+первоначальное беспокойство о traceability, но PR body + closing commit
+содержат достаточно информации для audit.
+
+### Исключения для координационных документов
+
+Следующие файлы могут мержиться в `main` через PR, минуя `dev` (подробно
+в `AGENTS.md §4.3`):
+
+- `AGENTS.md`, `CLAUDE_HANDOFF.md`, `docs/COORDINATION.md`
+- `CHANGELOG.md` (только entry-style)
+- `LICENSE`, `README.md` (структурные изменения)
+- `.github/CODEOWNERS`
+
+Координационные docs не запускают CI (нет `cargo test`); merge в `main` сразу
+делает их доступными всем агентам. Правила: PR + review + `--squash` сохраняются.
 
 ### Автоматизация
 
 - `.github/workflows/sync-main-to-dev.yml` — auto-sync PR после merge в main
 - `.github/PULL_REQUEST_TEMPLATE.md` — стандартный checklist
 - `.github/branch-protection.md` — конфигурация protection rules
-- `scripts/quality-gates.sh` — локальные gates (G1..G10)
+- `scripts/pre-pr-check.sh` — локальные gates (полный список в `AGENTS.md §10`)
+
+> **Single source of truth для AI-агентов**: [`AGENTS.md`](AGENTS.md).
+> Содержит lock state machine, file ownership, pre-PR gates, board sync,
+> test coverage (S11/P9), анти-паттерны. CLAUDE_HANDOFF.md — только
+> project context, release process, Git Flow. При расхождениях — `AGENTS.md`
+> имеет приоритет.
 
 ### Lessons learned
 

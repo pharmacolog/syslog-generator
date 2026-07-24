@@ -26,8 +26,9 @@ set -euo pipefail
 REPO="pharmacolog/syslog-generator"
 OWNER="pharmacolog"
 
-PROJECT_SCRUM="PVT_kwHOACFRws4BePJz"  # Project #2 Scrum Delivery
-PROJECT_AGENT_OPS="PVT_kwHOACFRws4BePSR"  # Project #4 Agent Operations
+PROJECT_SCRUM="PVT_kwHOACFRws4BePJz"  # Project #2 Scrum Delivery (GraphQL ID)
+PROJECT_AGENT_OPS_NUMBER="4"  # Project #4 Agent Operations (number for gh CLI)
+PROJECT_AGENT_OPS_ID="PVT_kwHOACFRws4BePSR"  # Project #4 Agent Operations (GraphQL ID)
 COORD_HUB=113
 
 # Field IDs for Project #4 (Agent Operations).
@@ -86,10 +87,10 @@ find_or_create_card() {
   local issue_number="$1"
   local title="$2"
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg title "$title" '.items[] | select(.title == $title) | .id')
   if [ -z "$item_id" ] || [ "$item_id" = "null" ]; then
-    item_id=$(gh project item-create "$PROJECT_AGENT_OPS" --owner "$OWNER" --title "$title" \
+    item_id=$(gh project item-create "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --title "$title" \
       --body "Coordination session card for Issue #$issue_number. See AGENTS.md §5." \
       --format json | jq -r '.id')
   fi
@@ -104,7 +105,7 @@ cmd_claim() {
   item_id=$(find_or_create_card "$issue_number" "$title")
   local agent_id
   agent_id=$(agent_option_id "OpenCode")
-  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_CLAIMED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_AGENT\",value:{singleSelectOptionId:\"$agent_id\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_SYNC_STATE\",value:{singleSelectOptionId:\"$SYNC_CURRENT\"}}){projectV2Item{id}} d:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
+  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_CLAIMED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_AGENT\",value:{singleSelectOptionId:\"$agent_id\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_SYNC_STATE\",value:{singleSelectOptionId:\"$SYNC_CURRENT\"}}){projectV2Item{id}} d:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
   gh issue comment "$issue_number" --repo "$REPO" --body "🤖 OpenCode starting work on this issue" >/dev/null
   gh issue edit "$issue_number" --repo "$REPO" --add-assignee "$OWNER" >/dev/null
   echo "Card $item_id claimed for Issue #$issue_number"
@@ -115,10 +116,10 @@ cmd_active() {
   local title="OpenCode — Issue #${issue_number} (active work)"
   require_auth
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg title "$title" '.items[] | select(.title == $title) | .id')
   [ -n "$item_id" ] && [ "$item_id" != "null" ] || die "no card found for Issue #$issue_number"
-  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_ACTIVE\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
+  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_ACTIVE\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
   echo "Card $item_id set active for Issue #$issue_number"
 }
 
@@ -127,10 +128,10 @@ cmd_review() {
   local title="OpenCode — Issue #${issue_number} (active work)"
   require_auth
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg title "$title" '.items[] | select(.title == $title) | .id')
   [ -n "$item_id" ] && [ "$item_id" != "null" ] || die "no card found for Issue #$issue_number"
-  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_REVIEW\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
+  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_REVIEW\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
   echo "Card $item_id set review for Issue #$issue_number"
 }
 
@@ -140,10 +141,10 @@ cmd_blocked() {
   local title="OpenCode — Issue #${issue_number} (active work)"
   require_auth
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg title "$title" '.items[] | select(.title == $title) | .id')
   [ -n "$item_id" ] && [ "$item_id" != "null" ] || die "no card found for Issue #$issue_number"
-  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_BLOCKED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_BLOCKED_BY\",value:{text:\"$reason\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
+  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_BLOCKED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_BLOCKED_BY\",value:{text:\"$reason\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_HEARTBEAT\",value:{date:\"$(date +%Y-%m-%d)\"}}){projectV2Item{id}} }" >/dev/null
   echo "Card $item_id set blocked for Issue #$issue_number: $reason"
 }
 
@@ -152,20 +153,20 @@ cmd_released() {
   local title="OpenCode — Issue #${issue_number} (active work)"
   require_auth
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg title "$title" '.items[] | select(.title == $title) | .id')
   [ -n "$item_id" ] && [ "$item_id" != "null" ] || die "no card found for Issue #$issue_number"
   local agent_id
   agent_id=$(agent_option_id "Maintainer")
-  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_RELEASED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_AGENT\",value:{singleSelectOptionId:\"$agent_id\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_BLOCKED_BY\",value:{text:\"\"}}){projectV2Item{id}} d:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_BRANCH\",value:{text:\"\"}}){projectV2Item{id}} e:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\",fieldId:\"$FIELD_WORKTREE\",value:{text:\"\"}}){projectV2Item{id}} }" >/dev/null
+  gh api graphql -f query="mutation { a:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_LOCK_STATE\",value:{singleSelectOptionId:\"$LOCK_RELEASED\"}}){projectV2Item{id}} b:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_AGENT\",value:{singleSelectOptionId:\"$agent_id\"}}){projectV2Item{id}} c:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_BLOCKED_BY\",value:{text:\"\"}}){projectV2Item{id}} d:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_BRANCH\",value:{text:\"\"}}){projectV2Item{id}} e:updateProjectV2ItemFieldValue(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\",fieldId:\"$FIELD_WORKTREE\",value:{text:\"\"}}){projectV2Item{id}} }" >/dev/null
   echo "Card $item_id set released for Issue #$issue_number"
 }
 
 cmd_status() {
   local issue_number="$1"
   local title="OpenCode — Issue #${issue_number} (active work)"
-  gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
-    jq -r --arg title "$title" '.items[] | select(.title == $title) | {id, status: (.fieldValues.nodes[] | select(.field.name == "Status") | .name // null), lockState: (.fieldValues.nodes[] | select(.field.name == "Lock State") | .name // null), agent: (.fieldValues.nodes[] | select(.field.name == "Agent") | .name // null), branch: (.fieldValues.nodes[] | select(.field.name == "Branch") | .text // null), heartbeat: (.fieldValues.nodes[] | select(.field.name == "Heartbeat") | .date // null)}'
+  gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
+    jq -r --arg title "$title" '.items[] | select(.title == $title) | {id, title, agent, lockState: ."lock State", syncState: ."sync State", branch, worktree, heartbeat, blockedBy:."blocked By", fileScope:."file Scope"}'
 }
 
 cmd_standup() {
@@ -178,10 +179,10 @@ cmd_archive_agent() {
   local name="$1"
   require_auth
   local item_id
-  item_id=$(gh project item-list "$PROJECT_AGENT_OPS" --owner "$OWNER" --limit 200 --format json | \
+  item_id=$(gh project item-list "$PROJECT_AGENT_OPS_NUMBER" --owner "$OWNER" --limit 200 --format json | \
     jq -r --arg name "$name" '.items[] | select(.title == $name) | .id')
   [ -n "$item_id" ] && [ "$item_id" != "null" ] || die "no card found with title: $name"
-  gh api graphql -f query="mutation { archiveProjectV2Item(input:{projectId:\"$PROJECT_AGENT_OPS\",itemId:\"$item_id\"}){item{id}} " >/dev/null
+  gh api graphql -f query="mutation { archiveProjectV2Item(input:{projectId:\"$PROJECT_AGENT_OPS_ID\",itemId:\"$item_id\"}){item{id}} " >/dev/null
   echo "Card $item_id archived"
 }
 

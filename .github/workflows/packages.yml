@@ -1,0 +1,313 @@
+# PR-C1.7 (Issue #107 [GTM-2]): Linux-пакеты .deb / .rpm.
+#
+# Триггеры:
+#   - push tag v*.*.* → финальные release artifacts, upload в GitHub Release;
+#   - workflow_dispatch → ручной run с опциональным `ref` для отладки.
+#
+# НЕ триггерится на PR или push в dev/main — артефакты нужны только
+# для публикации в GitHub Release (экономит CI минуты).
+#
+# Матрица: target=ubuntu-latest (фиксирован), kafka ∈ {false, true}.
+# 4 артефакта per release tag: default+karma deb, default+karma rpm.
+#
+# Jobs:
+#   1. build-deb       — cargo-deb → .deb
+#   2. build-rpm       — cargo-rpm → .rpm
+#   3. verify-install  — Docker ubuntu:latest + fedora:latest
+#   4. release         — gh release upload (ТОЛЬКО для tag push)
+#
+# GPG-подпись deferred to follow-up (см. Issue #107 scope / Issue #155).
+# verify-install использует `docker run` (без add-job-container).
+
+name: Packages
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (tag/branch/SHA) для отладочной сборки (default: HEAD)'
+        required: false
+        default: ''
+
+# Least privilege: contents: read для checkout/build/verify;
+# release job override до contents: write.
+permissions:
+  contents: read
+
+# PR-15 (T6): concurrency group (НЕ cancel-in-progress — отменённые jobs
+# приводят к "failure" report, что misleads).
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-deb:
+    name: Build .deb (kafka=${{ matrix.kafka }})
+    runs-on: ${{ matrix.target }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ubuntu-latest]
+        kafka: [false, true]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Для workflow_dispatch с inputs.ref — checkout указанного ref;
+          # иначе (tag push) — стандартный github.ref.
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # namespace=cargo-packages (отделён от ci/docker/pgo workflows).
+          shared-key: ${{ runner.os }}-cargo-packages
+          cache-on-failure: true
+
+      - name: Cache cargo-deb
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-deb
+          key: cargo-tool-${{ runner.os }}-cargo-deb-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-deb-
+
+      - name: Install cargo-deb
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-deb" ]; then
+            cargo install cargo-deb --locked
+          fi
+
+      - name: Install build deps (libssl, dpkg-dev, file)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config dpkg-dev file
+
+      - name: Build binary (cargo build --release --locked)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -euo pipefail
+          FEATURES=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+          fi
+          cargo build --bin syslog-generator --release --locked $FEATURES
+
+      - name: Generate man page
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -euo pipefail
+          # cargo-deb ожидает target/man/syslog-generator.1.gz
+          # (см. Cargo.toml [package.metadata.deb].assets).
+          mkdir -p target/man
+          ./target/release/syslog-generator man | gzip -9 > target/man/syslog-generator.1.gz
+          test -s target/man/syslog-generator.1.gz
+          ls -la target/man/
+
+      - name: Build .deb (cargo-deb)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -euo pipefail
+          FEATURES=""
+          VARIANT=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+            VARIANT="--variant=kafkatrue"
+          fi
+          mkdir -p target/debian
+          # --no-build: binary уже собран, cargo-deb лишь пакует .deb.
+          cargo deb --no-build --locked $FEATURES $VARIANT
+          ls -la target/debian/
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-deb-kafka${{ matrix.kafka }}
+          path: target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  build-rpm:
+    name: Build .rpm (kafka=${{ matrix.kafka }})
+    runs-on: ${{ matrix.target }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ubuntu-latest]
+        kafka: [false, true]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-packages
+          cache-on-failure: true
+
+      - name: Cache cargo-rpm
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-rpm
+          key: cargo-tool-${{ runner.os }}-cargo-rpm-v1
+          restore-keys: |
+            cargo-tool-${{ runner.os }}-cargo-rpm-
+
+      - name: Install cargo-rpm
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
+            cargo install cargo-rpm --locked
+          fi
+
+      - name: Install build deps (libssl, rpm)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config rpm file
+
+      - name: Build .rpm (cargo-rpm)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -euo pipefail
+          FEATURES=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+          fi
+          # cargo-rpm outputs to target/release/rpmbuild/RPMS/x86_64/<pkg>-<ver>-<rel>.<arch>.rpm
+          cargo rpm build --release --locked $FEATURES
+          # Stage для upload (раздельно для kafka on/off — чтобы не было коллизий
+          # внутри одного artifact, т.к. cargo-rpm не имеет --variant).
+          mkdir -p target/rpm
+          RPM_FILE=$(find target/release/rpmbuild/RPMS -name 'syslog-generator-*.rpm' -type f | head -1)
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            mv "$RPM_FILE" target/rpm/syslog-generator-kafka.rpm
+          else
+            mv "$RPM_FILE" target/rpm/syslog-generator.rpm
+          fi
+          ls -la target/rpm/
+
+      - name: Upload .rpm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-rpm-kafka${{ matrix.kafka }}
+          path: target/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  verify-install:
+    name: Verify install (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-deb, build-rpm]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: ubuntu
+            image: ubuntu:latest
+            artifact: syslog-generator-deb-kafkafalse
+            file_ext: deb
+          - distro: fedora
+            image: fedora:latest
+            artifact: syslog-generator-rpm-kafkafalse
+            file_ext: rpm
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/
+
+      - name: Install + smoke test (docker run)
+        # Два matrix entry: ubuntu + apt, fedora + dnf.
+        # Используем `docker run` (НЕ add-job-container — для CI reproducibility).
+        # find внутри container надёжнее, чем basename host-path (artifact
+        # extract'ится в dist/<artifact-name>/<file> под docker run).
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.file_ext }}" = "deb" ]; then
+            docker run --rm \
+              -v "$(pwd)/dist:/dist:ro" \
+              "${{ matrix.image }}" \
+              bash -c "set -e; export DEBIAN_FRONTEND=noninteractive; \
+                       apt-get update && \
+                       apt-get install -y \$(find /dist -name '*.deb' -type f) && \
+                       syslog-generator --version"
+          else
+            docker run --rm \
+              -v "$(pwd)/dist:/dist:ro" \
+              "${{ matrix.image }}" \
+              bash -c "set -e; \
+                       dnf install -y \$(find /dist -name '*.rpm' -type f) && \
+                       syslog-generator --version"
+          fi
+
+  release:
+    name: Upload to GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-deb, build-rpm, verify-install]
+    # Только для tag push (НЕ workflow_dispatch — это debugging).
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          pattern: syslog-generator-*
+
+      - name: Create release если отсутствует
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG не существует, создаём draft..."
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --draft
+          else
+            echo "Release $TAG уже существует, добавляем файлы..."
+          fi
+
+      - name: Upload artifacts to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          ls -la dist/
+          # GPG-подпись deferred to follow-up (см. Issue #107 scope / Issue #155).
+          find dist -type f \( -name '*.deb' -o -name '*.rpm' \) -print0 \
+            | xargs -0 gh release upload "$TAG" --clobber

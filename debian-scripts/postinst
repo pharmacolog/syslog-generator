@@ -1,0 +1,7 @@
+#!/bin/sh
+# postinst for syslog-generator — refresh shell completions if available.
+set -e
+if [ -d /usr/share/bash-completion/completions ]; then
+  echo "Regenerate bash completions via syslog-generator completions bash (skipped, see docs)."
+fi
+exit 0

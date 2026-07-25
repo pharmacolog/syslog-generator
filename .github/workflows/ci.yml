@@ -304,7 +304,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-deny
       - name: Cache cargo-deny
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-deny
           key: cargo-tool-${{ runner.os }}-cargo-deny-v1
@@ -345,7 +345,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-machete
       - name: Cache cargo-machete
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-machete
           key: cargo-tool-${{ runner.os }}-cargo-machete-v1
@@ -473,7 +473,7 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-cov
 
       - name: Cache cargo-llvm-cov
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-tool-${{ runner.os }}-cargo-llvm-cov-v1
@@ -600,7 +600,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-public-api
       - name: Cache cargo-public-api
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-public-api
           key: cargo-tool-${{ runner.os }}-cargo-public-api-v1

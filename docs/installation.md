@@ -405,6 +405,84 @@ source <(syslog-generator completions bash) && type _syslog-generator
 Если любой из шагов падает — см. §9 (Troubleshooting) или откройте issue с
 полным выводом (`syslog-generator --version`, `uname -a`, логи).
 
+### 7.7 Проверка GPG-подписи (начиная с v11.5+)
+
+> **Доступно с milestone v11.5+** (Issue #155, sub-tasks 1–3). До публикации
+> GPG-ключа артефакты **не подписаны** — `dpkg-sig --verify` вернёт warning
+> вместо success. Это нормально для milestone v11.4.x.
+
+#### 7.7.1 Импорт публичного ключа
+
+Один раз на машине (или в проде-инфраструктуре):
+
+```bash
+# Вариант A: прямой download с GitHub (main branch — обновляется при
+# sub-task 1 завершении)
+sudo mkdir -p /etc/apt/keyrings /etc/pki/rpm-gpg
+sudo curl -fsSL -o /etc/apt/keyrings/pharmacolog-release.asc \
+  https://raw.githubusercontent.com/pharmacolog/syslog-generator/main/scripts/keys/pharmacolog-release.asc
+sudo curl -fsSL -o /etc/pki/rpm-gpg/RPM-GPG-KEY-pharmacolog \
+  https://raw.githubusercontent.com/pharmacolog/syslog-generator/main/scripts/keys/pharmacolog-release.asc
+
+# Вариант B: из локального клона
+git clone https://github.com/pharmacolog/syslog-generator.git
+sudo cp syslog-generator/scripts/keys/pharmacolog-release.asc \
+  /etc/apt/keyrings/pharmacolog-release.asc
+```
+
+Для Fedora/RHEL (после sub-task 1):
+
+```bash
+sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-pharmacolog
+```
+
+#### 7.7.2 Verify .deb (после скачивания, до установки)
+
+```bash
+# Установить утилиту (один раз)
+sudo apt install dpkg-sig
+
+# Verify
+dpkg-sig --verify syslog-generator_11.5.0_amd64.deb
+# Ожидаемый вывод (с подписью):
+#   Processing syslog-generator_11.5.0_amd64.deb...
+#   GOODSIG ... 0xPHARMACOLOG_RELEASE_FINGERPRINT
+```
+
+#### 7.7.3 Verify .rpm (после скачивания, до установки)
+
+```bash
+rpm -K syslog-generator-11.5.0-1.x86_64.rpm
+# Ожидаемый вывод:
+#   syslog-generator-11.5.0-1.x86_64.rpm: digests signatures OK
+
+# Verbose (покажет key ID и подписанта)
+rpm -Kv syslog-generator-11.5.0-1.x86_64.rpm
+```
+
+#### 7.7.4 Полная цепочка verify (PPA/COPR с подписью)
+
+После sub-task 4 (Launchpad PPA) / sub-task 5 (Fedora COPR) — `apt install`
+и `dnf install` через эти каналы автоматически проверяют подпись по ключу
+из `/etc/apt/keyrings/` или `/etc/pki/rpm-gpg/`. Никаких дополнительных
+действий не требуется.
+
+### 7.8 SHA256SUMS manifest
+
+Начиная с v11.5+ каждый GitHub Release содержит `SHA256SUMS` + detached
+`.sig` (см. §10.5). Проверка:
+
+```bash
+# Скачать всё
+curl -fsSL -O https://github.com/pharmacolog/syslog-generator/releases/download/v11.5.0/{SHA256SUMS,SHA256SUMS.sig,syslog-generator_11.5.0_amd64.deb}
+
+# Verify manifest (GPG signature)
+gpg --verify SHA256SUMS.sig SHA256SUMS
+
+# Verify checksums
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
 ---
 
 ## 8. Удаление (uninstall)
@@ -663,6 +741,59 @@ sudo dnf install ./syslog-generator-11.4.0-1.x86_64.rpm
 
 См. также [SECURITY.md](../SECURITY.md) для ответственного раскрытия уязвимостей.
 
+### 9.11 `apt`/`dnf` ругается на signature verification failed
+
+**Симптом (apt):**
+
+```
+The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 0xPHARMACOLOG_RELEASE_FINGERPRINT
+```
+
+**Симптом (dnf):**
+
+```
+The GPG keys listed for the package ... are not configured: ... NO_PUBKEY 0xPHARMACOLOG_RELEASE_FINGERPRINT
+Public key for ... is not installed
+```
+
+**Причина:** публичный GPG-ключ проекта не импортирован в системе.
+
+**Решение:**
+
+```bash
+# 1. Скачать и импортировать ключ (один раз)
+sudo curl -fsSL -o /etc/apt/keyrings/pharmacolog-release.asc \
+  https://raw.githubusercontent.com/pharmacolog/syslog-generator/main/scripts/keys/pharmacolog-release.asc
+
+# Ubuntu/Debian (.deb):
+sudo apt-key add /etc/apt/keyrings/pharmacolog-release.asc 2>/dev/null || \
+  sudo gpg --dearmor < /etc/apt/keyrings/pharmacolog-release.asc \
+    | sudo tee /etc/apt/keyrings/pharmacolog-release.gpg > /dev/null
+
+# Fedora/RHEL (.rpm):
+sudo rpm --import /etc/apt/keyrings/pharmacolog-release.asc
+
+# 2. Verify вручную (до установки)
+dpkg-sig --verify syslog-generator_11.5.0_amd64.deb    # apt
+rpm -K syslog-generator-11.5.0-1.x86_64.rpm            # dnf
+
+# 3. После импорта — обычная установка
+sudo apt install ./syslog-generator_11.5.0_amd64.deb
+sudo dnf install ./syslog-generator-11.5.0-1.x86_64.rpm
+```
+
+**Workaround (НЕ рекомендуется для production):**
+
+```bash
+# Только для разовых тестов:
+sudo apt install --allow-unauthenticated ./syslog-generator_11.5.0_amd64.deb
+sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
+```
+
+**Где взять fingerprint ключа:** см. README.md → Security, либо
+[`scripts/keys/pharmacolog-release.asc`](../scripts/keys/pharmacolog-release.asc)
+после публикации sub-task 1.
+
 ---
 
 ## 10. Кросс-ссылки и история
@@ -696,6 +827,46 @@ sudo dnf install ./syslog-generator-11.4.0-1.x86_64.rpm
 - **Issue #155** (placeholder) — PPA / COPR / Alpine `.apk` distribution
   channels (deferred; см. §2.2, §3.2, §4).
 - **Issue #92** — B3 Presets (зависимость Issue #107: default config в пакете).
+
+### 10.5 GPG-подпись и supply-chain integrity
+
+> **Roadmap:** полная подпись артефактов — milestone v11.5+ (Issue #155).
+> В v11.4.x артефакты публикуются **без подписи** (deferred scope PR #154).
+
+#### Что подписывается
+
+| Артефакт | Подпись | Где проверять |
+|---|---|---|
+| `syslog-generator_*.deb` | `dpkg-sig --sign builder` (origin + builder роль) | `dpkg-sig --verify <pkg>` |
+| `syslog-generator-*.rpm` | `rpmsign --addsign` (SHA256 digest + GPG signature) | `rpm -K <pkg>` |
+| `SHA256SUMS` | detached `.sig` (GPG) | `gpg --verify SHA256SUMS.sig SHA256SUMS` |
+| Контейнеры `ghcr.io/*` | Cosign keyless (GitHub OIDC) | `cosign verify --certificate-identity ...` (опционально, sub-task 6) |
+
+#### Где хранится публичный ключ
+
+- **Public key:** [`scripts/keys/pharmacolog-release.asc`](../scripts/keys/pharmacolog-release.asc)
+  (sub-task 1, добавляется в milestone v11.5+).
+- **Fingerprint:** в README.md → Security, после публикации ключа.
+- **Key server:** publish на `keyserver.ubuntu.com` и `keys.openpgp.org`
+  (best practice — обеспечивает discovery).
+
+#### Как это защищает пользователя
+
+1. **Authenticity** — публичный ключ fingerprint'а совпадает с тем, что
+   на сайте → артефакт подписан maintainer'ом, не подменён MITM'ом.
+2. **Integrity** — `sha256sum -c SHA256SUMS` подтверждает, что файл не
+   повреждён при download.
+3. **Non-repudiation** — GPG-подпись привязана к ключу maintainer'а;
+   отозвать можно через keyserver revocation certificate.
+
+#### Связанные sub-tasks (Issue #155)
+
+- sub-task 1: создание release signing subkey + публикация `pharmacolog-release.asc`.
+- sub-task 2: `sign` step в `packages.yml` (между `build-deb` и `verify-install`).
+- sub-task 3: hardened `verify-install` (этот документ, §7.7).
+- sub-task 4: Launchpad PPA bootstrap (auto-verify через `add-apt-repository`).
+- sub-task 5: Fedora COPR setup (auto-verify через `dnf copr enable`).
+- sub-task 6: optional Cosign keyless signing для container images.
 
 ### 10.4 Метаданные документа
 

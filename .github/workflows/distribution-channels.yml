@@ -1,0 +1,251 @@
+name: Distribution channels
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Distribution channel instructions to print
+        required: true
+        type: choice
+        options:
+          - ppa
+          - copr
+          - manual-release-notes
+      ref:
+        description: Branch or tag to inspect
+        required: true
+        default: main
+        type: string
+      dry_run:
+        description: Print commands without executing distribution uploads
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  print-commands:
+    name: Print distribution commands
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Print commands
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          REF: ${{ inputs.ref }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(awk -F '"' '$1 ~ /^version[[:space:]]*=/ { print $2; exit }' Cargo.toml)"
+
+          printf '%s\n' "Selected channel: ${CHANNEL}"
+          printf '%s\n' "Selected ref: ${REF}"
+          printf '%s\n' "Detected version: ${VERSION}"
+          printf '%s\n' "dry_run: ${DRY_RUN}"
+          printf '%s\n' ""
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            printf '%s\n' "DRY RUN: commands below are instructions only."
+          else
+            printf '%s\n' "Execution is intentionally disabled because account setup is deferred."
+          fi
+
+          case "${CHANNEL}" in
+            ppa)
+              printf '%s\n' ""
+              printf '%s\n' "Launchpad PPA:"
+              printf '%s\n' "debuild -S -sa -k\$FINGERPRINT"
+              printf '%s\n' "dput ppa:pharmacolog/syslog-generator ../syslog-generator_${VERSION}-1_source.changes"
+              printf '%s\n' ""
+              printf '%s\n' "Expected result: source package uploaded to Launchpad build queue."
+              printf '%s\n' "Prerequisites: verified Ubuntu One email, Launchpad account, PPA, and OpenPGP key on Launchpad."
+              printf '%s\n' "No dput command is executed by this workflow."
+              ;;
+            copr)
+              printf '%s\n' ""
+              printf '%s\n' "Fedora COPR:"
+              printf '%s\n' "rpmbuild -bs packaging/syslog-generator.spec"
+              printf '%s\n' "copr-cli create syslog-generator"
+              printf '%s\n' "copr-cli build syslog-generator ~/rpmbuild/SRPMS/syslog-generator-${VERSION}-1.src.rpm"
+              printf '%s\n' ""
+              printf '%s\n' "Expected chroots: Fedora 39+, EPEL 9, Rocky Linux 9, AlmaLinux 9."
+              printf '%s\n' "Prerequisites: Fedora account, FAS, configured copr-cli, and RPM spec file."
+              printf '%s\n' "No copr-cli command is executed by this workflow."
+              ;;
+            manual-release-notes)
+              printf '%s\n' ""
+              printf '%s\n' "Manual GitHub Release notes:"
+              printf '%s\n' "gh release edit v${VERSION} --notes-file release-notes.md"
+              printf '%s\n' ""
+              printf '%s\n' "Suggested release sections:"
+              printf '%s\n' "- Changes"
+              printf '%s\n' "- Debian and RPM artifacts"
+              printf '%s\n' "- GPG verification instructions"
+              printf '%s\n' "- Container image: ghcr.io/pharmacolog/syslog-generator:v${VERSION}"
+              printf '%s\n' ""
+              printf '%s\n' "No release is edited by this workflow."
+              ;;
+            *)
+              printf '%s\n' "Unsupported channel: ${CHANNEL}" >&2
+              exit 1
+              ;;
+          esac
+
+  verify-channels:
+    name: Verify GitHub Release packages
+    needs: print-commands
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Prepare verification logs
+        run: |
+          set -euo pipefail
+          mkdir -p verify-logs
+
+      - name: Resolve release assets
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(awk -F '"' '$1 ~ /^version[[:space:]]*=/ { print $2; exit }' Cargo.toml)"
+          RELEASE_TAG="v${VERSION}"
+          DEB_URL="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}/syslog-generator_${VERSION}_amd64.deb"
+          RELEASE_JSON="$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          RPM_URL="$(printf '%s' "${RELEASE_JSON}" | jq -r '
+            [
+              .assets[]
+              | select((.name | endswith(".x86_64.rpm")) or (.name | endswith(".noarch.rpm")))
+              | select((.name | endswith(".src.rpm")) | not)
+              | .browser_download_url
+            ]
+            | first // empty
+          ')"
+
+          if [[ -z "${RPM_URL}" ]]; then
+            printf '%s\n' "No x86_64 or noarch RPM asset found in ${RELEASE_TAG}." >&2
+            exit 1
+          fi
+
+          {
+            printf '%s\n' "VERSION=${VERSION}"
+            printf '%s\n' "RELEASE_TAG=${RELEASE_TAG}"
+            printf '%s\n' "DEB_URL=${DEB_URL}"
+            printf '%s\n' "RPM_URL=${RPM_URL}"
+          } | tee verify-logs/metadata.log
+
+          {
+            printf 'version=%s\n' "${VERSION}"
+            printf 'deb_url=%s\n' "${DEB_URL}"
+            printf 'rpm_url=%s\n' "${RPM_URL}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Verify Ubuntu installation
+        id: verify-ubuntu
+        env:
+          DEB_URL: ${{ steps.metadata.outputs.deb_url }}
+        run: |
+          set -o pipefail
+          set +e
+
+          docker run --rm \
+            --env DEB_URL="${DEB_URL}" \
+            ubuntu:latest \
+            bash -euc '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates curl
+              mkdir -p /tmp/syslog-generator
+              cd /tmp/syslog-generator
+              curl -fL "${DEB_URL}" -o syslog-generator.deb
+              apt install -y ./syslog-generator.deb
+              syslog-generator --version
+            ' 2>&1 | tee verify-logs/ubuntu.log
+
+          UBUNTU_STATUS=${PIPESTATUS[0]}
+          printf '%s\n' "Ubuntu verification exit code: ${UBUNTU_STATUS}" | tee -a verify-logs/ubuntu.log
+
+          set -e
+          exit "${UBUNTU_STATUS}"
+
+      - name: Verify Fedora installation
+        id: verify-fedora
+        env:
+          RPM_URL: ${{ steps.metadata.outputs.rpm_url }}
+        run: |
+          set -o pipefail
+          set +e
+
+          docker run --rm \
+            --env RPM_URL="${RPM_URL}" \
+            fedora:latest \
+            bash -euc '
+              dnf install -y ca-certificates curl
+              mkdir -p /tmp/syslog-generator
+              cd /tmp/syslog-generator
+              curl -fL "${RPM_URL}" -o syslog-generator.rpm
+              dnf install -y ./syslog-generator.rpm
+              syslog-generator --version
+            ' 2>&1 | tee verify-logs/fedora.log
+
+          FEDORA_STATUS=${PIPESTATUS[0]}
+          printf '%s\n' "Fedora verification exit code: ${FEDORA_STATUS}" | tee -a verify-logs/fedora.log
+
+          set -e
+          exit "${FEDORA_STATUS}"
+
+      - name: Upload verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distribution-channel-verification-${{ github.run_id }}
+          path: verify-logs/
+          if-no-files-found: warn
+
+      - name: Comment verification result on Issue 155
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          BODY="$(printf '%s\n' \
+            "Distribution channel verification result" \
+            "" \
+            "- Channel instructions: \`${CHANNEL}\`" \
+            "- Ref: \`${REF}\`" \
+            "- Version: \`${VERSION:-unknown}\`" \
+            "- Verification job status: \`${JOB_STATUS}\`" \
+            "- Workflow run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" \
+            "- Logs: workflow artifacts \`distribution-channel-verification-${RUN_ID}\`" \
+            "" \
+            "The verification checks direct installation of the GitHub Release package in \`ubuntu:latest\` and \`fedora:latest\` containers.")"
+
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues/155/comments" \
+            --field body="${BODY}"

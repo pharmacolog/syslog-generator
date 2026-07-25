@@ -275,14 +275,14 @@ jobs:
           sudo apt-get install -y gnupg dpkg-sig rpm file
 
       - name: Download .deb artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           pattern: syslog-generator-deb-*
           merge-multiple: true
 
       - name: Download .rpm artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           pattern: syslog-generator-rpm-*
@@ -467,7 +467,7 @@ jobs:
             verify_cmd: rpm -K
     steps:
       - name: Download signed packages artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist/
@@ -529,7 +529,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download signed packages + signatures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: syslog-generator-signed-packages
           path: dist/

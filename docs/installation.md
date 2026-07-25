@@ -46,20 +46,21 @@ PR: [#146](https://github.com/pharmacolog/syslog-generator/pull/146)
 | Дистрибутив | Пакет | Статус | Канал |
 |---|---|---|---|
 | Ubuntu 22.04 LTS (jammy) | `.deb` | ✅ supported | GitHub Releases |
-| Ubuntu 24.04 LTS (noble) | `.deb` | ✅ supported | GitHub Releases + PPA (planned) |
+| Ubuntu 24.04 LTS (noble) | `.deb` | ✅ supported | GitHub Releases |
 | Debian 12 (bookworm) | `.deb` | ✅ supported | GitHub Releases |
 | Debian 13 (trixie) | `.deb` | ✅ supported | GitHub Releases |
-| Fedora 39 / 40 / 41 | `.rpm` | ✅ supported | GitHub Releases + COPR (planned) |
+| Fedora 39 / 40 / 41 | `.rpm` | ✅ supported | GitHub Releases |
 | RHEL 9 / Rocky Linux 9 | `.rpm` | ✅ supported | GitHub Releases |
 | AlmaLinux 9 | `.rpm` | ✅ supported | GitHub Releases |
 | openSUSE Leap / Tumbleweed | `.rpm` | ⚠️ experimental | GitHub Releases |
-| Alpine 3.19+ | `.apk` | ❌ **не поддерживается** | — (см. §4) |
-| Arch Linux | AUR | ❌ не поддерживается официально | — |
-| macOS / Windows | — | ⚠️ только из исходников | [README.md](../README.md#-установка) |
+| Alpine 3.19+ | — | ⚠️ **через container image** | `docker run ghcr.io/pharmacolog/syslog-generator:TAG` (см. §5.6) |
+| Arch Linux | AUR | ❌ не поддерживается официально | — (community-maintained) |
+| macOS / Windows | — | ⚠️ через container image или source build | [README.md](../README.md#-установка) |
 
 Архитектуры: `x86_64` (amd64) и `aarch64` (arm64).
 Динамическая линковка с `glibc` ≥ 2.31 (Ubuntu 20.04+, RHEL 9+, Debian 11+).
-Musl-билды для Alpine — **не предоставляются** (см. §4).
+Musl-билды для Alpine **не предоставляются** (см. §4 — native Alpine-пакет
+официально не поддерживается, но container image покрывает use-case).
 
 CI matrix (см. `docs/ROADMAP.md` → Веха G → v11.4):
 `debian: [bookworm, noble] × arch: [amd64, arm64]` и
@@ -88,22 +89,12 @@ syslog-generator --version
 (текущая сборка требует только `libc6`, остальное — `$auto` из
 `Cargo.toml → [package.metadata.deb]`).
 
-### 2.2 Через Launchpad PPA (deferred)
+### 2.2 Через Launchpad PPA
 
-> **⚠️ Deferred:** канал `ppa:pharmacolog/syslog-generator` ещё не создан.
-> Отслеживание: Issue
-> [#155](https://github.com/pharmacolog/syslog-generator/issues/155)
-> (placeholder, связан с Issue #107). После публикации PPA этот раздел
-> будет дополнен командами:
+> **❌ Not Planned** (решение maintainer'а 2026-07-25, см. `docs/distribution-channels.md`).
 >
-> ```bash
-> sudo add-apt-repository ppa:pharmacolog/syslog-generator
-> sudo apt update
-> sudo apt install syslog-generator
-> ```
-
-Подписаться на обновление: GitHub Watch → `Releases only` для репозитория
-[pharmacolog/syslog-generator](https://github.com/pharmacolog/syslog-generator).
+> Для Ubuntu/Debian-пользователей: `apt install ./file.deb` через GitHub
+> Releases (см. §2.1) — workflow 1-2 минуты.
 
 ### 2.3 Обновление
 
@@ -136,20 +127,12 @@ syslog-generator --version
 базу rpm. Для RHEL 9 / Rocky 9 / AlmaLinux 9 синтаксис идентичен (dnf есть
 из коробки).
 
-### 3.2 Через Fedora COPR (deferred)
+### 3.2 Через Fedora COPR
 
-> **⚠️ Deferred:** канал
-> `copr.fedoraproject.org/coprs/pharmacolog/syslog-generator` ещё не создан.
-> Отслеживание: Issue
-> [#155](https://github.com/pharmacolog/syslog-generator/issues/155)
-> (placeholder, общий с PPA). Команды после публикации COPR:
+> **❌ Not Planned** (решение maintainer'а 2026-07-25, см. `docs/distribution-channels.md`).
 >
-> ```bash
-> sudo dnf copr enable pharmacolog/syslog-generator
-> sudo dnf install syslog-generator
-> ```
-
-Альтернативный путь для RHEL-семейства — EPEL + ручной `.rpm` (см. §3.1).
+> Для Fedora/RHEL-пользователей: `dnf install ./file.rpm` через GitHub
+> Releases (см. §3.1) — workflow 1-2 минуты.
 
 ### 3.3 Обновление
 
@@ -161,30 +144,27 @@ sudo dnf upgrade syslog-generator
 
 ---
 
-## 4. Alpine (.apk)
+## 4. Alpine
 
-> **❌ Alpine-пакет официально не поддерживается** в milestone v11.4.
+> **⚠️ Native Alpine-пакет официально не поддерживается.**
 >
 > Причина: основная сборка линкуется динамически с `glibc` (через
 > `cargo-deb` / `cargo-rpm`). Alpine использует `musl`, что требует
-> отдельного `--target x86_64-unknown-linux-musl` билда + проверки всех
-> нативных зависимостей (rustls → ring, kafka-lz4/zstd, file rotation).
+> отдельного build pipeline.
 >
-> **Tracking**: Issue
-> [#155](https://github.com/pharmacolog/syslog-generator/issues/155)
-> (placeholder; deferred до получения ≥ 10 запросов от пользователей).
+> **Tracking:** Issue [#155](https://github.com/pharmacolog/syslog-generator/issues/155)
+> sub-task 6 — **Not Planned** (решение maintainer'а 2026-07-25).
 >
-> **Workaround**: запускать под Alpine через Docker-образ
-> `ghcr.io/pharmacolog/syslog-generator:v11.4.0` (multi-arch: linux/amd64 +
-> linux/arm64; см. [README.md → Docker](../README.md#docker)):
+> **Workaround** для Alpine-пользователей: container image (multi-arch
+> `linux/amd64` + `linux/arm64`) через Docker/podman — см. §5.6:
 >
 > ```bash
+> # На Alpine Linux (через docker или podman):
+> docker run --rm ghcr.io/pharmacolog/syslog-generator:v11.4.0 --version
+> # Или multi-arch напрямую:
+> apk add docker  # если Docker ещё не установлен
 > docker run --rm ghcr.io/pharmacolog/syslog-generator:v11.4.0 --version
 > ```
-
-Если вам нужен нативный Alpine-пакет — откройте issue с label `track-gtm`,
-опишите use-case (load-testing на Alpine-based routers / WAF), и мы
-приоритизируем для milestone v11.5+.
 
 ---
 
@@ -816,17 +796,20 @@ sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
 
 | Версия | Дата | Изменения |
 |---|---|---|
+| **v11.4.x** | 2026-07-25 | Policy update: PPA/COPR/Alpine `.apk` явно отмечены как **Not Planned** (решение maintainer'а, см. `docs/distribution-channels.md` §Политика). Alpine и macOS/Windows use-cases покрыты через container image. |
 | **v11.4.0** (Issue #107) | TBD | Первая публикация `.deb` / `.rpm` через `cargo-deb` / `cargo-rpm`. CI matrix: `debian×2×arch×2` + `fedora×2×arch×2`. GPG-подпись deferred (Issue #155). Documentation: этот файл. |
 | PR #146 | 2026-07-24 | Coordination docs / AGENTS.md v2.0 (контекст для этого документа; см. AGENTS.md §10 — coordination docs flow). |
 
 ### 10.3 Связанные issues
 
 - **Issue #107** —
-  [GTM-2] Linux-пакеты .deb/.rpm через `cargo-deb` / `cargo-rpm`
-  (milestone v11.4, track `track-gtm`, priority `p2`).
-- **Issue #155** (placeholder) — PPA / COPR / Alpine `.apk` distribution
-  channels (deferred; см. §2.2, §3.2, §4).
-- **Issue #92** — B3 Presets (зависимость Issue #107: default config в пакете).
+  [GTM-2] Linux-пакеты `.deb`/`.rpm` через `cargo-deb` / `cargo-rpm`
+  (milestone v11.4, closed via PR #154).
+- **Issue #155** — [C1.8] GPG-подпись и distribution channels (closed via PR #156).
+  Sub-tasks 1 (GPG key) и 2-3 (sign/verify steps) реализованы в PR #156.
+  Sub-tasks 4 (PPA), 5 (COPR), 6 (Alpine `.apk`) — **Not Planned** (решение
+  maintainer'а 2026-07-25, см. `docs/distribution-channels.md` §Политика).
+- **Issue #92** — B3 Presets (closed, dependency).
 
 ### 10.5 GPG-подпись и supply-chain integrity
 

@@ -45,7 +45,7 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-sbom
 
       - name: Cache cargo-cyclonedx
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-cyclonedx
           key: cargo-tool-${{ runner.os }}-cargo-cyclonedx-v1

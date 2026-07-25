@@ -57,7 +57,7 @@ jobs:
         kafka: [false, true]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Для workflow_dispatch с inputs.ref — checkout указанного ref;
           # иначе (tag push) — стандартный github.ref.
@@ -154,7 +154,7 @@ jobs:
         kafka: [false, true]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
 
@@ -388,7 +388,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
 
@@ -693,7 +693,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download signed packages + signatures
         uses: actions/download-artifact@v8

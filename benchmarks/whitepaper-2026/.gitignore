@@ -1,0 +1,9 @@
+# Bench harness ephemeral files
+results/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# TLS certs (regenerate with docker/gen-cert.sh)
+docker/certs/*.pem
+docker/certs/*.key

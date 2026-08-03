@@ -19,6 +19,10 @@ repository = "https://github.com/pharmacolog/syslog-generator"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = 2
+split-debuginfo = "packed"
 
 # PR-A0 (v10.8.0): release-like profile для benches.
 # Criterion benches ранее компилировались в debug-режиме (no opt, debug assertions),

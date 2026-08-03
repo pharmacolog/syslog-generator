@@ -955,7 +955,7 @@ pub fn syslog_generator::core::default_values(&syslog_generator::generator::core
 pub fn syslog_generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<usize>) -> anyhow::Result<()>
+pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::error
 pub enum syslog_generator::error::ConfigError
@@ -2064,7 +2064,7 @@ pub fn syslog_generator::generator::core::generate_message_with_format_cached(&s
 pub fn syslog_generator::generator::core::generate_message_with_plan(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize, &mut syslog_generator::plan::value::ValueArena, &mut alloc::string::String) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<usize>) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub struct syslog_generator::generator::CefConfig
 pub syslog_generator::generator::CefConfig::device_product: alloc::string::String
@@ -2604,7 +2604,7 @@ pub fn syslog_generator::generator::load_profile_from_path(&std::path::Path) -> 
 pub fn syslog_generator::generator::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub fn syslog_generator::generator::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<usize>) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::load_shape
 pub enum syslog_generator::load_shape::LoadShape
@@ -7241,7 +7241,7 @@ pub async fn syslog_generator::reconnect_with_backoff<F, Fut, T, E>(&syslog_gene
 pub fn syslog_generator::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub fn syslog_generator::render_template(&str, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::string::String
 pub fn syslog_generator::route(&str, &str, &syslog_generator::observability::metrics::Metrics) -> alloc::string::String
-pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken, core::option::Option<usize>) -> anyhow::Result<()>
+pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub async fn syslog_generator::serve_metrics(&str, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub fn syslog_generator::should_drop_packet(&syslog_generator::anomaly::AnomalyKind, core::option::Option<u64>, usize) -> bool

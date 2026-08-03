@@ -31,7 +31,7 @@ cargo +nightly fuzz run format_json_lines
 
 | Target | Что fuzzит | Что может сломаться |
 |---|---|---|
-| `profile_parser` | `load_profile_from_yaml_str` (произвольный YAML) | `serde_yaml` panics, некорректные UTF-8 |
+| `profile_parser` | `load_profile_from_yaml_str` (произвольный YAML) | `serde_yaml_ng` panics, некорректные UTF-8 |
 | `format_rfc5424` | `build_rfc5424` с произвольными полями Header | escaping, переполнение буфера |
 | `format_cef` | `cef::build` с произвольными extensions | CEF escaping (`|`, `=`, `\`) |
 | `format_leef` | `leef::build` с произвольными attributes | LEEF escaping |

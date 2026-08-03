@@ -5,7 +5,7 @@ use syslog_generator::load_profile_from_yaml_str;
 /// Fuzz profile_parser: парсинг YAML-профиля из произвольных байт.
 ///
 /// Цель: найти panics/undefined-behavior в:
-/// - `serde_yaml::from_str` (внешняя зависимость, но мы её используем)
+/// - `serde_yaml_ng::from_str` (внешняя зависимость, но мы её используем)
 /// - структурах `Profile`, `Phase`, `TargetConfig`
 ///
 /// Если fuzzer найдёт вход, который вызывает panic — он сохранится в

@@ -411,11 +411,11 @@ pub fn load_profile_from_json_str(s: &str) -> Result<Profile, ConfigError> {
 
 /// Загрузить профиль из YAML-строки (D3, v8.5.0).
 ///
-/// `serde_yaml` поддерживает те же serde-дерайвы, что и `serde_json`, поэтому
+/// `serde_yaml_ng` поддерживает те же serde-дерайвы, что и `serde_json`, поэтому
 /// структура `Profile` парсится идентично. YAML чувствителен к отступам —
 /// неявный фолбэк на JSON не делаем, чтобы ошибка была однозначной.
 pub fn load_profile_from_yaml_str(s: &str) -> Result<Profile, ConfigError> {
-    serde_yaml::from_str(s).map_err(|source| ConfigError::Yaml {
+    serde_yaml_ng::from_str(s).map_err(|source| ConfigError::Yaml {
         path: "<inline>".to_string(),
         source,
     })
@@ -471,7 +471,7 @@ pub fn load_profile_from_path(path: &Path) -> Result<Profile, ConfigError> {
             source,
         }),
         Some("yaml") | Some("yml") => {
-            serde_yaml::from_str(&buf).map_err(|source| ConfigError::Yaml {
+            serde_yaml_ng::from_str(&buf).map_err(|source| ConfigError::Yaml {
                 path: path_str,
                 source,
             })

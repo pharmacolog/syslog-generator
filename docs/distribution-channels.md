@@ -303,29 +303,27 @@ COPR rebuilds from source. Это означает:
 
 ## Alpine `.apk`
 
-**Статус: ❌ not supported**
+**Статус: ✅ active** (Issue #159, milestone v11.4)
 
-Alpine Linux использует musl libc, тогда как стандартные Linux-пакеты проекта
-ориентированы на glibc-среду.
+Native `.apk` публикуется в GitHub Releases. Сборка через `cargo build
+--target x86_64-unknown-linux-musl` + `abuild -r` в Alpine-builder environment
+(подробно в `docs/installation.md` §4). Alpine `.apk` покрывает тот же use-case,
+что планировался для PPA/COPR — без overhead внешних account setup.
 
-Поддержка Alpine потребовала бы отдельного build и packaging pipeline:
+Подробная процедура установки — в `docs/installation.md` §4 (Alpine).
 
-- отдельный Rust target, например `x86_64-unknown-linux-musl`;
-- отдельные targets для ARM;
-- проверка всех native dependencies;
-- отдельный `APKBUILD`;
-- сборка и тестирование через Alpine toolchain;
-- проверка runtime behavior на musl;
-- отдельную публикацию `.apk` repository metadata.
+Поддержка Alpine `x86_64-unknown-linux-musl` в Alpine-builder environment
+подтверждена локально (мусл-билд syslog-generator собирается за ~4-5 минут,
+~14.8 MB ELF static-pie бинарь; `abuild -r` упаковывает в `.apk`). GitHub Actions
+через `.github/workflows/packages.yml:build-apk` job собирает `.apk` в Alpine
+container, upload'ит в GitHub Release как `syslog-generator-$VERSION-r$PKGREL.apk`.
 
-Даже если основной бинарник Rust удаётся собрать статически, это не устраняет
-необходимость проверять native dependencies, optional features и packaging
-integration. Для проекта также требуется отдельно поддерживать musl build в
-CI и отслеживать отличия поведения glibc и musl.
+См. также `alpine/README.md` для maintainer notes по локальной сборке
+и `alpine/APKBUILD` для шаблона.
 
-Сейчас отдельный musl target и нативный Alpine packaging не входят в
-поддерживаемый release process. Docker image проекта не является обещанием
-поддержки Alpine `.apk`.
+**Out of scope (отложено):**
+- aarch64 musl build — initial scope только x86_64. Issue #159 явно out-of-scope
+  aarch64. Расширение через cross-compilation (QEMU или cross) — follow-up issue.
 
 ## Container registries
 

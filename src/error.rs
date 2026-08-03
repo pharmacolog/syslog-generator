@@ -120,7 +120,7 @@ pub enum ConfigError {
     Yaml {
         path: String,
         #[source]
-        source: serde_yaml::Error,
+        source: serde_yaml_ng::Error,
     },
 
     #[error("неподдерживаемое расширение файла профиля {extension:?} (путь: {path:?}); ожидается .json, .yaml или .yml")]
@@ -142,7 +142,7 @@ impl ConfigError {
         }
     }
 
-    pub fn yaml(path: impl Into<String>, source: serde_yaml::Error) -> Self {
+    pub fn yaml(path: impl Into<String>, source: serde_yaml_ng::Error) -> Self {
         Self::Yaml {
             path: path.into(),
             source,
@@ -275,11 +275,11 @@ mod tests {
         let _ = parsed;
     }
 
-    /// D3 (v8.5.0): `ConfigError::yaml` корректно оборачивает serde_yaml::Error.
+    /// D3 (v8.5.0): `ConfigError::yaml` корректно оборачивает serde_yaml_ng::Error.
     #[test]
     fn config_error_yaml_wraps_source() {
         // Заведомо невалидный YAML — дублирование ключа в мапе приводит к ошибке.
-        let yaml_err = serde_yaml::from_str::<serde_yaml::Value>("a: 1\na: 2\n").unwrap_err();
+        let yaml_err = serde_yaml_ng::from_str::<serde_yaml_ng::Value>("a: 1\na: 2\n").unwrap_err();
         let e = ConfigError::yaml("profile.yaml", yaml_err);
         let s = format!("{e}");
         assert!(s.contains("profile.yaml"), "got: {s}");

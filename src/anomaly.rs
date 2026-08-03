@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn burst_injection_round_trip() {
         let yaml = "type: burst-injection\nrate_multiplier: 10.0\ninterval_secs: 30.0\nduration_secs: 2.0\n";
-        let a: Anomaly = serde_yaml::from_str(yaml).expect("yaml");
+        let a: Anomaly = serde_yaml_ng::from_str(yaml).expect("yaml");
         assert_eq!(
             a.kind,
             AnomalyKind::BurstInjection {
@@ -273,14 +273,14 @@ mod tests {
                 duration_secs: 2.0
             }
         );
-        let back = serde_yaml::to_string(&a).expect("to_string");
+        let back = serde_yaml_ng::to_string(&a).expect("to_string");
         assert!(back.contains("burst-injection"), "got: {back}");
     }
 
     #[test]
     fn slow_drip_round_trip() {
         let yaml = "type: slow-drip\nrate_divisor: 5.0\nduration_secs: 60.0\n";
-        let a: Anomaly = serde_yaml::from_str(yaml).expect("yaml");
+        let a: Anomaly = serde_yaml_ng::from_str(yaml).expect("yaml");
         assert_eq!(
             a.kind,
             AnomalyKind::SlowDrip {
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn packet_loss_round_trip() {
         let yaml = "type: packet-loss\nloss_percent: 20.0\n";
-        let a: Anomaly = serde_yaml::from_str(yaml).expect("yaml");
+        let a: Anomaly = serde_yaml_ng::from_str(yaml).expect("yaml");
         assert_eq!(a.kind, AnomalyKind::PacketLoss { loss_percent: 20.0 });
     }
 
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn unknown_kind_rejected() {
         let yaml = "type: not-a-kind\n";
-        let res: Result<Anomaly, _> = serde_yaml::from_str(yaml);
+        let res: Result<Anomaly, _> = serde_yaml_ng::from_str(yaml);
         assert!(res.is_err(), "expected unknown tag to be rejected");
     }
 

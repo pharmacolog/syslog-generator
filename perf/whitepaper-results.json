@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0.0",
+  "issue": 106,
+  "purpose": "Issue #106 (GTM-1 whitepaper) schema + status artifact.",
+  "status": "schema_only",
+  "status_meaning": {
+    "schema_only": "Committed initial state. No harness run has been recorded.",
+    "dry_run": "Harness executed in dry-run mode. Commands printed, not run. No measurements.",
+    "partial": "Some (workload, tool) cells were measured; others were n/a, skipped, or failed.",
+    "complete": "All 4 compared tools x 4 workloads measured successfully."
+  },
+  "generated_by": "benchmarks/whitepaper-2026/scripts/04_collect.py",
+  "generated_at": "2026-07-25T00:00:00Z",
+  "host": {
+    "os": "Darwin",
+    "arch": "arm64",
+    "kernel": "24.6.0",
+    "cpu_count": 12,
+    "cpu_model": "Apple M2 Max",
+    "memory_bytes": null
+  },
+  "tool_versions": {
+    "syslog_generator": {
+      "available": false,
+      "path": null,
+      "version": null
+    },
+    "loggen": {
+      "available": false,
+      "path": null,
+      "version": null
+    },
+    "flog": {
+      "available": false,
+      "path": null,
+      "version": null
+    },
+    "tcpkali": {
+      "available": false,
+      "path": null,
+      "version": null
+    }
+  },
+  "compared_tools": [
+    "syslog_generator",
+    "loggen",
+    "flog",
+    "tcpkali"
+  ],
+  "workloads": [
+    {
+      "id": "udp_100rps_256b",
+      "transport": "udp",
+      "target_msg_per_sec": 100,
+      "target_bytes_per_msg": 256,
+      "framing": "datagram",
+      "duration_secs": 30,
+      "header_overhead_bytes": 51,
+      "template_body_bytes": 205,
+      "receiver": {
+        "address": "127.0.0.1",
+        "port": 5140,
+        "protocol": "udp"
+      },
+      "issue_106_spec": "UDP 100 msg/s 256B",
+      "config_path": "benchmarks/whitepaper-2026/configs/workload_udp_100rps_256b.json"
+    },
+    {
+      "id": "tcp_10krps_1kb",
+      "transport": "tcp",
+      "target_msg_per_sec": 10000,
+      "target_bytes_per_msg": 1024,
+      "framing": "octet-counting",
+      "duration_secs": 30,
+      "header_overhead_bytes": 51,
+      "template_body_bytes": 973,
+      "receiver": {
+        "address": "127.0.0.1",
+        "port": 6010,
+        "protocol": "tcp"
+      },
+      "issue_106_spec": "TCP 10k msg/s 1KB",
+      "config_path": "benchmarks/whitepaper-2026/configs/workload_tcp_10krps_1kb.json"
+    },
+    {
+      "id": "tls_5krps_1kb",
+      "transport": "tls",
+      "target_msg_per_sec": 5000,
+      "target_bytes_per_msg": 1024,
+      "framing": "octet-counting",
+      "duration_secs": 30,
+      "header_overhead_bytes": 51,
+      "template_body_bytes": 973,
+      "receiver": {
+        "address": "127.0.0.1",
+        "port": 6514,
+        "protocol": "tls"
+      },
+      "issue_106_spec": "TLS 5k msg/s 1KB",
+      "config_path": "benchmarks/whitepaper-2026/configs/workload_tls_5krps_1kb.json"
+    },
+    {
+      "id": "kafka_50krps_256b",
+      "transport": "kafka",
+      "target_msg_per_sec": 50000,
+      "target_bytes_per_msg": 256,
+      "framing": "kafka-protocol",
+      "duration_secs": 30,
+      "header_overhead_bytes": 51,
+      "template_body_bytes": 205,
+      "receiver": {
+        "address": "127.0.0.1",
+        "port": 9092,
+        "protocol": "kafka",
+        "topic": "syslog-whitepaper-2026"
+      },
+      "issue_106_spec": "Kafka 50k msg/s 256B",
+      "config_path": "benchmarks/whitepaper-2026/configs/workload_kafka_50krps_256b.json"
+    }
+  ],
+  "runs": [],
+  "constraints": {
+    "no_fabricated_measurements": true,
+    "issue_106_spec": "Issue #106: fair, reproducible, comparable benchmark of syslog-generator vs loggen vs flog vs tcpkali.",
+    "min_runs_per_cell": 1,
+    "default_runs_per_cell": 1,
+    "outliers_dropped": 0,
+    "rate_tolerance_fraction_default": 0.05,
+    "size_tolerance_fraction_default": 0.05,
+    "exit_code_policy": {
+      "schema_only": 0,
+      "dry_run": 0,
+      "partial_with_failures": 1,
+      "complete": 0,
+      "REQUIRE_TOOLS=1_supported_skipped": 2,
+      "REQUIRE_TOOLS=1_supported_failed": 1
+    },
+    "invariant": "If runs[i].status == 'completed', runs[i].measurements is non-empty. If runs[i].status in ('skipped', 'dry_run', 'n_a'), runs[i].measurements is null/absent.",
+    "capability_matrix": {
+      "syslog_generator": {
+        "udp": "supported",
+        "tcp": "supported",
+        "tls": "supported",
+        "kafka": "N/A (no real consumer)"
+      },
+      "loggen": {
+        "udp": "supported",
+        "tcp": "N/A (syslog-ng loggen is UDP-only)",
+        "tls": "N/A (UDP-only)",
+        "kafka": "N/A"
+      },
+      "flog": {
+        "udp": "N/A (no native network output)",
+        "tcp": "N/A",
+        "tls": "N/A",
+        "kafka": "N/A"
+      },
+      "tcpkali": {
+        "udp": "N/A (TCP/TLS only)",
+        "tcp": "supported",
+        "tls": "supported",
+        "kafka": "N/A"
+      }
+    }
+  },
+  "fairness": {
+    "same_hardware": true,
+    "same_network": "loopback 127.0.0.1 for all 4 workloads",
+    "same_receiver": "single Python byte-counter (scripts/receiver.py)",
+    "same_duration_secs": 30,
+    "same_message_size_bytes": "256 for udp/kafka, 1024 for tcp/tls",
+    "same_target_rate": "all tools configured with the spec'd target",
+    "rate_tolerance_fraction": 0.05,
+    "size_tolerance_fraction": 0.05,
+    "measurement_window": "sender runtime (no warmup, no time subtraction)",
+    "notes": "See benchmarks/whitepaper-2026/METHODOLOGY.md for full fairness protocol."
+  },
+  "external_pending": {
+    "marketing_publications": "EXTERNAL PENDING (Habr, dev.to, Telegram, Twitter/X, Reddit, HN)",
+    "citation_metrics": "EXTERNAL PENDING (citations count, GitHub stars via UTM)",
+    "containerized_dockerfiles": "EXTERNAL PENDING (see benchmarks/whitepaper-2026/docker/README.md)",
+    "kafka_consumer": "EXTERNAL PENDING (real consumer requires librdkafka, out of scope v1)"
+  }
+}

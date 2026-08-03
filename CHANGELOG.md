@@ -1,6 +1,83 @@
 
 # Changelog
 
+## v10.7.20 - 2026-08-03 (v11.6 milestone follow-up)
+
+**Patch-release: Issue #134 serde_yaml_ng migration + Issue #133 release profile hardening + Issue #106 whitepaper harness skeleton.** Все 3 PR влиты в dev, CI зелёный.
+
+### Changed
+
+- **serde_yaml 0.9 → serde_yaml_ng 0.10** (Issue #134, PR #177): drop-in замена archived dtolnay crate на active fork (acatton). MSRV 1.64 ≤ проектного 1.95. Тот же `unsafe-libyaml 0.2.11` FFI, та же serde-derive семантика. Security: убран `serde_yaml 0.9.34+deprecated` из графа. **Breaking в public API**: `ConfigError::Yaml::source` теперь `serde_yaml_ng::Error`. См. `docs/MIGRATION.md` §6 — пошаговый downstream guide.
+- **`[profile.release]` hardening** (Issue #133, PR #178): `panic = "abort"`, `strip = "symbols"`, `debug = 2`, `split-debuginfo = "packed"`. Production binary теряет unwind tables + symbol table; Cargo создаёт packed external debug artifact (`.dSYM`/`.dwp`), который проходит `atos`/`addr2line` symbolication. opt-level=3 и lto=fat сохранены — perf benchmark hot_path 1781 vs 1731 ns = +2.9% (в пределах ±5% gate).
+- **`scripts/verify-release-profile.sh`** (Issue #133): reproducible paired measurement, исследует `strip={symbols,true,debuginfo}` × `opt-level={3,s,z}` в isolated temp dirs. macOS: `.dSYM`+`atos`, Linux: `.dwp`+`addr2line`. Default `MIN_REDUCTION_PERCENT=30` exit 1 при недостижении.
+- **`docs/PERFORMANCE.md` §2.2**: release profile секция обновлена фактическими paired measurements (baseline 11,757,008 bytes; strip=symbols −25.53%; opt-level=s −40.96%; opt-level=z −51.06%).
+- **`docs/MIGRATION.md` §6**: новый раздел с breaking-change guidance для downstream (downstream `Cargo.toml` change, Rust namespace rename, валидный `if let ConfigError::Yaml` pattern).
+- **`docs/FUZZING.md`, `examples/load_shape_burst.yaml`, `fuzz/fuzz_targets/profile_parser.rs`, `CLAUDE_HANDOFF.md`**: inventory sweep (sed-replace `serde_yaml` → `serde_yaml_ng`).
+- **`api-snapshot.txt`**: 4 строки (`ConfigError::Yaml::source` + ctor).
+
+### Added
+
+- **`benchmarks/whitepaper-2026/`** (Issue #106, PR #179, GTM-1 whitepaper harness):
+  reproducible skeleton для сравнения syslog-generator против loggen/flog/tcpkali.
+  4 workload'а (UDP 100 msg/s 256B, TCP 10k msg/s 1KB, TLS 5k msg/s 1KB, Kafka
+  50k msg/s 256B), strict rate gate 95–105%, size gate ±5%, Python
+  octet-counting receiver, 132 self-test assertions. `make all` по
+  умолчанию dry-run (exit 0); `REQUIRE_TOOLS=1` fail-fast при отсутствующем
+  обязательном tool.
+- **`docs/whitepaper-2026.md` + `.en.md` + `.ru.md`**: drafts для
+  publication на Habr/dev.to. Публикация, citations, UTM-stars —
+  `EXTERNAL PENDING` (post-benchmark items).
+- **`perf/whitepaper-results.json`**: schema-only artifact (`status`,
+  `tool_versions`, `runs=[]`); populated after `make all`.
+
+### Quality Gates
+
+- ✅ `cargo fmt --all -- --check` clean.
+- ✅ `cargo clippy --all-targets -- -D warnings` clean (default + kafka).
+- ✅ `cargo test --locked --lib` — 473 passed, 0 failed, 1 ignored.
+- ✅ `cargo test --locked --features kafka,test-helpers` — green.
+- ✅ `cargo public-api --features test-helpers` vs `api-snapshot.txt` — 0 строк diff.
+- ✅ `bash scripts/check-n7-invariant.sh` — clean.
+- ✅ `cargo deny check` — advisories ok (serde_yaml 0.9.34+deprecated удалён).
+- ✅ `cargo machete` — no unused deps.
+- ✅ `bash scripts/check-advisory-expiry.sh` — PASS.
+- ✅ All 7 CI blocking checks + non-blocking (CodeQL, perf regression, macos test) green.
+- ✅ hot_path bench: 1781 ns (PR #178) vs 1731 ns (dev) = +2.9%, в пределах ±5%.
+- ✅ Whitepaper harness: 132 PASS / 0 FAIL; real UDP run DURATION=30 → 99.05 msg/s (99% target, в 95-105% gate).
+
+### Known limitations / external pending
+
+- **Issue #133**: paired measurement показал −25.53% с `strip="symbols"` (`opt-level=3`). ≥30% acceptance достижимо только с `opt-level="s"` (−40.96%) или `opt-level="z"` (−51.06%), но требует отдельного perf-regression gate decision (cold bench compile прерван OOM в этой сессии). `scripts/verify-release-profile.sh` исследует все варианты.
+- **Issue #134**: 2h `cargo fuzz` budget НЕ выполнен (только 30-сек smoke: 487 138 runs, 0 crashes). Полный 2h требует отдельного PR в ночном окне / CI.
+- **Issue #106**: marketing publications (Habr/dev.to), ≥5 citations, ≥50 UTM-attributed stars, Kafka real consumer для fair comparison — все `EXTERNAL PENDING` после фактических замеров на эталонной VM.
+- **Issue #106**: контейнеризация tools (Dockerfile'ы с pinned versions/SHA) удалена — не угадываем upstream versions; `benchmarks/whitepaper-2026/docker/` содержит только `gen-cert.sh` + README.
+
+## Unreleased (PR-A0 baseline)
+
+### Added
+
+- **Alpine `.apk` packaging** ([Issue #159](https://github.com/pharmacolog/syslog-generator/issues/159), milestone v11.4):
+  - `alpine/APKBUILD` — hand-written Alpine package recipe (musl build, man-page,
+    license, FHS layout).
+  - `alpine/README.md` — maintainer notes по локальной сборке.
+  - `.github/workflows/packages.yml` — новый `build-apk` job (docker run alpine:3.21 +
+    cargo build --target x86_64-unknown-linux-musl + abuild -r). Output:
+    `syslog-generator-$VERSION-r$PKGREL.apk`.
+  - `verify-install` matrix extended: добавлен `alpine:3.21` entry с `apk add
+    --allow-untrusted` + smoke test (`apk info`, `syslog-generator --version`).
+  - `release` job: extended find-pattern для `*.apk`; добавлен отдельный
+    download-artifact step для Alpine.
+  - `docs/installation.md` §4 обновлён: Alpine через GitHub Releases с GPG
+    signature verification (apk v2.14+).
+  - `docs/distribution-channels.md` Alpine секция: статус ❌ → ✅.
+
+### Policy update
+
+- **PPA и COPR — Not Planned** (решение maintainer'а 2026-07-25): solo-maintainer
+  overhead + source packaging duplication делают эти каналы нецелесообразными
+  для проекта. Alpine `.apk` (Issue #159) покрывает основной use-case. См.
+  `docs/distribution-channels.md` §Политика для обоснования.
+
 ## Unreleased (PR-A0 baseline)
 
 ### Added

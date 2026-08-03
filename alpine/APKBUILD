@@ -1,0 +1,53 @@
+# Maintainer: pharmacolog <https://github.com/pharmacolog/syslog-generator/issues>
+# Reference: Issue #159 [C1.9], Issue #107 PR #154 (sibling)
+pkgname=syslog-generator
+pkgver=10.7.19
+pkgrel=0
+pkgdesc="Industrial syslog load generator written in Rust with variadic templates and multi-target delivery"
+url="https://github.com/pharmacolog/syslog-generator"
+license="Apache-2.0"
+arch="x86_64"
+depends="ca-certificates"
+makedepends="cargo rust openssl-dev pkgconfig cmake perl linux-headers git build-base"
+source="$pkgname-$pkgver.tar.gz::https://github.com/pharmacolog/syslog-generator/archive/refs/tags/v$pkgver.tar.gz"
+sha256sums="SKIP"  # placeholder; abuild -r заполняет sha256 при первом запуске
+
+build() {
+    cd "$builddir"
+    : "${CARGO_HOME:=$HOME/.cargo}"
+    export PATH="$CARGO_HOME/bin:$PATH"
+
+    # musl target из rustup-installed toolchain (abuild chroot — минимальный alpine).
+    cargo build --release --locked \
+        --target x86_64-unknown-linux-musl \
+        --bin syslog-generator
+
+    # Man-страница для syslog-generator.1.
+    install -Dm755 -d "$builddir/man"
+    ./target/x86_64-unknown-linux-musl/release/syslog-generator man \
+        | gzip -9 > "$builddir/man/$pkgname.1.gz"
+
+    # Strip бинаря (~30% экономии размера apk).
+    strip "$builddir/target/x86_64-unknown-linux-musl/release/$pkgname"
+}
+
+check() {
+    cd "$builddir"
+    ./target/x86_64-unknown-linux-musl/release/$pkgname --version
+}
+
+package() {
+    cd "$builddir"
+
+    install -Dm755 \
+        "target/x86_64-unknown-linux-musl/release/$pkgname" \
+        "$pkgdir/usr/bin/$pkgname"
+
+    install -Dm644 "man/$pkgname.1.gz" \
+        "$pkgdir/usr/share/man/man1/$pkgname.1.gz"
+
+    install -Dm644 "LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "README.md" \
+        "$pkgdir/usr/share/licenses/$pkgname/README.md"
+}

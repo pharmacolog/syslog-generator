@@ -1,0 +1,50 @@
+{
+  "_doc": "Issue #106 / GTM-1 / whitepaper-2026. TCP 10000 msg/s, 1024B syslog body. _-prefixed keys are harness metadata; rest is a valid syslog-generator profile.",
+  "_workload_id": "tcp_10krps_1kb",
+  "_issue_spec": {
+    "transport": "tcp",
+    "target_msg_per_sec": 10000,
+    "target_bytes_per_msg": 1024,
+    "framing": "octet-counting",
+    "duration_secs": 30,
+    "header_overhead_bytes": 51,
+    "template_body_bytes": 973
+  },
+  "_receiver": {
+    "address": "127.0.0.1",
+    "port": 6010,
+    "protocol": "tcp"
+  },
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "immediate",
+    "drain_timeout_secs": 1
+  },
+  "phases": [
+    {
+      "name": "tcp_10krps_1kb",
+      "format": "rfc5424",
+      "duration_secs": 30,
+      "messages_per_second": 10000,
+      "templates": [
+        "xWG_loadgen_2026_padding_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "syslog": {
+        "facility": 16,
+        "severity": 6,
+        "hostname": "host01",
+        "app_name": "gen",
+        "procid": "1",
+        "msgid": "ID1"
+      }
+    }
+  ],
+  "targets": [
+    {
+      "address": "127.0.0.1:6010",
+      "transport": "tcp",
+      "connections": 4,
+      "framing": "octet-counting"
+    }
+  ]
+}

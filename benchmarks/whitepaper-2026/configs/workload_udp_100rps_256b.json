@@ -1,0 +1,49 @@
+{
+  "_doc": "Issue #106 / GTM-1 / whitepaper-2026. UDP 100 msg/s, 256B syslog body. _-prefixed keys are harness metadata; rest is a valid syslog-generator profile.",
+  "_workload_id": "udp_100rps_256b",
+  "_issue_spec": {
+    "transport": "udp",
+    "target_msg_per_sec": 100,
+    "target_bytes_per_msg": 256,
+    "framing": "datagram",
+    "duration_secs": 30,
+    "header_overhead_bytes": 51,
+    "template_body_bytes": 205
+  },
+  "_receiver": {
+    "address": "127.0.0.1",
+    "port": 5140,
+    "protocol": "udp"
+  },
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "immediate",
+    "drain_timeout_secs": 1
+  },
+  "phases": [
+    {
+      "name": "udp_100rps_256b",
+      "format": "rfc5424",
+      "duration_secs": 30,
+      "messages_per_second": 100,
+      "templates": [
+        "xWG_loadgen_2026_padding_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "syslog": {
+        "facility": 16,
+        "severity": 6,
+        "hostname": "host01",
+        "app_name": "gen",
+        "procid": "1",
+        "msgid": "ID1"
+      }
+    }
+  ],
+  "targets": [
+    {
+      "address": "127.0.0.1:5140",
+      "transport": "udp",
+      "connections": 1
+    }
+  ]
+}

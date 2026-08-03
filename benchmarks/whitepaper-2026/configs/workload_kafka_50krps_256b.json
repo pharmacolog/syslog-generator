@@ -1,0 +1,55 @@
+{
+  "_doc": "Issue #106 / GTM-1 / whitepaper-2026. KAFKA 50000 msg/s, 256B syslog body. _-prefixed keys are harness metadata; rest is a valid syslog-generator profile.",
+  "_workload_id": "kafka_50krps_256b",
+  "_issue_spec": {
+    "transport": "kafka",
+    "target_msg_per_sec": 50000,
+    "target_bytes_per_msg": 256,
+    "framing": "kafka-protocol",
+    "duration_secs": 30,
+    "header_overhead_bytes": 51,
+    "template_body_bytes": 205
+  },
+  "_receiver": {
+    "address": "127.0.0.1",
+    "port": 9092,
+    "protocol": "kafka",
+    "topic": "syslog-whitepaper-2026"
+  },
+  "distribution": "round-robin",
+  "shutdown": {
+    "mode": "immediate",
+    "drain_timeout_secs": 1
+  },
+  "phases": [
+    {
+      "name": "kafka_50krps_256b",
+      "format": "rfc5424",
+      "duration_secs": 30,
+      "messages_per_second": 50000,
+      "templates": [
+        "xWG_loadgen_2026_padding_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "syslog": {
+        "facility": 16,
+        "severity": 6,
+        "hostname": "host01",
+        "app_name": "gen",
+        "procid": "1",
+        "msgid": "ID1"
+      }
+    }
+  ],
+  "targets": [
+    {
+      "address": "127.0.0.1:9092",
+      "transport": "kafka",
+      "connections": 1,
+      "kafka_topic": "syslog-whitepaper-2026",
+      "kafka_compression": "lz4",
+      "kafka_linger_ms": 5,
+      "kafka_max_batch_size": 4096,
+      "kafka_client_id": "syslog-generator-whitepaper-2026"
+    }
+  ]
+}

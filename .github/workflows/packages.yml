@@ -218,6 +218,154 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Issue #159 [C1.9]: Alpine .apk packaging.
+  #
+  # Подход: docker run alpine:3.21 на ubuntu-latest runner (НЕ native Alpine
+  # runner — GitHub его не предоставляет). musl target x86_64-unknown-linux-musl.
+  # abuild упаковывает бинарь + man + license в .apk.
+  #
+  # Verify-install (verify job) использует apk add --allow-untrusted + version.
+  build-apk:
+    name: Build .apk (Alpine, k8s-like minimal)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-packages
+          cache-on-failure: true
+
+      - name: Install abuild host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-sig fakeroot sudo
+          # abuildsudo в alpine-based container; здесь — файл-заглушка.
+          # /etc/sudoers.d/abuild-build создаётся в Alpine контейнере.
+
+      - name: Compute source tarball sha256
+        id: sha
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            curl -fsSL "https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.ref_name }}.tar.gz" \
+              -o /tmp/src.tar.gz
+          else
+            # CI dev/test: generate local source archive.
+            git archive --format=tgz --prefix="syslog-generator-$VERSION/" \
+              -o /tmp/src.tar.gz HEAD
+          fi
+          echo "sha256=$(sha256sum /tmp/src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Render APKBUILD
+        # Подставляем $pkgver и $sha256sums в APKBUILD через sed.
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.sha.outputs.VERSION }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+          sed -e "s/@@VERSION@@/$VERSION/g" \
+              -e "s/@@SHA@@/$SHA/g" \
+              alpine/APKBUILD > /tmp/APKBUILD
+          cat /tmp/APKBUILD
+
+      - name: Build .apk in Alpine container
+        # musl build + abuild -r. Pass abuild.conf через volume mount.
+        # abuild требует user-mode chroot (по умолчанию), используем fakeroot.
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/abuild-home
+          chmod 700 /tmp/abuild-home
+
+          docker run --rm \
+            -v "$(pwd):/src" \
+            -v /tmp/abuild-home:/home/build/.abuild \
+            -v /tmp/APKBUILD:/tmp/APKBUILD:ro \
+            -w /src \
+            -u root \
+            alpine:3.21 \
+            sh -c '
+              set -eu
+              apk add --no-cache alpine-sdk bash sudo curl fakeroot openssl ca-certificates
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0 --profile minimal
+              . "$HOME/.cargo/env"
+              rustup target add x86_64-unknown-linux-musl
+
+              # 1. Generate key as build user.
+              adduser -D -G abuild build
+              mkdir -p /home/build/.abuild
+              sudo -u build openssl genrsa -out /home/build/.abuild/build.rsa 2048
+              sudo -u build openssl rsa -in /home/build/.abuild/build.rsa \
+                -pubout -out /home/build/.abuild/build.rsa.pub
+              cat > /home/build/.abuild/abuild.conf <<EOF
+          PACKAGER="OpenCode <opencode@local>"
+          PACKAGER_PRIVKEY="/home/build/.abuild/build.rsa"
+          PACKAGER_PUBKEY="/home/build/.abuild/build.rsa.pub"
+          EOF
+              chown -R build:abuild /home/build/.abuild
+              chmod 700 /home/build/.abuild
+              install -D -m 644 /home/build/.abuild/build.rsa.pub /etc/apk/keys/build.rsa.pub
+
+              # 2. abuild-keygen creates /home/build/.abuild/build.rsa if not exists.
+              #    For our case we manually created key above.
+              # 3. Configure abuild: run as build user via sudo (NOPASSWD for /usr/bin/abuild).
+              echo "build ALL=(ALL) NOPASSWD: /usr/bin/abuild" > /etc/sudoers.d/abuild-build
+              chmod 440 /etc/sudoers.d/abuild-build
+              visudo -c
+
+              # 4. Build musl binary (pre-flight verified locally).
+              cd /src
+              cargo build --release --locked \
+                --target x86_64-unknown-linux-musl \
+                --bin syslog-generator
+              mkdir -p alpine/man
+              ./target/x86_64-unknown-linux-musl/release/syslog-generator man \
+                | gzip -9 > alpine/man/syslog-generator.1.gz
+
+              # 5. abuild -r as build user.
+              mkdir -p /home/build/packages
+              chown -R build:abuild /src/alpine /home/build/packages
+              cp /tmp/APKBUILD /src/alpine/APKBUILD
+              chown build:abuild /src/alpine/APKBUILD
+              cd /src/alpine
+              sudo -n -u build abuild -r 2>&1 | tail -30
+              find /home/build/packages -name "*.apk" -type f
+            '
+
+      - name: Stage .apk output
+        id: locate
+        run: |
+          set -euo pipefail
+          APK=$(find /tmp/abuild-home -name 'syslog-generator-*.apk' -type f 2>/dev/null | head -1)
+          if [[ -z "$APK" ]]; then
+            # Fallback: search in user's home (if not in volume).
+            APK=$(find ~ -name 'syslog-generator-*.apk' -type f 2>/dev/null | head -1)
+          fi
+          if [[ -z "$APK" ]]; then
+            echo "::error::.apk not found"
+            exit 1
+          fi
+          mkdir -p dist/
+          cp "$APK" dist/$(basename "$APK")
+          echo "apk_path=dist/$(basename "$APK")" >> "$GITHUB_OUTPUT"
+          echo "::notice::Built $APK ($(stat -c %s "$APK") bytes)"
+
+      - name: Upload .apk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-apk
+          path: ${{ steps.locate.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 30
+
   sign:
     # Issue #155 [C1.8] sub-task 2: GPG-подпись .deb / .rpm + SHA256SUMS manifest.
     #
@@ -448,7 +596,7 @@ jobs:
     name: Verify install (${{ matrix.distro }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [sign]
+    needs: [sign, build-apk]
     permissions:
       contents: read
     strategy:
@@ -465,15 +613,21 @@ jobs:
             artifact: syslog-generator-signed-packages
             file_ext: rpm
             verify_cmd: rpm -K
+          # Issue #159 [C1.9]: Alpine .apk install + smoke test.
+          - distro: alpine
+            image: alpine:3.21
+            artifact: syslog-generator-apk
+            file_ext: apk
+            verify_cmd: 'apk add --allow-untrusted'
     steps:
-      - name: Download signed packages artifact
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/
 
       - name: Install + smoke test + signature verify (docker run)
-        # Два matrix entry: ubuntu + apt, fedora + dnf.
+        # Три matrix entry: ubuntu + apt, fedora + dnf, alpine + apk.
         # Используем `docker run` (НЕ add-job-container — для CI reproducibility).
         # find внутри container надёжнее, чем basename host-path (artifact
         # extract'ится в dist/<artifact-name>/<file> под docker run).
@@ -495,7 +649,7 @@ jobs:
                        dpkg-sig --verify \"\$PKG\" && \
                        syslog-generator --version && \
                        syslog-generator completions bash | head -3"
-          else
+          elif [ "${{ matrix.file_ext }}" = "rpm" ]; then
             docker run --rm \
               -v "$(pwd)/dist:/dist:ro" \
               "${{ matrix.image }}" \
@@ -512,13 +666,26 @@ jobs:
                        rpm -qi syslog-generator && \
                        syslog-generator --version && \
                        syslog-generator completions bash | head -3"
+          else
+            # Issue #159: Alpine .apk install + smoke test.
+            docker run --rm \
+              -v "$(pwd)/dist:/dist:ro" \
+              "${{ matrix.image }}" \
+              sh -c "set -e; \
+                    apk add --no-cache ca-certificates; \
+                    APK=\$(find /dist -name '*.apk' -type f ! -name '*kafka*' | head -1); \
+                    echo \"--- Install .apk ---\" && \
+                    apk add --allow-untrusted \"\$APK\" && \
+                    echo \"--- Verify install + smoke test ---\" && \
+                    syslog-generator --version && \
+                    apk info syslog-generator"
           fi
 
   release:
     name: Upload to GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [sign, verify-install]
+    needs: [sign, build-apk, verify-install]
     # Только для tag push (НЕ workflow_dispatch — это debugging).
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     environment: release
@@ -532,6 +699,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: syslog-generator-signed-packages
+          path: dist/
+
+      - name: Download .apk artifact (Issue #159)
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-apk
           path: dist/
 
       - name: Create release если отсутствует
@@ -556,9 +729,10 @@ jobs:
           TAG="${{ github.ref_name }}"
           ls -la dist/
           # Issue #155 [C1.8]: GPG-подпись интегрирована в release process.
-          # Upload .deb, .rpm, SHA256SUMS, SHA256SUMS.asc, scripts/keys/pharmacolog-release.asc.
+          # Issue #159 [C1.9]: .apk файл добавляется в release.
+          # Upload .deb, .rpm, .apk, SHA256SUMS, SHA256SUMS.asc, scripts/keys/pharmacolog-release.asc.
           find dist -type f \
-            \( -name '*.deb' -o -name '*.rpm' \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' \
                -o -name 'SHA256SUMS' -o -name 'SHA256SUMS.asc' \
                -o -name 'pharmacolog-release.asc' \) \
             -print0 \

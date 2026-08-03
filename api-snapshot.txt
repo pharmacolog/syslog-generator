@@ -970,12 +970,12 @@ pub syslog_generator::error::ConfigError::UnsupportedFormat::extension: alloc::s
 pub syslog_generator::error::ConfigError::UnsupportedFormat::path: alloc::string::String
 pub syslog_generator::error::ConfigError::Yaml
 pub syslog_generator::error::ConfigError::Yaml::path: alloc::string::String
-pub syslog_generator::error::ConfigError::Yaml::source: serde_yaml::error::Error
+pub syslog_generator::error::ConfigError::Yaml::source: serde_yaml_ng::error::Error
 impl syslog_generator::error::ConfigError
 pub fn syslog_generator::error::ConfigError::io(impl core::convert::Into<alloc::string::String>, core::io::error::Error) -> Self
 pub fn syslog_generator::error::ConfigError::json(impl core::convert::Into<alloc::string::String>, serde_json::error::Error) -> Self
 pub fn syslog_generator::error::ConfigError::unsupported_format(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn syslog_generator::error::ConfigError::yaml(impl core::convert::Into<alloc::string::String>, serde_yaml::error::Error) -> Self
+pub fn syslog_generator::error::ConfigError::yaml(impl core::convert::Into<alloc::string::String>, serde_yaml_ng::error::Error) -> Self
 impl core::convert::From<syslog_generator::error::ConfigError> for syslog_generator::error::RuntimeError
 pub fn syslog_generator::error::RuntimeError::from(syslog_generator::error::ConfigError) -> Self
 impl core::error::Error for syslog_generator::error::ConfigError
@@ -5362,12 +5362,12 @@ pub syslog_generator::ConfigError::UnsupportedFormat::extension: alloc::string::
 pub syslog_generator::ConfigError::UnsupportedFormat::path: alloc::string::String
 pub syslog_generator::ConfigError::Yaml
 pub syslog_generator::ConfigError::Yaml::path: alloc::string::String
-pub syslog_generator::ConfigError::Yaml::source: serde_yaml::error::Error
+pub syslog_generator::ConfigError::Yaml::source: serde_yaml_ng::error::Error
 impl syslog_generator::error::ConfigError
 pub fn syslog_generator::error::ConfigError::io(impl core::convert::Into<alloc::string::String>, core::io::error::Error) -> Self
 pub fn syslog_generator::error::ConfigError::json(impl core::convert::Into<alloc::string::String>, serde_json::error::Error) -> Self
 pub fn syslog_generator::error::ConfigError::unsupported_format(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
-pub fn syslog_generator::error::ConfigError::yaml(impl core::convert::Into<alloc::string::String>, serde_yaml::error::Error) -> Self
+pub fn syslog_generator::error::ConfigError::yaml(impl core::convert::Into<alloc::string::String>, serde_yaml_ng::error::Error) -> Self
 impl core::convert::From<syslog_generator::error::ConfigError> for syslog_generator::error::RuntimeError
 pub fn syslog_generator::error::RuntimeError::from(syslog_generator::error::ConfigError) -> Self
 impl core::error::Error for syslog_generator::error::ConfigError

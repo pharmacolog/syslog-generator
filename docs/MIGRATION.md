@@ -1,6 +1,8 @@
 # MIGRATION GUIDE
 
-> **Версия:** v10.7.4. Документ описывает breaking changes и шаги миграции.
+> **Статус:** Unreleased / v11.6 (Issue #134). Документ описывает breaking
+> changes и шаги миграции. Текущий released tag — v10.7.19; breaking changes
+> секции §6 ещё не выпущены.
 
 ## 1. v10.0.0 — Breaking cleanup (B1–B7)
 
@@ -169,7 +171,133 @@ API полностью backward-compatible.
 - **`rustls 0.23 → 0.27+`** (PR-8) — breaking в rustls API, может сломать
   custom `ClientConfig` extensions.
 
-## 6. Контакты и помощь
+## 6. `serde_yaml` → `serde_yaml_ng` (Issue #134, breaking в public API)
+
+Upstream `serde_yaml 0.9` (dtolnay) архивирован 2024-03. Мигрируем на активный
+drop-in форк `serde_yaml_ng 0.10` (acatton) — тот же `unsafe-libyaml` FFI,
+совместимый serde-derive API, та же internal `Value`/`Mapping`/`Sequence`
+структура. MSRV крейта `1.64`, MSRV проекта `1.95` — совместимо.
+
+### Что меняется в public API
+
+Меняется конкретный тип одного-единственного публичного поля — `source`
+варианта `ConfigError::Yaml`. Это `#[source]` источник через `thiserror`,
+поэтому публично наблюдаемое поведение: `source().downcast_ref::<Error>()`
+раньше давало `serde_yaml::Error`, теперь даёт `serde_yaml_ng::Error`. Семантика
+`Display` (`{source}` форматирует то же «line N, column M: ...») и сигнатура
+метода `std::error::Error::source` остаются — это **breaking** только если
+downstream явно аннотирует тип `serde_yaml::Error` или делает `downcast`.
+
+### Шаги миграции для downstream
+
+**1. `Cargo.toml` вашего проекта:**
+
+```toml
+[dependencies]
+# До:
+serde_yaml = "0.9"
+
+# После:
+serde_yaml_ng = "0.10"
+```
+
+**2. Зависимости (прямые `use`/`serde_yaml::` в вашем коде):**
+
+```rust
+// До:
+use serde_yaml::{Error as YamlError, Value as YamlValue};
+fn parse(s: &str) -> Result<YamlValue, YamlError> { serde_yaml::from_str(s) }
+
+// После:
+use serde_yaml_ng::{Error as YamlError, Value as YamlValue};
+fn parse(s: &str) -> Result<YamlValue, YamlError> { serde_yaml_ng::from_str(s) }
+```
+
+Механический sed-replace `serde_yaml::` → `serde_yaml_ng::` покрывает
+большинство случаев. Методы API (`from_str`, `from_reader`, `to_string`,
+`to_writer`, `Value`, `Mapping`, `Sequence`, `Number`, `Error`) — те же.
+
+**3. Сторона `syslog-generator`:**
+
+```rust
+// До: явный downcast или аннотация типа
+if let ConfigError::Yaml { source, .. } = &err {
+    let yaml_err: &serde_yaml::Error = source; // ← компилировалось на serde_yaml 0.9
+    println!("{yaml_err}");
+}
+
+// После:
+if let ConfigError::Yaml { source, .. } = &err {
+    let yaml_err: &serde_yaml_ng::Error = source; // ← нужно обновить аннотацию
+    println!("{yaml_err}");
+}
+```
+
+Опции патчинга:
+- **Механическая замена** (предпочтительно): `sed -i 's/serde_yaml::/serde_yaml_ng::/g' $(rg -l 'serde_yaml::' .)`
+- **Re-export-обёртка** (если нужен fallback): объявите в своём крейте
+  `pub use serde_yaml_ng as serde_yaml;` — API идентичен.
+
+### Что НЕ меняется
+
+- Поведение `load_profile_from_yaml_str` / `load_profile_from_path` (YAML→`Profile`).
+- Парсинг YAML-профилей (одинаковая семантика: serde-derive, тот же `Value`).
+- CLI, бинарь, схемы JSON Schema, fuzz harness — без изменений контракта.
+- Hot-path (генерация syslog-сообщений) — YAML не используется в hot-path,
+  см. §7 про честный статус bench rerun.
+
+### Альтернативные кандидаты (не выбраны)
+
+`serde_norway 0.9.42` (cafkafk, MSRV 1.71.1) и `yaml_serde 0.10.4`
+(The YAML Organization, MSRV 1.82, libyaml-rs без unsafe C) — оба drop-in.
+Не выбраны из-за предпочтения maintainer'а (issue #134) к `serde_yaml_ng`
+как ближайшему форку dtolnay.
+
+`serde_yml` (RUSTSEC-2025-0068) и `serde-saphyr` (typed-only, не DOM) —
+**не** являются drop-in и не мигрируем на них.
+
+## 7. Performance impact (Issue #134, измеренный)
+
+**A/B microbenchmark YAML-парсинга** (`/tmp/yaml-ab-bench`, criterion 0.8,
+100 samples, тот же `Profile` struct, тот же YAML, тот же rustc 1.95.0,
+та же машина — `serde_yaml 0.9` НЕ добавлен в project deps):
+
+```
+yaml_parse/serde_yaml_0.9     time:   [11.640 µs 11.668 µs 11.699 µs]
+                              thrpt:  [56.982 MiB/s 57.133 MiB/s 57.270 MiB/s]
+
+yaml_parse/serde_yaml_ng_0.10 time:   [11.597 µs 11.618 µs 11.640 µs]
+                              thrpt:  [57.271 MiB/s 57.380 MiB/s 57.483 MiB/s]
+```
+
+Δ ≈ −0.43% (≈ 50 нс) на `serde_yaml_ng` — в пределах noise одного
+criterion run. Регрессии на пути YAML→`Profile` не зафиксировано.
+
+**Hot-path bench на `serde_yaml_ng`** (`cargo bench --bench hot_path -- --quick`):
+
+| Bench | Time |
+|---|---|
+| `hot_path/rfc5424_with_faker` | 1.7373 µs (1.7371–1.7374) |
+| `template_render_only` | 104.73 ns (104.52–104.78) |
+| `faker_ipv4` | 90.27 ns (89.76–92.33) |
+| `faker_uuid` | 33.00 ns (32.81–33.79) |
+| `faker_username` | 20.19 ns (20.13–20.43) |
+
+YAML в `b.iter`-теле не вызывается (`load_profile_from_yaml_str` —
+один раз до `b.iter`, `benches/hot_path.rs:38`), поэтому эти числа не
+зависят от YAML-крейта.
+
+**Fuzz smoke** (`cargo fuzz run profile_parser -- -max_total_time=30 -max_len=4096`):
+
+```
+runs:    487138 in 30 seconds
+exec/s:  15714
+crashes: 0
+```
+
+Это 30-секундный smoke, не 2-часовой rerun из acceptance #134.
+
+## 8. Контакты и помощь
 
 - Issues: https://github.com/pharmacolog/syslog-generator/issues
 - Документация: `docs/USER_GUIDE.md`, `docs/DEVELOPER_GUIDE.md`

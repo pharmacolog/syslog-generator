@@ -1,6 +1,6 @@
 # D3 (v8.5.0): пример с load_shape в YAML.
 # Демонстрирует что сложные структуры (load_shape.burst) тоже
-# сериализуются через serde_yaml без потерь.
+# сериализуются через serde_yaml_ng без потерь.
 #
 # Запуск:
 #   cargo run --release -- --profile examples/load_shape_burst.yaml --validate --schema-strict

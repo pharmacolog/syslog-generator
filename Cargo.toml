@@ -3,14 +3,10 @@
 name = "syslog-generator"
 version = "10.7.19"
 edition = "2021"
-description = "Industrial syslog load generator written in Rust with variadic templates and multi-target delivery"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
 # фактически код собирается на stable 1.95).
 rust-version = "1.95"
-license = "Apache-2.0"
-homepage = "https://github.com/pharmacolog/syslog-generator"
-repository = "https://github.com/pharmacolog/syslog-generator"
 
 # v10.1.0 (Performance ч.1): LTO + codegen-units=1 для release profile.
 # Улучшает throughput на 5-15% за счёт cross-module inlining.
@@ -19,6 +15,10 @@ repository = "https://github.com/pharmacolog/syslog-generator"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = 2
+split-debuginfo = "packed"
 
 # PR-A0 (v10.8.0): release-like profile для benches.
 # Criterion benches ранее компилировались в debug-режиме (no opt, debug assertions),
@@ -58,7 +58,7 @@ debug = true
 # pgo = false
 
 [features]
-## F16 (v9.0.0): Kafka/Redpanda transport через pure-Rust клиент `rskafka`.
+## F16 (v9.3.0): Kafka/Redpanda transport через pure-Rust клиент `rskafka`.
 ## Opt-in — НЕ включён по умолчанию (позволяет не тянуть зависимости
 ## пользователям, которым Kafka не нужен). Включение: `--features kafka`.
 default = []
@@ -67,33 +67,6 @@ kafka = ["dep:rskafka"]
 ## нужны integration-тестам (например `ensure_rustls_provider_for_tests`).
 ## По умолчанию выключен — это не часть продакшн API.
 test-helpers = []
-
-# PR-C1.7 (Issue #107 [GTM-2]): package metadata для cargo-deb и cargo-rpm.
-# Позволяет собирать .deb и .rpm артефакты через `cargo deb` и `cargo rpm build`,
-# и загружать их в GitHub Releases через .github/workflows/packages.yml.
-[package.metadata.deb]
-maintainer = "Anton E. Gerasimov <anton@smg.org.ru>"
-copyright = "2026, Anton E. Gerasimov"
-license-file = ["LICENSE", "0"]
-extended-description = """\
-Syslog-generator — промышленный генератор нагрузки для серверов по \
-протоколу Syslog на Rust. Поддерживает вариативные шаблоны, multi-target \
-доставку и профили нагрузки с аномалиями (burst, packet loss, slow drip)."""
-section = "net"
-priority = "optional"
-depends = "$auto"
-features = ["noautorecommends"]
-maintainer-scripts = "debian-scripts/postinst"
-assets = [
-    ["target/man/syslog-generator.1.gz", "usr/share/man/man1/", "644"],
-]
-
-[package.metadata.rpm]
-# cargo-rpm config schema (BTreeMap<String, FileConfig>) — см.
-# https://github.com/rustrpm/cargo-rpm/blob/main/src/config.rs
-
-[package.metadata.rpm.targets.syslog-generator]
-path = "target/release/syslog-generator"
 
 [dependencies]
 anyhow = "1"
@@ -117,7 +90,7 @@ prometheus = { version = "0.14", default-features = false }
 # (std нужен для HashMap/Vec/Result).
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
 serde_json = "1"
-serde_yaml = "0.9"
+serde_yaml_ng = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "io-util", "fs"] }
 # PR-17e (v10.7.20): `parking_lot::Mutex` для SharedRx — замена `tokio::sync::Mutex`.
 # Sync mutex быстрее async на uncontended path (~30-100 нс/msg savings).

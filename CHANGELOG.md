@@ -5,6 +5,32 @@
 
 ### Added
 
+- **Alpine `.apk` packaging** ([Issue #159](https://github.com/pharmacolog/syslog-generator/issues/159), milestone v11.4):
+  - `alpine/APKBUILD` — hand-written Alpine package recipe (musl build, man-page,
+    license, FHS layout).
+  - `alpine/README.md` — maintainer notes по локальной сборке.
+  - `.github/workflows/packages.yml` — новый `build-apk` job (docker run alpine:3.21 +
+    cargo build --target x86_64-unknown-linux-musl + abuild -r). Output:
+    `syslog-generator-$VERSION-r$PKGREL.apk`.
+  - `verify-install` matrix extended: добавлен `alpine:3.21` entry с `apk add
+    --allow-untrusted` + smoke test (`apk info`, `syslog-generator --version`).
+  - `release` job: extended find-pattern для `*.apk`; добавлен отдельный
+    download-artifact step для Alpine.
+  - `docs/installation.md` §4 обновлён: Alpine через GitHub Releases с GPG
+    signature verification (apk v2.14+).
+  - `docs/distribution-channels.md` Alpine секция: статус ❌ → ✅.
+
+### Policy update
+
+- **PPA и COPR — Not Planned** (решение maintainer'а 2026-07-25): solo-maintainer
+  overhead + source packaging duplication делают эти каналы нецелесообразными
+  для проекта. Alpine `.apk` (Issue #159) покрывает основной use-case. См.
+  `docs/distribution-channels.md` §Политика для обоснования.
+
+## Unreleased (PR-A0 baseline)
+
+### Added
+
 - **Bench matrix expansion (Issue #87, PR-A0)**: 4 новых bench-файла
   дополняют существующий `hot_path.rs` и измеряют реальный runtime:
   - `benches/runtime.rs` — end-to-end `run_profile` (file transport, 20K msg).

@@ -31,7 +31,7 @@ PR: [#146](https://github.com/pharmacolog/syslog-generator/pull/146)
 1. [Поддерживаемые дистрибутивы](#1-поддерживаемые-дистрибутивы)
 2. [Ubuntu / Debian (.deb)](#2-ubuntu--debian-deb)
 3. [Fedora / RHEL / Rocky (.rpm)](#3-fedora--rhel--rocky-rpm)
-4. [Alpine (.apk)](#4-alpine-apk)
+4. [Alpine (via GitHub Releases)](#4-alpine-via-github-releases)
 5. [Сборка из исходников / `cargo install`](#5-сборка-из-источников--cargo-install)
 6. [Автодополнение shell](#6-автодополнение-shell)
 7. [Проверка установки (verification)](#7-проверка-установки-verification)
@@ -53,13 +53,13 @@ PR: [#146](https://github.com/pharmacolog/syslog-generator/pull/146)
 | RHEL 9 / Rocky Linux 9 | `.rpm` | ✅ supported | GitHub Releases |
 | AlmaLinux 9 | `.rpm` | ✅ supported | GitHub Releases |
 | openSUSE Leap / Tumbleweed | `.rpm` | ⚠️ experimental | GitHub Releases |
-| Alpine 3.19+ | `.apk` | ❌ **не поддерживается** | — (см. §4) |
+| Alpine 3.19+ | `.apk` | ✅ supported (`x86_64`) | GitHub Releases |
 | Arch Linux | AUR | ❌ не поддерживается официально | — |
 | macOS / Windows | — | ⚠️ только из исходников | [README.md](../README.md#-установка) |
 
 Архитектуры: `x86_64` (amd64) и `aarch64` (arm64).
 Динамическая линковка с `glibc` ≥ 2.31 (Ubuntu 20.04+, RHEL 9+, Debian 11+).
-Musl-билды для Alpine — **не предоставляются** (см. §4).
+Alpine `.apk` собирается для target `x86_64-unknown-linux-musl`.
 
 CI matrix (см. `docs/ROADMAP.md` → Веха G → v11.4):
 `debian: [bookworm, noble] × arch: [amd64, arm64]` и
@@ -161,30 +161,60 @@ sudo dnf upgrade syslog-generator
 
 ---
 
-## 4. Alpine (.apk)
+## 4. Alpine (via GitHub Releases)
 
-> **❌ Alpine-пакет официально не поддерживается** в milestone v11.4.
->
-> Причина: основная сборка линкуется динамически с `glibc` (через
-> `cargo-deb` / `cargo-rpm`). Alpine использует `musl`, что требует
-> отдельного `--target x86_64-unknown-linux-musl` билда + проверки всех
-> нативных зависимостей (rustls → ring, kafka-lz4/zstd, file rotation).
->
-> **Tracking**: Issue
-> [#155](https://github.com/pharmacolog/syslog-generator/issues/155)
-> (placeholder; deferred до получения ≥ 10 запросов от пользователей).
->
-> **Workaround**: запускать под Alpine через Docker-образ
-> `ghcr.io/pharmacolog/syslog-generator:v11.4.0` (multi-arch: linux/amd64 +
-> linux/arm64; см. [README.md → Docker](../README.md#docker)):
->
-> ```bash
-> docker run --rm ghcr.io/pharmacolog/syslog-generator:v11.4.0 --version
-> ```
+> **Статус:** ✅ Native `.apk` via GitHub Releases
+> ([Issue #159](https://github.com/pharmacolog/syslog-generator/issues/159),
+> milestone v11.4).
 
-Если вам нужен нативный Alpine-пакет — откройте issue с label `track-gtm`,
-опишите use-case (load-testing на Alpine-based routers / WAF), и мы
-приоритизируем для milestone v11.5+.
+**Prerequisites:** ничего — пакет содержит нативный musl-бинарник и не требует
+glibc compatibility layer. Команды рассчитаны на Alpine 3.19+ с `apk` v2.14+
+и выполняются от `root`.
+
+Initial scope — `x86_64`.
+
+### 4.1 Скачать пакет
+
+URL pattern:
+
+`https://github.com/pharmacolog/syslog-generator/releases/download/v<VERSION>/syslog-generator-<VERSION>-r<PKGREL>.apk`
+
+```bash
+VERSION="11.4.0"
+curl -fsSLO "https://github.com/pharmacolog/syslog-generator/releases/download/v${VERSION}/syslog-generator-${VERSION}-r0.apk"
+```
+
+### 4.2 Добавить публичный ключ и проверить подпись
+
+Добавьте публичный `abuild`-ключ в системное хранилище доверенных ключей:
+
+```bash
+curl -O https://github.com/pharmacolog/syslog-generator/releases/latest/download/abuild.rsa.pub && cp abuild.rsa.pub /etc/apk/keys/
+```
+
+Проверьте подпись пакета до установки:
+
+```bash
+apk verify --allow-untrusted syslog-generator-*.apk
+```
+
+### 4.3 Установить пакет
+
+```bash
+apk add --allow-untrusted syslog-generator-*.apk
+```
+
+### 4.4 Проверить установку и musl build
+
+```bash
+apk info syslog-generator
+syslog-generator --version
+```
+
+Пакет собирается в Alpine-builder environment командой
+`cargo build --release --target x86_64-unknown-linux-musl`, затем упаковывается
+через `abuild -r`. Release pipeline проверяет полученный `.apk` в Alpine 3.21
+командами `apk info syslog-generator` и `syslog-generator --version`.
 
 ---
 
@@ -739,6 +769,34 @@ sudo dnf install ./syslog-generator-11.4.0-1.x86_64.rpm
    [github.com/pharmacolog/syslog-generator/issues/new](https://github.com/pharmacolog/syslog-generator/issues/new)
    с label `bug` и приложить `/tmp/sg-diag.txt`.
 
+### 9.12 Alpine `.apk`: GPG signature verification
+
+**Симптом:**
+
+```text
+ERROR: syslog-generator-*.apk: UNTRUSTED signature
+```
+
+**Причина:** публичный `abuild`-ключ отсутствует или не установлен в
+`/etc/apk/keys/`. Для Alpine `.apk` используется встроенная RSA-подпись
+`abuild`; отдельная утилита `gpg` не требуется.
+
+**Решение (`apk` v2.14+):**
+
+```bash
+curl -O https://github.com/pharmacolog/syslog-generator/releases/latest/download/abuild.rsa.pub && cp abuild.rsa.pub /etc/apk/keys/
+apk verify --allow-untrusted syslog-generator-*.apk
+```
+
+После успешной проверки:
+
+```bash
+apk add --allow-untrusted syslog-generator-*.apk
+```
+
+Если `apk verify` завершается с ненулевым кодом, не устанавливайте пакет:
+повторно скачайте `.apk` и публичный ключ из официального GitHub Release.
+
 См. также [SECURITY.md](../SECURITY.md) для ответственного раскрытия уязвимостей.
 
 ### 9.11 `apt`/`dnf` ругается на signature verification failed
@@ -816,6 +874,7 @@ sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
 
 | Версия | Дата | Изменения |
 |---|---|---|
+| **v11.4.x** (Issue #159) | 2026-07-25 | Alpine `.apk` packaging возвращён в scope: native package через GitHub Releases и musl build (`x86_64-unknown-linux-musl`). PPA и COPR остаются **Not Planned**. |
 | **v11.4.0** (Issue #107) | TBD | Первая публикация `.deb` / `.rpm` через `cargo-deb` / `cargo-rpm`. CI matrix: `debian×2×arch×2` + `fedora×2×arch×2`. GPG-подпись deferred (Issue #155). Documentation: этот файл. |
 | PR #146 | 2026-07-24 | Coordination docs / AGENTS.md v2.0 (контекст для этого документа; см. AGENTS.md §10 — coordination docs flow). |
 
@@ -823,9 +882,15 @@ sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
 
 - **Issue #107** —
   [GTM-2] Linux-пакеты .deb/.rpm через `cargo-deb` / `cargo-rpm`
-  (milestone v11.4, track `track-gtm`, priority `p2`).
-- **Issue #155** (placeholder) — PPA / COPR / Alpine `.apk` distribution
-  channels (deferred; см. §2.2, §3.2, §4).
+  (milestone v11.4, closed via PR #154).
+- **Issue #155** —
+  [[C1.8] GPG-подпись и distribution channels](https://github.com/pharmacolog/syslog-generator/issues/155)
+  (**closed via PR #156**). GPG signing scaffold и sign/verify infrastructure
+  реализованы; PPA и COPR — **Not Planned**. Alpine `.apk` вынесен в Issue #159.
+- **Issue #159** —
+  [[C1.9] Alpine `.apk` packaging](https://github.com/pharmacolog/syslog-generator/issues/159)
+  (**open**, milestone v11.4). Native `x86_64` `.apk` публикуется через GitHub
+  Releases и собирается для target `x86_64-unknown-linux-musl` через `abuild`.
 - **Issue #92** — B3 Presets (зависимость Issue #107: default config в пакете).
 
 ### 10.5 GPG-подпись и supply-chain integrity

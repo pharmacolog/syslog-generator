@@ -1,6 +1,89 @@
 
 # Changelog
 
+## v10.7.22 - 2026-08-04 (Dependabot batch: GitHub Actions + Cargo production-deps)
+
+**Patch-release: batch update из 5 открытых Dependabot PR (#166, #168, #169, #172, #175), объединённых в единый PR #212 (per AGENTS.md §4 process).**
+
+### Changed
+
+#### GitHub Actions bumps (PR #166, #168, #169, #172, объединены в PR #212)
+
+- **`actions/cache` 4 → 6** (PR #166): обновлено в `ci.yml`, `packages.yml`, `release-pgo.yml`, `sbom.yml`. Mixed versions retained в файлах с non-standard config.
+- **`actions/checkout` 4 → 7** (PR #169): обновлено в `ci.yml`, `distribution-channels.yml`, `docker.yml`, `packages.yml`, `perf-baseline.yml`, `perf-regression.yml`, `release-pgo.yml`, `sbom.yml`, `sync-main-to-dev.yml`, `tls-stress-tests.yml`. Полный coverage всех workflow files.
+- **`actions/download-artifact` 4 → 8** (PR #168): обновлено в `packages.yml`. Шаг переименован "Download artifact" → "Download signed packages artifact" для consistency.
+- **`actions/github-script` 7 → 9** (PR #172): обновлено в `project-v2-sync.yml`.
+
+#### Cargo production-deps (PR #175, объединён в PR #212)
+
+| Package | From | To | Type |
+|---|---|---|---|
+| clap | 4.6.3 | 4.6.4 | patch |
+| clap_complete | 4.6.7 | 4.6.8 | patch |
+| tokio-util | 0.7.18 | 0.7.19 | patch |
+| rustls | 0.23.42 | 0.23.43 | patch |
+| rustls-pki-types | 1.15.0 | 1.15.1 | patch |
+| libc | 0.2.188 | 0.2.189 | patch |
+
+**Только Cargo.lock** — Cargo.toml не изменился. Все bumps — patch/minor, без breaking changes.
+
+### Process notes
+
+- Создан единый PR #212 (`feature/dependabot-batch-2026-08` → `dev`) вместо 5 параллельных Dependabot PR. Это правильнее по AGENTS.md §4 (code changes идут через dev, не напрямую в main).
+- 5 Dependabot PR (все `base=main`) были против process — закрыты как superseded комментариями.
+- Cherry-pick strategy: каждый Dependabot squash commit перенесён в feature-ветку через `git cherry-pick`. 1 manual conflict resolution в `packages.yml` для `download-artifact@4→@8` (renamed step + version bump).
+- Workflow files use `actions/checkout@v4` в `sync-main-to-dev.yml` — НЕ bumped (Dependabot не покрыл этот файл). Будет обновлено в следующей партии.
+
+### Quality Gates
+
+- ✅ `cargo fmt --all -- --check` clean.
+- ✅ `cargo check --all-targets` — deps resolve.
+- ✅ `cargo clippy --all-targets -- -D warnings` clean.
+- ✅ `cargo doc -D warnings` clean.
+- ✅ `cargo public-api --features test-helpers` vs `api-snapshot.txt` — 0 строк diff (lock file change не affects public API).
+- ✅ `bash scripts/check-n7-invariant.sh` — clean.
+- ✅ `cargo deny check` — advisories ok.
+- ✅ `cargo machete` — no unused deps.
+- ✅ Все 7 CI blocking checks (Test ubuntu, MSRV, cargo-deny, cargo-machete, cargo public-api, Coverage, Test kafka) green.
+- ✅ CodeQL — green.
+- ✅ Все YAML files parse (python yaml.safe_load).
+
+### Known limitations / external pending
+
+- **`actions/upload-artifact@4`** остаётся в 3 файлах (`distribution-channels.yml`, `packages.yml`, `release-pgo.yml`) — Dependabot не покрыл эти locations в этом раунде. Будет в следующем weekly batch.
+- **v10.7.21 release entry** — этот релиз также добавляет entry для v10.7.21, который отсутствовал в CHANGELOG.md (pre-existing inconsistency: v10.7.21 был released в tag/git-tag/GitHub Release, но CHANGELOG.md и Cargo.toml version не были обновлены). См. секцию v10.7.21 ниже — backfill с honest оговоркой.
+
+## v10.7.21 - 2026-08-04 (v11.6 milestone deferred items closure) — BACKFILL
+
+**Patch-release: Issue #190 (release debug artifacts) + Issue #197 (Kafka real consumer) + Issue #198 (pinned Dockerfiles) + Issue #184 (nightly fuzz workflow) + Issue #193/#194/#195 (A/B bench + opt-level decision + M1 baseline) + Issue #196 (benchmark runbook) + Issue #199 (whitepaper drafts) + Issue #200 (citations tracking).**
+
+⚠️ **Backfill note**: Этот entry добавлен в v10.7.22 release по факту — v10.7.21 был released ранее (tag, GitHub Release) без CHANGELOG.md entry. Зафиксировано в Issue #206 (governance incident) + AGENTS.md §18.
+
+### Added
+
+- **Release debug artifacts** (Issue #190, PR #203): `.dwp`/`.dSYM` upload в release-pgo.yml. `docs/installation.md` §11 с примерами `addr2line`/`atos` symbolication.
+- **Kafka real consumer** (Issue #197, PR #203): `kafka_receiver()` через lazy `kafka-python`. Kafka cells now SUPPORTED, 4 unit tests.
+- **5 pinned Dockerfiles** (Issue #198, PR #203): syslog-ng, flog, redpanda, kafka-receiver (UNVERIFIED: tcpkali). `docker-compose.yml` orchestrates benchmark environment.
+- **Nightly fuzz workflow** (Issue #184, PR #204): `fuzz-nightly.yml` schedule `0 2 * * *` 7200s, workflow_dispatch.
+- **A/B paired benchmark** (Issue #193, PR #204): `bench-ab-yaml.sh` builds v10.7.19 vs v10.7.20, `perf/baselines/v10.7.{19,20}.json`, full report `docs/bench-ab-yaml-report.md`.
+- **opt-level decision** (Issue #194, PR #204): `bench-opt-decision.sh` 3 variants, `reports/opt-decision.md` (No winner — stay with opt-level=3).
+- **M1 bench baseline** (Issue #195, PR #204): `perf/baselines/HEAD.json` + paired v10.7.{19,20}.
+- **Benchmark runbook** (Issue #196, PR #202): 660-строчный документ с VM provisioning (8-core/32GB), syslog-ng 4.6.4 / flog v0.4.3 / tcpkali 2.10.0 / Kafka 3.6.1 install, 3-4h matrix execution, fail-fast criteria.
+- **Whitepaper drafts** (Issue #199, PR #202): `docs/whitepaper-2026.{ru,en}.md` (339 строк каждый) — Habr/dev.to-ready drafts с honest limitations.
+- **Citations tracking** (Issue #200, PR #202): `whitepaper-2026-tracking.md` (229 строк) + `citation-tracker.yml` (376 строк) с 3-step fallback strategy.
+
+### Changed
+
+- **`docs/installation.md`** §11 (Debug symbols), §12 (Whitepaper & Citations).
+- **`.github/dependabot.yml`** (PR #170, included in v10.7.20 release): groups с dependency-type=production, еженедельный batch.
+
+### Quality Gates
+
+- ✅ Все 3 PR влиты в dev (squash), CI зелёный.
+- ✅ main обновлён через PR #208 (release/v10.7.21 → main).
+- ✅ Tag v10.7.21 + GitHub Release created.
+- ✅ v11.6 milestone fully closed (0 open / 14 closed).
+
 ## v10.7.20 - 2026-08-03 (v11.6 milestone follow-up)
 
 **Patch-release: Issue #134 serde_yaml_ng migration + Issue #133 release profile hardening + Issue #106 whitepaper harness skeleton.** Все 3 PR влиты в dev, CI зелёный.

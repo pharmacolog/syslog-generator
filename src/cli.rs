@@ -178,6 +178,13 @@ pub struct Args {
     /// None → 1ms (sub-millisecond precision). Clamped до >= 1.
     #[arg(long, value_name = "MS")]
     pub pacer_tick_interval: Option<u64>,
+
+    /// Issue #241 (B2/A4): --explain-plan — вывести structured tree итогового
+    /// pipeline configuration (targets, phases, runtime, transport, metrics)
+    /// и выйти. Полезно для CI/pre-deploy/документации.
+    /// Формат: text (default, human-readable) или json.
+    #[arg(long, value_name = "FORMAT")]
+    pub explain_plan: Option<String>,
 }
 
 /// «Чистое» представление CLI-оверрайдов, не зависящее от clap.
@@ -893,5 +900,6 @@ fn apply_overrides_no_targets_keeps_existing() {
 
 // === v10.6.0 (Usability ч.1): тесты subcommand'ов живут в `mod tests`
 //     выше (top-level дубликаты удалены в PR-Q.1). ===
+pub mod explain_plan;
 pub mod preset;
 pub mod set_override;

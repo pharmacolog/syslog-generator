@@ -1,0 +1,215 @@
+# Nightly fuzz rerun для profile_parser (Issue #184, milestone v11.6).
+#
+# Goal: 2h nightly прогон libFuzzer на fuzz-таргете `profile_parser`,
+# чтобы ловить panics / OOB / infinite loops в `load_profile_from_yaml_str`
+# (наследует `serde_yaml_ng` panics, malformed UTF-8, deeply nested maps, ...).
+#
+# Cadence:
+# - schedule: 02:00 UTC каждый день (между perf-baseline в 04:00 и tls-stress в 03:00).
+# - workflow_dispatch: ручной запуск для подтверждения фиксов.
+#
+# Свойства:
+# - `continue-on-error: true` на job — nightly НЕ должен блокировать
+#   merge'ы или красные PR-check'и. Fuzz regressions отслеживаются
+#   через artifact + ручной review.
+# - cargo-fuzz требует nightly toolchain (libFuzzer binding).
+# - Артефакты: corpus (для дальнейшего tmin/repro) + JSON stats.
+# - Время: 7200s = 2h. На CI runner'е ~5-15 min на setup + 2h прогон + 5 min upload.
+
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: 'Override -max_total_time (seconds). Default 7200 (2h).'
+        required: false
+        default: '7200'
+      max_len:
+        description: 'Override -max_len (bytes). Default 16384.'
+        required: false
+        default: '16384'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: profile_parser fuzz (${{ inputs.fuzz_seconds || '7200' }}s)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    env:
+      RUST_BACKTRACE: short
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain (libFuzzer binding)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & fuzz build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ runner.os }}-fuzz-nightly
+          # Fuzz build кладёт артефакты в fuzz/target — пусть Swatinem/rust-cache
+          # сам обнаружит target dirs (он сканирует target/, fuzz/target/).
+
+      - name: Install cargo-fuzz
+        run: |
+          set -euo pipefail
+          cargo install cargo-fuzz --locked || \
+            cargo install cargo-fuzz --version ^0.13
+          cargo fuzz --version
+
+      - name: Prepare fuzz artifacts directory
+        run: |
+          set -euo pipefail
+          mkdir -p fuzz-artifacts
+          rm -rf fuzz/corpus/profile_parser.ci 2>/dev/null || true
+
+      - name: Run profile_parser fuzzer
+        id: fuzz_run
+        run: |
+          set -euo pipefail
+          FUZZ_SECONDS="${{ inputs.fuzz_seconds || '7200' }}"
+          MAX_LEN="${{ inputs.max_len || '16384' }}"
+          echo "::notice::Running cargo fuzz profile_parser for ${FUZZ_SECONDS}s, max_len=${MAX_LEN}"
+          cd fuzz
+          # -max_total_time: hard timeout in seconds (libFuzzer stop-after-N).
+          # -max_len: bound на размер input (16 KiB — типичный syslog profile).
+          # -print_final_stats: печатает coverage + new-features в конце.
+          # Сохраняем corpus в CI-отдельный каталог чтобы не пересекаться
+          # с локальным fuzz/corpus/profile_parser.
+          cargo +nightly fuzz run profile_parser \
+            -- \
+            -max_total_time="${FUZZ_SECONDS}" \
+            -max_len="${MAX_LEN}" \
+            -print_final_stats=1 \
+            -artifact_prefix=fuzz-artifacts/ 2>&1 | tee ../fuzz-artifacts/fuzz.log
+        # Note: libFuzzer nonzero exit on crash/timeout/oom propagates through cargo fuzz;
+        # `continue-on-error: true` on job ensures artifact upload still runs for forensics.
+
+      - name: Collect corpus + stats
+        if: always()
+        run: |
+          set -euo pipefail
+          cd fuzz
+          # Каталог corpus создаётся cargo-fuzz автоматически при первом run;
+          # сохраняем под именем profile_parser.ci для архива.
+          if [[ -d corpus/profile_parser ]]; then
+            tar -czf ../fuzz-artifacts/fuzz-corpus.tar.gz \
+              -C corpus profile_parser
+            echo "corpus files: $(find corpus/profile_parser -type f | wc -l | tr -d ' ')"
+          else
+            echo "no corpus directory created" >&2
+            # Пустой archive — намеренно: всё равно сохраняем, чтобы видеть "fuzz ran"
+            tar -czf ../fuzz-artifacts/fuzz-corpus.tar.gz --files-from /dev/null
+          fi
+
+      - name: Parse fuzzer stats to JSON
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - fuzz-artifacts/fuzz.log "${{ inputs.fuzz_seconds || '7200' }}" \
+            "${{ inputs.max_len || '16384' }}" "${{ github.sha }}" \
+            > fuzz-artifacts/fuzz-stats.json <<'PYEOF'
+          import json
+          import re
+          import sys
+          from datetime import datetime, timezone
+
+          log_path, fuzz_seconds, max_len, sha = sys.argv[1:5]
+          fuzz_seconds = int(fuzz_seconds)
+          max_len = int(max_len)
+
+          stats = {
+              "sha": sha,
+              "fuzz_target": "profile_parser",
+              "max_total_time_s": fuzz_seconds,
+              "max_len_bytes": max_len,
+              "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+
+          coverage = {}
+          try:
+              with open(log_path, "r", errors="replace") as f:
+                  content = f.read()
+              # Ищем строки вида:
+              #   #1234 NEW    cov: 456 ft: 1234 corp: 12/24Kb ...
+              #   INFO: Seed: 1234567
+              #   INFO: Loaded 1 inputs (12 bytes)
+              #   #1234 REDUCE cov: 456 ft: 1234 corp: 11/22Kb ...
+              # Final stats обычно содержит "cov:" в последнем #строка-блоке.
+              cov_pattern = re.compile(r"cov:\s*(\d+)\s+ft:\s*(\d+)\s+corp:\s*(\d+)/(\d+)([KMG]?)b", re.IGNORECASE)
+              matches = cov_pattern.findall(content)
+              if matches:
+                  last = matches[-1]
+                  coverage = {
+                      "cov": int(last[0]),
+                      "features": int(last[1]),
+                      "corpus_count": int(last[2]),
+                      "corpus_size_value": int(last[3]),
+                      "corpus_size_unit": (last[4] or "b").upper(),
+                  }
+                  stats["final_coverage"] = coverage
+
+              # Crash counts: "==ERROR== libFuzzer: deadly signal" или
+              # "BINGO: Found 1 artifacts".
+              crashes = re.findall(r"==\d+==\s*ERROR:\s*libFuzzer:\s*(\w+)", content)
+              stats["crashes_detected"] = len(crashes)
+              stats["crash_types"] = sorted(set(crashes))
+
+              artifacts_dir = re.findall(r"artifact\sprefix\s*=\s*([^\s]+)", content)
+              stats["artifact_prefix"] = artifacts_dir[0] if artifacts_dir else None
+
+              # Длительность прогона из логов cargo-fuzz ("Elapsed: X seconds").
+              elapsed = re.search(r"elapsed:\s*(\d+)\s*s", content, re.IGNORECASE)
+              stats["elapsed_seconds"] = int(elapsed.group(1)) if elapsed else None
+          except Exception as e:
+              stats["parse_error"] = str(e)
+
+          print(json.dumps(stats, indent=2))
+          PYEOF
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-nightly-${{ github.run_id }}
+          path: |
+            fuzz-artifacts/fuzz-corpus.tar.gz
+            fuzz-artifacts/fuzz-stats.json
+            fuzz-artifacts/fuzz.log
+          if-no-files-found: error
+
+      - name: Summarize results
+        if: always()
+        run: |
+          {
+            echo "## Fuzz nightly summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- SHA: ${GITHUB_SHA}"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Run: ${{ github.run_id }}"
+            echo "- Fuzz target: \`profile_parser\`"
+            echo "- Duration: ${{ inputs.fuzz_seconds || '7200' }}s"
+            echo ""
+            if [[ -f fuzz-artifacts/fuzz-stats.json ]]; then
+              echo "### Stats"
+              echo '```json'
+              cat fuzz-artifacts/fuzz-stats.json
+              echo '```'
+            fi
+            echo ""
+            echo "### Last 30 lines of fuzz.log"
+            echo '```'
+            tail -30 fuzz-artifacts/fuzz.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

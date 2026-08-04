@@ -12,12 +12,12 @@ use crate::transport::kafka::{
     parse_kafka_acks, parse_kafka_compression, target_sender_kafka, KafkaConfig,
 };
 use crate::transport::reconnect::ReconnectConfig;
+#[cfg(not(feature = "kafka"))]
+use crate::transport::target_sender_udp_with_batch;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
     target_sender_udp, BroadcastPolicy, Framing,
 };
-#[cfg(not(feature = "kafka"))]
-use crate::transport::target_sender_udp_with_batch;
 use anyhow::Result;
 use governor::{Quota, RateLimiter};
 use std::collections::HashMap;

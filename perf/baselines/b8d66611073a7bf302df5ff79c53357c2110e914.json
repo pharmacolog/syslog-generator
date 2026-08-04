@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-08-04T11:10:41Z",
+  "baseline_sha": "b8d66611073a7bf302df5ff79c53357c2110e914",
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1725,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0
+    }
+  ],
+  "notes": "Manually generated baseline for sync PR #219 (main \u2192 dev after v10.7.22) per docs/perf-governance.md"
+}

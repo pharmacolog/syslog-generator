@@ -1,0 +1,6 @@
+---
+source: src/format/snapshot_tests.rs
+assertion_line: 63
+expression: "String::from_utf8_lossy(&out)"
+---
+CEF:0|TestVendor|TestProduct|1.0|100|test_event|5|msg=test payload

@@ -49,3 +49,8 @@ tls-ca-*.pem
 *.tmp
 *.bak
 fuzz/Cargo.lock
+
+# === Тестовые regress-артефакты =======================================
+# proptest хранит найденные shrinking-cases в `proptest-regressions/`,
+# это локальный debug-cache, не предназначен для коммита.
+proptest-regressions/

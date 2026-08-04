@@ -904,6 +904,11 @@ sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
 |---|---|---|
 | `syslog-generator_*.deb` | `dpkg-sig --sign builder` (origin + builder роль) | `dpkg-sig --verify <pkg>` |
 | `syslog-generator-*.rpm` | `rpmsign --addsign` (SHA256 digest + GPG signature) | `rpm -K <pkg>` |
+| `syslog-generator-*.apk` | (НЕ подписан, см. §4) | `apk verify --allow-untrusted <pkg>` |
+| `syslog-generator-pgo` | (НЕ подписан, deferred — выделить reusable sign workflow) | `sha256sum -c SHA256SUMS` (после PR #180.4) |
+| `merged.profdata` | (НЕ подписан) | N/A (вспомогательный артефакт для воспроизводимости PGO build) |
+| `sbom-<sha>.cdx.json` | CycloneDX 1.5 (НЕ подписан) | `python3 -c "import json; json.load(open('sbom-...'))"` |
+| `syslog-generator-$VERSION-docker.tar.gz` | (НЕ подписан, deferred) | `docker load < tarball && docker manifest inspect local/syslog-generator:$TAG` |
 | `SHA256SUMS` | detached `.sig` (GPG) | `gpg --verify SHA256SUMS.sig SHA256SUMS` |
 | Контейнеры `ghcr.io/*` | Cosign keyless (GitHub OIDC) | `cosign verify --certificate-identity ...` (опционально, sub-task 6) |
 
@@ -924,14 +929,68 @@ sudo dnf install --nogpgcheck ./syslog-generator-11.5.0-1.x86_64.rpm
 3. **Non-repudiation** — GPG-подпись привязана к ключу maintainer'а;
    отозвать можно через keyserver revocation certificate.
 
-#### Связанные sub-tasks (Issue #155)
+#### Связанные sub-tasks (Issue #155 / Issue #180)
 
 - sub-task 1: создание release signing subkey + публикация `pharmacolog-release.asc`.
 - sub-task 2: `sign` step в `packages.yml` (между `build-deb` и `verify-install`).
 - sub-task 3: hardened `verify-install` (этот документ, §7.7).
-- sub-task 4: Launchpad PPA bootstrap (auto-verify через `add-apt-repository`).
-- sub-task 5: Fedora COPR setup (auto-verify через `dnf copr enable`).
+- sub-task 4: Launchpad PPA bootstrap (auto-verify через `add-apt-repository`) — **Not Planned** (решение maintainer'а 2026-07-25).
+- sub-task 5: Fedora COPR setup (auto-verify через `dnf copr enable`) — **Not Planned** (решение maintainer'а 2026-07-25).
 - sub-task 6: optional Cosign keyless signing для container images.
+- Issue #180 sub-task 1: PGO бинарь в Release (через `release-pgo.yml`).
+- Issue #180 sub-task 2: SBOM CycloneDX в Release (через `packages.yml:release`).
+- Issue #180 sub-task 3: Docker multi-arch archive в Release (через `docker.yml:docker-multiarch`).
+
+#### Проверка PGO binary (Issue #180.1)
+
+После PR #180 (Issue #180.1) PGO-optimized binary публикуется в GitHub Release
+как `syslog-generator-pgo` (с переименованием в step "Stage PGO artifacts").
+Verify:
+
+```bash
+curl -fsSL -O "https://github.com/pharmacolog/syslog-generator/releases/download/v${VERSION}/syslog-generator-pgo"
+chmod +x syslog-generator-pgo
+./syslog-generator-pgo --version   # ожидаем: syslog-generator $VERSION
+# FNV1 fingerprint в Release Notes для cross-verification.
+sha256sum syslog-generator-pgo      # должно совпадать с SHA256SUMS (после PR #180.4).
+```
+
+> ⚠️ **PGO binary НЕ подписан** в PR #180.1. PGP detached signature для PGO
+> — deferred scope (выделить reusable sign workflow в отдельный PR).
+
+#### Проверка SBOM (Issue #180.2)
+
+После PR #180 (Issue #180.2) SBOM CycloneDX JSON публикуется в GitHub Release
+как `sbom-<sha>.cdx.json`. Verify:
+
+```bash
+curl -fsSL -O "https://github.com/pharmacolog/syslog-generator/releases/download/v${VERSION}/sbom-${SHA}.cdx.json"
+# JSON schema validation (CycloneDX 1.5)
+python3 -c "
+import json, sys
+d = json.load(open('sbom-${SHA}.cdx.json'))
+assert d['bomFormat'] == 'CycloneDX', f'bad format: {d[\"bomFormat\"]}'
+assert d['specVersion'] == '1.5', f'bad spec: {d[\"specVersion\"]}'
+assert d['serialNumber'].startswith('urn:uuid:'), 'bad serial'
+assert len(d.get('components', [])) > 0, 'no components'
+print(f'OK: CycloneDX 1.5, {len(d[\"components\"])} components')
+"
+# Опционально: визуальный просмотр в [CycloneDX CLI Viewer](https://github.com/CycloneDX/cyclonedx-cli).
+```
+
+#### Проверка Docker archive (Issue #180.3)
+
+После PR #180 (Issue #180.3) Docker multi-arch image tarball публикуется в
+GitHub Release как `syslog-generator-$VERSION-docker.tar.gz`. Verify:
+
+```bash
+curl -fsSL -O "https://github.com/pharmacolog/syslog-generator/releases/download/v${VERSION}/syslog-generator-${VERSION}-docker.tar.gz"
+# Multi-arch manifest содержит index (linux/amd64, linux/arm64).
+docker load < syslog-generator-${VERSION}-docker.tar.gz
+# Loaded image в локальный Docker.
+docker run --rm local/syslog-generator:${VERSION} --version   # ожидаем: syslog-generator $VERSION
+docker manifest inspect local/syslog-generator:${VERSION}     # multi-arch info
+```
 
 ### 10.4 Метаданные документа
 

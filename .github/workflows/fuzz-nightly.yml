@@ -1,4 +1,5 @@
 # Nightly fuzz rerun для profile_parser (Issue #184, milestone v11.6).
+# Fix per Issue #242 (milestone v11.9): workflow не запускался (0 runs).
 #
 # Goal: 2h nightly прогон libFuzzer на fuzz-таргете `profile_parser`,
 # чтобы ловить panics / OOB / infinite loops в `load_profile_from_yaml_str`
@@ -15,6 +16,14 @@
 # - cargo-fuzz требует nightly toolchain (libFuzzer binding).
 # - Артефакты: corpus (для дальнейшего tmin/repro) + JSON stats.
 # - Время: 7200s = 2h. На CI runner'е ~5-15 min на setup + 2h прогон + 5 min upload.
+# - Concurrency: `nightly-fuzz` group — только один run одновременно (новый
+#   cancels старый incomplete, чтобы не тратить CI minutes).
+#
+# Issue #242 fix changes (2026-08-04):
+# - permissions: добавлены `actions: read` и `pull-requests: read` (forward-compat)
+# - concurrency: добавлена группа `nightly-fuzz` для предотвращения overlap
+# - timeout-minutes: 180 → 240 (запас для 2h прогона + setup overhead)
+# - checkout: добавлен `fetch-depth: 0` для full git history (consistent с perf-baseline)
 
 name: fuzz-nightly
 
@@ -34,18 +43,29 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  # Issue #242: только один fuzz-nightly run одновременно.
+  # Новый scheduled run cancels предыдущий incomplete (если он ещё идёт),
+  # чтобы не тратить CI minutes на overlap.
+  group: nightly-fuzz
+  cancel-in-progress: true
 
 jobs:
   fuzz:
     name: profile_parser fuzz (${{ inputs.fuzz_seconds || '7200' }}s)
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     continue-on-error: true
     env:
       RUST_BACKTRACE: short
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install nightly toolchain (libFuzzer binding)
         uses: dtolnay/rust-toolchain@nightly

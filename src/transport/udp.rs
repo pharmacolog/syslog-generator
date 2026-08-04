@@ -207,19 +207,14 @@ mod tests {
         // Receiver должен получить все 50 datagrams.
         let mut received: Vec<String> = Vec::new();
         let mut buf = [0u8; 256];
-        loop {
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(100),
-                receiver.recv_from(&mut buf),
-            )
-            .await
-            {
-                Ok(Ok(_)) => {
-                    let s = String::from_utf8_lossy(&buf).trim_end().to_string();
-                    received.push(s);
-                }
-                _ => break,
-            }
+        while let Ok(Ok(_)) = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            receiver.recv_from(&mut buf),
+        )
+        .await
+        {
+            let s = String::from_utf8_lossy(&buf).trim_end().to_string();
+            received.push(s);
         }
         assert_eq!(
             received.len(),

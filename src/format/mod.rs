@@ -157,6 +157,12 @@ pub mod raw;
 pub mod rfc3164;
 pub mod rfc5424;
 
+// Issue #165 (C3): snapshot tests через insta crate.
+// Авто-генерирует snapshot файлы при первом запуске (обновить через
+// `cargo insta review` или `INSTA_UPDATE=auto` в CI).
+#[cfg(test)]
+mod snapshot_tests;
+
 /// Контекст рендеринга сообщения (F15, v9.2.0).
 ///
 /// Содержит всё, что может понадобиться разным форматам:

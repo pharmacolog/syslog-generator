@@ -135,6 +135,12 @@ libc = "0.2"
 criterion = { version = "0.8", features = ["async_tokio"] }
 regex = "1"
 proptest = "1"
+# Issue #165 (C3 remaining tests): snapshot tests via insta crate.
+# Используется для byte-for-byte verification output formats (rfc5424, cef, leef,
+# json_lines, raw). Snapshot tests покрывают edge cases которые трудно
+# покрыть обычными assert_eq — insta сама генерирует snapshot файл при первом
+# запуске и проверяет при последующих.
+insta = "1"
 # F16 (v9.3.0): для integration-теста reconnect — RST через SO_LINGER=0.
 # tokio::net::TcpStream::set_linger deprecated, поэтому используем
 # socket2::Socket::set_linger напрямую.

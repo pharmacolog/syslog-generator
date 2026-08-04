@@ -71,7 +71,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -203,7 +203,7 @@ jobs:
     continue-on-error: true
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -244,7 +244,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check if rust-toolchain.toml exists
         id: check-toolchain
@@ -293,7 +293,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -304,7 +304,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-deny
       - name: Cache cargo-deny
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-deny
           key: cargo-tool-${{ runner.os }}-cargo-deny-v1
@@ -334,7 +334,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -345,7 +345,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-machete
       - name: Cache cargo-machete
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-machete
           key: cargo-tool-${{ runner.os }}-cargo-machete-v1
@@ -375,7 +375,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -459,7 +459,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -473,7 +473,7 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-cov
 
       - name: Cache cargo-llvm-cov
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-llvm-cov
           key: cargo-tool-${{ runner.os }}-cargo-llvm-cov-v1
@@ -543,7 +543,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -567,7 +567,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run N7 invariant check
         run: bash scripts/check-n7-invariant.sh
 
@@ -591,7 +591,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install nightly toolchain (required for rustdoc-json)
         uses: dtolnay/rust-toolchain@nightly
       - name: Cache cargo registry & build artifacts
@@ -600,7 +600,7 @@ jobs:
           cache-on-failure: true
           shared-key: ${{ runner.os }}-cargo-public-api
       - name: Cache cargo-public-api
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-public-api
           key: cargo-tool-${{ runner.os }}-cargo-public-api-v1

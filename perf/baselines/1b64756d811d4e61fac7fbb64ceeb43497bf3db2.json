@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-08-04T10:12:54Z",
+  "baseline_sha": "1b64756d811d4e61fac7fbb64ceeb43497bf3db2",
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1740,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0
+    }
+  ],
+  "notes": "Manually generated baseline for release/v10.7.22 (Dependabot batch) per docs/perf-governance.md \u2014 script: scripts/perf-regression-collect.sh hot_path"
+}

@@ -1,0 +1,64 @@
+# Dockerfile.flog — Issue #198
+#
+# Multi-stage: golang:1.22 builder → debian:bookworm-slim runtime.
+# Builds `github.com/mingrammer/flog@v0.4.3` (last official release 2021-03).
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. Base images (`golang:1.22` builder, `debian:bookworm-slim` runtime)
+#      pinned by TAG, NOT by digest. Замените `golang:1.22` на
+#      `golang:1.22@sha256:<digest>` для строгой воспроизводимости.
+#   2. `go install github.com/mingrammer/flog@v0.4.3` использует Go module
+#      pseudo-version `v0.4.3`, которую Go toolchain резолвит в
+#      `go install github.com/mingrammer/flog@v0.4.3` → конкретный commit
+#      SHA (mingrammer/flog commit 0a47c5a... — НЕ подтверждено мной без
+#      network-lookup). Без `GONOSUMCHECK`/`GOFLAGS=-insecure` Go по умолчанию
+#      проверяет `go.sum` (создаётся в /tmp/build), но это не SHA-pinning
+#      исходников. Для строгого pinning используйте `replace` directive с
+#      конкретным commit SHA в go.mod, или склонируйте репо и используйте
+#      локальный путь.
+#   3. flog v0.4.3 (2021-03) — последний official release. mingrammer/flog
+#      repo НЕ обновлялся с тех пор (issue #25 про network support до сих
+#      пор open: https://github.com/mingrammer/flog/issues/25). Для
+#      network-output используется `flog --output file` + `nc` (см. Makefile
+#      docker/run-flog-netcat target), но это НЕ эквивалентно native
+#      network output и помечено в METHODOLOGY.md как fair-comparison
+#      caveat.
+#   4. `--mount=type=cache` для Go build cache — ускоряет rebuild, но НЕ
+#      влияет на security (rebuilt binaries always come from source).
+#
+# TODO (Issue #198 follow-up): pin Go toolchain к digest + заменить
+# `@v0.4.3` на explicit commit SHA. Tracking: issue comments.
+
+FROM golang:1.22 AS builder
+
+WORKDIR /src
+
+# Copy go.mod/go.sum first для layer cache; создаём минимальный go.mod,
+# чтобы `go install` с `go install pkg@version` работал.
+COPY <<EOF go.mod
+module flog-build
+
+go 1.22
+EOF
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go install github.com/mingrammer/flog@v0.4.3 \
+    && /go/bin/flog --version
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /go/bin/flog /usr/local/bin/flog
+
+# Sanity check на runtime — fail loudly если flog не установлен.
+RUN flog --version
+
+# Sidecar: docker compose exec запускает workload по требованию.
+# Note: debian:bookworm-slim содержит /bin/sh → sleep infinity OK.
+ENTRYPOINT ["sleep", "infinity"]
+CMD ["infinity"]

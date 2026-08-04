@@ -57,6 +57,45 @@ jobs:
       - run: cargo +nightly fuzz run profile_parser -- -max_total_time=300
 ```
 
+### Nightly Fuzz Schedule (Issue #184, v11.6)
+
+С v11.6 введён nightly workflow `.github/workflows/fuzz-nightly.yml`:
+
+| Параметр | Значение |
+|---|---|
+| `schedule.cron` | `0 2 * * *` (02:00 UTC каждый день) |
+| `workflow_dispatch.inputs.fuzz_seconds` | default `7200` (2h) |
+| `workflow_dispatch.inputs.max_len` | default `16384` (16 KiB) |
+| Toolchain | `dtolnay/rust-toolchain@nightly` (libFuzzer binding) |
+| `cargo-fuzz` | `cargo install cargo-fuzz --locked` (с fallback на `^0.13`) |
+| Cache | `Swatinem/rust-cache@v2` с `shared-key: ${{ runner.os }}-fuzz-nightly` |
+| `continue-on-error` | `true` — nightly НЕ блокирует merge gate |
+| `timeout-minutes` | `180` (3h запас: 2h прогон + setup + upload) |
+| Artifacts | `fuzz-corpus.tar.gz`, `fuzz-stats.json`, `fuzz.log` через `actions/upload-artifact@v7` |
+
+Cadence coordination с другими nightly jobs:
+
+| Workflow | Cron | Issue |
+|---|---|---|
+| `fuzz-nightly` | `0 2 * * *` | #184 |
+| `tls-stress-tests` | `0 3 * * *` | #117 |
+| `perf-baseline` | `0 4 * * *` | PR-A0 |
+
+Порядок выбран так, чтобы ресурсы CI runner'ов не конкурировали
+(fuzz использует больше всего CPU и времени).
+
+Workflow скрипт `cd fuzz && cargo fuzz run profile_parser` зеркалирует
+локальную команду из раздела [Установка](#установка). В конце прогона
+Python-скрипт парсит libFuzzer-вывод (`cov:`, `ft:`, `corp:`, `BINGO`/`ERROR`)
+и сохраняет `fuzz-stats.json` для удобного сравнения ночь-к-ночи.
+
+Найденные crashes обрабатываются вручную: скачать artifact
+`fuzz-nightly-<run-id>`, `tar xzf fuzz-corpus.tar.gz`, минимизировать:
+
+```bash
+cargo +nightly fuzz tmin profile_parser fuzz/corpus/profile_parser/crash-<sha1>
+```
+
 ## Артефакты
 
 Найденные edge cases сохраняются в `fuzz/corpus/<target>/` и могут быть

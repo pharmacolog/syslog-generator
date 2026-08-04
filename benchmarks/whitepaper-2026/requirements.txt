@@ -1,0 +1,20 @@
+# Pinned dependencies for whitepaper-2026 harness (Issue #197)
+#
+# Установка:
+#   pip install -r benchmarks/whitepaper-2026/requirements.txt
+#
+# Honest disclosure:
+#   * kafka-python — pure-Python (no native build), медленнее confluent-kafka
+#     в ~2-3x, но достаточно для whitepaper 50k msg/s на localhost.
+#   * Если в будущем потребуется >100k msg/s на Kafka workloads, переход на
+#     confluent-kafka-python (C-extension, требует librdkafka) — отдельный
+#     issue (Issue #199 deferred). lazy-import в receiver.py изолирует
+#     kafka-python так что install в venv опционален для других workloads.
+#
+# Pinned versions:
+#   * kafka-python>=2.0 — последний major branch с Python 3.8+ support;
+#     2.0.7+ содержит фикс для poll() timeout_ms precision.
+#   * Не указываем kafka-python-ng или confluent-kafka — Issue #197 явно
+#     выбрал kafka-python.
+
+kafka-python>=2.0

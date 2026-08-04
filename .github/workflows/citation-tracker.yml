@@ -1,0 +1,376 @@
+# Citation & UTM stars tracking (Issue #200).
+#
+# Quarterly cron (1-е число каждые 3 месяца, 00:00 UTC) + workflow_dispatch.
+# Сканирует web на backlinks → whitepaper, обновляет
+# docs/whitepaper-2026-tracking.md через PR.
+#
+# API strategy:
+# 1. Google Custom Search API (если GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX
+#    secrets доступны) — primary.
+# 2. GitHub GraphQL mention search (через GITHUB_TOKEN) — secondary.
+# 3. Если оба failed — постит comment в Issue #200 с current state.
+#
+# Permissions:
+# - contents: write   — push branch.
+# - pull-requests: write — открыть PR.
+# - issues: write      — fallback comment.
+#
+# Acceptance: Issue #106 — ≥5 citations / 3 мес, ≥50 UTM stars / 3 мес.
+
+name: citation-tracker (Issue #200)
+
+on:
+  schedule:
+    # 1-е число каждые 3 месяца, 00:00 UTC.
+    # Q1: Jan, Q2: Apr, Q3: Jul, Q4: Oct.
+    - cron: '0 0 1 */3 *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no PR, no comment, just log)'
+        required: false
+        default: 'false'
+        type: boolean
+      override_quarter:
+        description: 'Override quarter label (e.g., 2027-Q1)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+# Конкурентные runs (например, если scan длится >3 часов) — отменять предыдущий.
+concurrency:
+  group: citation-tracker
+  cancel-in-progress: true
+
+jobs:
+  scan-and-update:
+    name: Quarterly citations scan + tracking PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TRACKING_FILE: docs/whitepaper-2026-tracking.md
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect quarter
+        id: quarter
+        run: |
+          if [[ -n "${{ inputs.override_quarter }}" ]]; then
+            QUARTER="${{ inputs.override_quarter }}"
+          else
+            MONTH=$(date -u +%-m)
+            YEAR=$(date -u +%Y)
+            case $MONTH in
+              1|2|3) Q="Q1" ;;
+              4|5|6) Q="Q2" ;;
+              7|8|9) Q="Q3" ;;
+              10|11|12) Q="Q4" ;;
+              *) Q="Q?" ;;
+            esac
+            QUARTER="${YEAR}-${Q}"
+          fi
+          echo "quarter=${QUARTER}" >> "$GITHUB_OUTPUT"
+          echo "Detected quarter: ${QUARTER}"
+
+      - name: Try Google Custom Search API
+        id: google_cse
+        if: ${{ env.GOOGLE_CSE_API_KEY == '' || env.GOOGLE_CSE_CX == '' }}
+        continue-on-error: true
+        env:
+          GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
+          GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GOOGLE_CSE_API_KEY}" ]] || [[ -z "${GOOGLE_CSE_CX}" ]]; then
+            echo "google_cse_available=false" >> "$GITHUB_OUTPUT"
+            echo "google_cse_result=" >> "$GITHUB_OUTPUT"
+            echo "WARN: GOOGLE_CSE_API_KEY or GOOGLE_CSE_CX not set; skipping"
+            exit 0
+          fi
+
+          QUERY="syslog-generator benchmark"
+          ENCODED_QUERY=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${QUERY}'))")
+
+          # Google CSE возвращает до 10 results per page; max 100/day на free tier.
+          RESPONSE=$(curl -fsSL \
+            "https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${ENCODED_QUERY}&num=10" \
+            2>/dev/null || echo '{}')
+
+          # Извлекаем первые 10 results.
+          RESULTS=$(echo "${RESPONSE}" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          items = data.get('items', [])
+          for it in items:
+              print(f\"{it.get('link','')}\t{it.get('title','')}\t{it.get('snippet','')}\")
+          " 2>/dev/null || echo "")
+
+          if [[ -n "${RESULTS}" ]]; then
+            echo "google_cse_available=true" >> "$GITHUB_OUTPUT"
+            echo "google_cse_result<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${RESULTS}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "Found $(echo "${RESULTS}" | wc -l | tr -d ' ') results."
+          else
+            echo "google_cse_available=false" >> "$GITHUB_OUTPUT"
+            echo "google_cse_result=" >> "$GITHUB_OUTPUT"
+            echo "WARN: Google CSE returned no results"
+          fi
+
+      - name: Fallback to GitHub GraphQL mention search
+        id: gh_mentions
+        if: steps.google_cse.outputs.google_cse_available != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Search issues/PRs в этом репозитории, которые ссылаются на
+          # наш whitepaper. Это fallback, не full web scan.
+          QUERY="repo:pharmacolog/syslog-generator whitepaper-2026 is:issue OR is:pr"
+          RESULT=$(gh search issues "${QUERY}" --json url,title,state,createdAt,number \
+            --limit 30 2>/dev/null || echo "[]")
+
+          if [[ "${RESULT}" != "[]" ]]; then
+            echo "gh_mentions_available=true" >> "$GITHUB_OUTPUT"
+            echo "gh_mentions_result<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${RESULT}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            COUNT=$(echo "${RESULT}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            echo "Found ${COUNT} mentions."
+          else
+            echo "gh_mentions_available=false" >> "$GITHUB_OUTPUT"
+            echo "gh_mentions_result=" >> "$GITHUB_OUTPUT"
+            echo "WARN: no GitHub mentions found"
+          fi
+
+      - name: Read current tracking file
+        id: read_tracking
+        run: |
+          if [[ -f "${TRACKING_FILE}" ]]; then
+            echo "tracking_exists=true" >> "$GITHUB_OUTPUT"
+            # Считаем текущие counters.
+            COUNTERS=$(python3 -c "
+          import re, sys
+          with open('${TRACKING_FILE}') as f:
+              md = f.read()
+          # Citations: row count в §1.2.
+          sec = md.split('### 1.2 Citations log')[1].split('## 2.')[0]
+          citations = sec.count('| http') + sec.count('| https')
+          # UTM stars: парсим из §2.
+          utm_match = re.search(r'\\*\\*GitHub stars via UTM\\*\\*\\s*\\|\\s*(\\d+)', md)
+          utm = int(utm_match.group(1)) if utm_match else 0
+          print(f'{citations} {utm}')
+          ")
+            CITATIONS=$(echo "${COUNTERS}" | cut -d' ' -f1)
+            UTM=$(echo "${COUNTERS}" | cut -d' ' -f2)
+            echo "current_citations=${CITATIONS}" >> "$GITHUB_OUTPUT"
+            echo "current_utm_stars=${UTM}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tracking_exists=false" >> "$GITHUB_OUTPUT"
+            echo "current_citations=0" >> "$GITHUB_OUTPUT"
+            echo "current_utm_stars=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate updated tracking file
+        id: update
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          set -euo pipefail
+          QUARTER="${{ steps.quarter.outputs.quarter }}"
+          CURRENT_CITATIONS=${{ steps.read_tracking.outputs.current_citations }}
+          CURRENT_UTM=${{ steps.read_tracking.outputs.current_utm_stars }}
+
+          # Если Google CSE available — прибавляем.
+          if [[ "${{ steps.google_cse.outputs.google_cse_available }}" == "true" ]]; then
+            NEW_CITATIONS=$(echo "${{ steps.google_cse.outputs.google_cse_result }}" | wc -l | tr -d ' ')
+            NEW_CITATIONS_RAW="${{ steps.google_cse.outputs.google_cse_result }}"
+          elif [[ "${{ steps.gh_mentions.outputs.gh_mentions_available }}" == "true" ]]; then
+            NEW_CITATIONS=$(echo "${{ steps.gh_mentions.outputs.gh_mentions_result }}" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+            NEW_CITATIONS_RAW=""
+          else
+            NEW_CITATIONS=0
+            NEW_CITATIONS_RAW=""
+          fi
+
+          TOTAL_CITATIONS=$((CURRENT_CITATIONS + NEW_CITATIONS))
+
+          # Генерируем updated tracking file.
+          python3 - <<EOF
+          import re, sys
+          from pathlib import Path
+
+          path = Path('${TRACKING_FILE}')
+          md = path.read_text()
+
+          # 1. Update §1.2 Citations log table.
+          if '${NEW_CITATIONS_RAW}':
+              rows = []
+              for line in '${NEW_CITATIONS_RAW}'.strip().split('\n'):
+                  parts = line.split('\t')
+                  if len(parts) >= 3:
+                      url, title, snippet = parts[0], parts[1], parts[2]
+                      anchor = title[:80].replace('|', '\\|')
+                      snippet_short = snippet[:80].replace('|', '\\|')
+                      rows.append(f'| {url} | "{anchor}" | $(date -u +%Y-%m-%d) | blog_post | medium | "{snippet_short}" |')
+              if rows:
+                  new_rows = '\n'.join(rows)
+                  # Insert before "## 2. Initial state".
+                  md = md.replace('## 2. Initial state', f'{new_rows}\n\n## 2. Initial state', 1)
+
+          # 2. Update §2 counters (citations, utm stars).
+          md = re.sub(
+              r'\\| \\*\\*Citations / backlinks\\*\\* \\| 0 \\|',
+              f'| **Citations / backlinks** | {${TOTAL_CITATIONS}} |',
+              md, count=1
+          )
+
+          # 3. Update §4 Quarterly report для текущего quarter.
+          quarter = '${QUARTER}'
+          new_section = f\"\"\"
+          ### {quarter}
+
+          | Метрика | Value | Delta vs prev | Target progress |
+          |---|---|---|---|
+          | Citations | {${TOTAL_CITATIONS}} | +{${NEW_CITATIONS}} | {int((100 * ${TOTAL_CITATIONS}) / 5)}% (target ≥5) |
+          | UTM stars | {${CURRENT_UTM}} | 0 | {int((100 * ${CURRENT_UTM}) / 50)}% (target ≥50) |
+          | Habr views | 0 | 0 | — |
+          | dev.to views | 0 | 0 | — |
+          \"\"\"
+          # Insert перед "## 5. Goals & acceptance".
+          md = md.replace('## 5. Goals & acceptance', f'{new_section}\n## 5. Goals & acceptance', 1)
+
+          path.write_text(md)
+          print(f'Updated {path}')
+          print(f'  Citations: {${CURRENT_CITATIONS}} → {${TOTAL_CITATIONS}} (+{${NEW_CITATIONS}})')
+          print(f'  UTM stars: {${CURRENT_UTM}} (unchanged; GitHub API does not provide UTM attribution)')
+          EOF
+
+      - name: Create branch + PR
+        if: ${{ inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          QUARTER="${{ steps.quarter.outputs.quarter }}"
+          BRANCH="citation-tracker/${QUARTER,,}"
+          # Sanitize: 2026-Q3 → citation-tracker/2026-q3
+          BRANCH_SAFE=$(echo "${BRANCH}" | tr '[:upper:]' '[:lower:]')
+
+          git config user.name "citation-tracker[bot]"
+          git config user.email "citation-tracker-bot@users.noreply.github.com"
+
+          git checkout -b "${BRANCH_SAFE}"
+          git add "${TRACKING_FILE}"
+
+          if git diff --staged --quiet; then
+            echo "No changes detected; skipping PR."
+            exit 0
+          fi
+
+          git commit -m "docs(whitepaper): Issue #200 quarterly citations scan (${QUARTER})
+
+          - Citations: ${{ steps.read_tracking.outputs.current_citations }} → auto-discovered delta
+          - UTM stars: ${{ steps.read_tracking.outputs.current_utm_stars }} (unchanged)
+          - Updated \`docs/whitepaper-2026-tracking.md\` §1.2 + §4
+          - Trigger: ${{ github.event_name }}
+          "
+
+          git push origin "${BRANCH_SAFE}"
+
+          # Открыть PR.
+          PR_BODY=$(cat <<EOF
+          ## Citation scan — ${QUARTER}
+
+          Автоматический quarterly scan (Issue #200).
+
+          ### Результаты
+
+          - **Citations / backlinks:** ${{ steps.read_tracking.outputs.current_citations }} (see §1.2 in tracking file)
+          - **UTM stars:** ${{ steps.read_tracking.outputs.current_utm_stars }} (GitHub API не отдаёт UTM attribution; см. §3 в tracking file)
+          - **Habr permalink views:** manual
+          - **dev.to permalink views:** manual
+
+          ### Source
+
+          - ${{ steps.google_cse.outputs.google_cse_available == 'true' && 'Google Custom Search API' || 'GitHub GraphQL mention search (fallback)' }}
+          - Workflow: \`${GITHUB_WORKFLOW}\`
+          - Run: #${GITHUB_RUN_NUMBER}
+
+          ### Acceptance metrics (Issue #106)
+
+          - ≥5 citations / 3 months: ${{ steps.read_tracking.outputs.current_citations }} / 5
+          - ≥50 UTM stars / 3 months: ${{ steps.read_tracking.outputs.current_utm_stars }} / 50
+
+          cc @maintainer — review + merge.
+          EOF
+          )
+
+          gh pr create \
+            --base dev \
+            --head "${BRANCH_SAFE}" \
+            --title "docs(whitepaper): Issue #200 citation scan (${QUARTER})" \
+            --body "${PR_BODY}" \
+            --label "documentation,whitepaper-2026" \
+            --reviewer pharmacolog
+
+      - name: Fallback comment on Issue #200
+        if: ${{ steps.google_cse.outputs.google_cse_available != 'true' && steps.gh_mentions.outputs.gh_mentions_available != 'true' && inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          QUARTER="${{ steps.quarter.outputs.quarter }}"
+          CURRENT_CITATIONS=${{ steps.read_tracking.outputs.current_citations }}
+          CURRENT_UTM=${{ steps.read_tracking.outputs.current_utm_stars }}
+
+          BODY=$(cat <<EOF
+          ## 🤖 citation-tracker — ${QUARTER}
+
+          Quarterly scan выполнен, но **ни один API не вернул backlinks**:
+
+          - ❌ Google Custom Search API: \`GOOGLE_CSE_API_KEY\` / \`GOOGLE_CSE_CX\` secrets не настроены или API limit exceeded.
+          - ❌ GitHub GraphQL mention search: 0 results.
+
+          ### Current state
+
+          - **Citations / backlinks:** ${CURRENT_CITATIONS} (target ≥5)
+          - **UTM stars:** ${CURRENT_UTM} (target ≥50)
+          - **Workflow:** \`${GITHUB_WORKFLOW}\`
+          - **Run:** #${GITHUB_RUN_NUMBER}
+
+          ### Action items
+
+          - [ ] Maintainer: проверить [docs/whitepaper-2026-tracking.md](docs/whitepaper-2026-tracking.md) §1.2 вручную.
+          - [ ] Если найдены citations — добавить через PR.
+          - [ ] Если \`GOOGLE_CSE_API_KEY\` ценен — настроить secrets.
+
+          _Этот comment автоматический. Не отвечайте на него без нужды._
+          EOF
+          )
+
+          gh issue comment 200 --body "${BODY}" || \
+            echo "WARN: cannot comment on Issue #200"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Citation tracker summary"
+            echo "- Quarter: ${{ steps.quarter.outputs.quarter }}"
+            echo "- Citations (current): ${{ steps.read_tracking.outputs.current_citations }}"
+            echo "- UTM stars (current): ${{ steps.read_tracking.outputs.current_utm_stars }}"
+            echo "- Google CSE available: ${{ steps.google_cse.outputs.google_cse_available }}"
+            echo "- GH mentions available: ${{ steps.gh_mentions.outputs.gh_mentions_available }}"
+            echo "- Result: ${{ job.status }}"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Run: ${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"

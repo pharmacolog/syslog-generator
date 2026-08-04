@@ -122,7 +122,10 @@ tool_supports_transport() {
     local tool="$1"
     local transport="$2"
     case "${tool}:${transport}" in
-        syslog_generator:udp|syslog_generator:tcp|syslog_generator:tls) return 0 ;;
+        # Issue #197 (v11.6): syslog_generator теперь поддерживает kafka —
+        # `kafka_receiver` (kafka-python, pure-Python) позволяет завершать
+        # Kafka cells с реальными measurements (а не n/a через stub).
+        syslog_generator:udp|syslog_generator:tcp|syslog_generator:tls|syslog_generator:kafka) return 0 ;;
         loggen:udp) return 0 ;;
         flog:*) return 1 ;;
         tcpkali:tcp|tcpkali:tls) return 0 ;;

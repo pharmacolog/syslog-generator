@@ -57,7 +57,7 @@ jobs:
         kafka: [false, true]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Для workflow_dispatch с inputs.ref — checkout указанного ref;
           # иначе (tag push) — стандартный github.ref.
@@ -76,7 +76,7 @@ jobs:
           cache-on-failure: true
 
       - name: Cache cargo-deb
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-deb
           key: cargo-tool-${{ runner.os }}-cargo-deb-v1
@@ -154,7 +154,7 @@ jobs:
         kafka: [false, true]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
 
@@ -170,7 +170,7 @@ jobs:
           cache-on-failure: true
 
       - name: Cache cargo-rpm
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-rpm
           key: cargo-tool-${{ runner.os }}-cargo-rpm-v1
@@ -388,7 +388,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
 
@@ -423,14 +423,14 @@ jobs:
           sudo apt-get install -y gnupg dpkg-sig rpm file
 
       - name: Download .deb artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           pattern: syslog-generator-deb-*
           merge-multiple: true
 
       - name: Download .rpm artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
           pattern: syslog-generator-rpm-*
@@ -620,8 +620,8 @@ jobs:
             file_ext: apk
             verify_cmd: 'apk add --allow-untrusted'
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
+      - name: Download signed packages artifact
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist/
@@ -693,10 +693,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download signed packages + signatures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: syslog-generator-signed-packages
           path: dist/

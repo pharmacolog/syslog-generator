@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-04T23:15:16Z",
+  "baseline_sha": "d600195afcf16365a54aef6cd3993fe74f9a0f12",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1671,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manual bootstrap for d600195."
+}

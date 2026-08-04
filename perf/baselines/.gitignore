@@ -1,0 +1,16 @@
+# perf/baselines/*.json: structured baseline artifacts
+#
+# Файлы в этом каталоге (v10.7.19.json, v10.7.20.json, HEAD.json,
+# <sha>.json) — это измерения Criterion benches (perf baseline), они
+# НЕ должны игнорироваться по умолчанию.
+#
+# НО: при локальной разработке они генерируются автоматически и не должны
+# попадать в коммиты. Force-track только в целевых PR (например, PR #193,
+# PR #195) через:
+#
+#     git add -f perf/baselines/<sha>.json
+#
+# Override через -f работает в обход .gitignore (см. git-add(1)).
+*
+!.gitignore
+!README.md

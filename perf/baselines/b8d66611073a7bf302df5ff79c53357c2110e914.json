@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-08-04T11:07:35Z",
+  "baseline_sha": "9c824fa20f1eaac1e694a5d7cbb959cf66cb93fd",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1710,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ]
+}

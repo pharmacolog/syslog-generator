@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-08-04T21:03:17Z",
-  "baseline_sha": "66a137ecad25fece984570cde05ff6b21c163221",
+  "timestamp": "2026-08-04T21:37:35Z",
+  "baseline_sha": "1723fd72c971b258b1171f033dc0f1e0ae8c5e7d",
   "n_runs": 3,
   "estimates": [
     {
       "bench": "hot_path",
       "group": "hot_path",
       "label": "hot_path/rfc5424_with_faker",
-      "time_ns_median": 1707,
+      "time_ns_median": 1729,
       "time_ns_lower": 0,
       "time_ns_upper": 0,
       "n_samples": 3
     }
   ],
-  "notes": "Manual bootstrap for 66a137e."
+  "notes": "Manual bootstrap for 1723fd7 (PR #230 adaptive UDP batching)."
 }

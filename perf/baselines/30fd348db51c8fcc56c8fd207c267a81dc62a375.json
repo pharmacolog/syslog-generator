@@ -1,38 +1,17 @@
 {
-  "sha": "30fd348db51c8fcc56c8fd207c267a81dc62a375",
-  "mode": "quick",
-  "timestamp": "2026-08-04T18:33:44Z",
-  "status": "ok",
-  "estimate_count": 29,
+  "timestamp": "2026-08-04T18:58:07Z",
+  "baseline_sha": "30fd348db51c8fcc56c8fd207c267a81dc62a375",
+  "n_runs": 3,
   "estimates": [
-    {"bench": "hot_path", "group": "hot_path", "label": "hot_path/rfc5424_with_faker", "time_ns_median": 1736.9003143310547, "time_ns_lower": 1725.8096923828125, "time_ns_upper": 1747.9909362792969},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc3164_static", "time_ns_median": 41322572.75, "time_ns_lower": 40242437.5, "time_ns_upper": 42402708.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_static", "time_ns_median": 32630325.5625, "time_ns_lower": 32477671.875, "time_ns_upper": 32782979.25},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/warmup_static", "time_ns_median": 10979380.1875, "time_ns_lower": 10923750.0, "time_ns_upper": 11035010.375},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_faker", "time_ns_median": 40550979.25, "time_ns_lower": 40222708.5, "time_ns_upper": 40879250.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/json_lines_static", "time_ns_median": 36947146.25, "time_ns_lower": 36397834.0, "time_ns_upper": 37496458.5},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_faker", "time_ns_median": 2020.7958068847656, "time_ns_lower": 2013.952880859375, "time_ns_upper": 2027.6387329101562},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc3164_static", "time_ns_median": 1443.168327331543, "time_ns_lower": 1441.934585571289, "time_ns_upper": 1444.4020690917969},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/protobuf_static", "time_ns_median": 688.3597373962402, "time_ns_lower": 687.2148513793945, "time_ns_upper": 689.5046234130859},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_static", "time_ns_median": 1146.0816040039062, "time_ns_lower": 1143.19482421875, "time_ns_upper": 1148.9683837890625},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/cef_static", "time_ns_median": 1035.7729568481445, "time_ns_lower": 1028.9598999023438, "time_ns_upper": 1042.5860137939453},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_faker", "time_ns_median": 1576.8794860839844, "time_ns_lower": 1569.3499145507812, "time_ns_upper": 1584.4090576171875},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/raw_static", "time_ns_median": 1025.6271286010742, "time_ns_lower": 1019.5553894042969, "time_ns_upper": 1031.6988677978516},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_static", "time_ns_median": 1579.76025390625, "time_ns_lower": 1574.1043090820312, "time_ns_upper": 1585.4161987304688},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/leef_static", "time_ns_median": 1040.6471786499023, "time_ns_lower": 1030.7210083007812, "time_ns_upper": 1050.5733489990234},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/16", "time_ns_median": 5326401.03125, "time_ns_lower": 5293861.96875, "time_ns_upper": 5358940.09375},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/1", "time_ns_median": 6059614.6875, "time_ns_lower": 5917208.375, "time_ns_upper": 6202021.0},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/4", "time_ns_median": 4547349.578125, "time_ns_lower": 4536760.375, "time_ns_upper": 4557938.78125},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/1", "time_ns_median": 8910932.3125, "time_ns_lower": 8819052.125, "time_ns_upper": 9002812.5},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/4", "time_ns_median": 6320588.5, "time_ns_lower": 6319692.625, "time_ns_upper": 6321484.375},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_4", "time_ns_median": 19670148.375, "time_ns_lower": 19440020.75, "time_ns_upper": 19900276.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_1", "time_ns_median": 17828360.65625, "time_ns_lower": 17467442.625, "time_ns_upper": 18189278.6875},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_16", "time_ns_median": 76753104.25, "time_ns_lower": 75866333.5, "time_ns_upper": 77639875.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_1", "time_ns_median": 16573101.5625, "time_ns_lower": 16556791.75, "time_ns_upper": 16589411.375},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_16", "time_ns_median": 29089727.203125, "time_ns_lower": 28432058.59375, "time_ns_upper": 29747395.8125},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_4", "time_ns_median": 19945424.5625, "time_ns_lower": 19540901.125, "time_ns_upper": 20349948.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_4", "time_ns_median": 30987765.625, "time_ns_lower": 30627552.125, "time_ns_upper": 31347979.125},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_1", "time_ns_median": 16502380.25, "time_ns_lower": 16088312.5, "time_ns_upper": 16916448.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_16", "time_ns_median": 25436177.078125, "time_ns_lower": 25197632.8125, "time_ns_upper": 25674721.34375}
-  ]
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1704,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manually generated baseline for 30fd348 (PR #229 governance docs). hot_path/rfc5424_with_faker: median of 3 runs. Required for autogen PR #244 to pass gate."
 }

@@ -1,35 +1,18 @@
-# perf/baselines/
+# perf/baselines/ holds per-SHA Criterion estimate baselines for the perf-regression gate.
 
-Structured baseline artifacts for Criterion benches. See
-[`docs/perf-baseline.md`](../../docs/perf-baseline.md) and
-[`docs/PERFORMANCE.md`](../../docs/PERFORMANCE.md) §3 for context.
+This directory is intentionally tracked in git so that the perf-regression workflow can:
+1. Read baseline from `perf/baselines/<origin/main-sha>.json` (immutable, SHA-pinned).
+2. Compare against current PR's `target/criterion/<bench>/new/estimates.json`.
+3. Fail the gate if any category (hot_path/format/transport/allocations) exceeds its threshold.
 
-## Files
+See:
+- [Issue #164](https://github.com/pharmacolog/syslog-generator/issues/164) — gate blocking (v11.8).
+- [PR #210](https://github.com/pharmacolog/syslog-generator/pull/210) — gate implementation.
+- [docs/perf-governance.md](../docs/perf-governance.md) — refresh procedure.
 
-| File | Description | Issue |
-|------|-------------|-------|
-| `v10.7.19.json` | Pre serde_yaml_ng migration baseline (Issue #134 / PR #177) | #193 |
-| `v10.7.20.json` | Single-run baseline for current HEAD (post-migration) | #193 |
-| `HEAD.json` | Latest A/B paired bench output (`scripts/bench-ab-yaml.sh`) | #193 |
-| `<git-sha>.json` | Per-commit baselines (`scripts/perf-baseline.sh update`) | PR-A0 |
-
-## Tracking policy
-
-`.gitignore` исключает `*.json` по умолчанию (см. `.gitignore` в этом
-каталоге). Чтобы закоммитить baseline в PR, override через `git add -f`:
-
+Initial baseline generation:
 ```bash
-git add -f perf/baselines/<sha>.json
+scripts/perf-baseline.sh update "$(git rev-parse HEAD)"
 ```
 
-Примеры PR, где это используется: #193, #195.
 
-## Generation
-
-```bash
-# Per-commit baseline (с CI):
-scripts/perf-baseline.sh update $(git rev-parse HEAD)
-
-# A/B comparison vs tag (Issue #193):
-scripts/bench-ab-yaml.sh v10.7.19 HEAD
-```

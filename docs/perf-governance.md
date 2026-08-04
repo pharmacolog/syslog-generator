@@ -201,6 +201,21 @@ perf baseline.
 - **Auto-baseline trigger**: `push` в main через
   `perf-baseline-autogen.yml` (Issue #223).
 
+## Local PR check (maintainer workflow, Issue #228)
+
+CI gate (median-of-3-runs) имеет systematic variance ±15-20% на GitHub Actions
+runners. Для **honest baseline** maintainer должен **локально** запустить
+perf-regression gate перед PR.
+
+**Hard rule**: см. `AGENTS.md §10.1` (Локальная perf-regression проверка).
+Maintainer обязан:
+1. Запустить `bash scripts/perf-local-check.sh <baseline-file>` локально
+2. Если exit 1 (regression detected) — **fix before push**
+3. Только после local PASS — push в remote
+
+**Helper**: `scripts/perf-local-check.sh` — entry point.
+**Tests**: `scripts/tests/test_perf_local_check.sh` (5/5 PASS).
+
 ## Связанные документы
 
 - [`docs/DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — как писать новые benches.

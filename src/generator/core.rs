@@ -12,11 +12,9 @@ use crate::transport::kafka::{
     parse_kafka_acks, parse_kafka_compression, target_sender_kafka, KafkaConfig,
 };
 use crate::transport::reconnect::ReconnectConfig;
-#[cfg(not(feature = "kafka"))]
-use crate::transport::target_sender_udp_with_batch;
 use crate::transport::{
     parse_tls_min_version, target_sender_file, target_sender_tcp, target_sender_tls,
-    target_sender_udp, BroadcastPolicy, Framing,
+    target_sender_udp, target_sender_udp_with_batch, BroadcastPolicy, Framing,
 };
 use anyhow::Result;
 use governor::{Quota, RateLimiter};
@@ -1552,8 +1550,17 @@ fn setup_target_senders(
                     ))
                 }
                 "udp" => {
-                    // UDP без reconnect (connectionless).
-                    tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd))
+                    // Issue #162 (A5 adaptive batching): если задан udp_batch_size,
+                    // использовать batched path. Иначе — legacy single-datagram.
+                    let batch_size = target.udp_batch_size.unwrap_or(1);
+                    if batch_size > 1 {
+                        tokio::spawn(target_sender_udp_with_batch(
+                            addr, phase_name, rx, m, sd, batch_size,
+                        ))
+                    } else {
+                        // UDP без reconnect (connectionless).
+                        tokio::spawn(target_sender_udp(addr, phase_name, rx, m, sd))
+                    }
                 }
                 "tls" => {
                     // N4: SNI/проверка имени — из tls_domain или хост-части address.

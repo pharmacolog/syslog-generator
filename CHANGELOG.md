@@ -1,6 +1,46 @@
 
 # Changelog
 
+## v10.7.23 - 2026-08-04 (perf-baseline auto-generation)
+
+**Patch-release: автоматическая генерация perf baseline после каждого push в main (Issue #223, PR #224).**
+
+### Added
+
+- **`.github/workflows/perf-baseline-autogen.yml`** (Issue #223, PR-A6.1, v11.8): workflow fires на `push` в `main`, генерирует `perf/baselines/<main-sha>.json` через median-of-3 hot_path runs, сравнивает с предыдущим main baseline.
+
+  **Hard policy** (per AGENTS.md §policy):
+  > Регрессия — это повод чинить код, а не снижать требования к бейзлайну.
+
+  Workflow **никогда** не обновляет baseline при regression > +10% (hot_path). При регрессии → FAIL с диагностикой → maintainer должен починить код или использовать `workflow_dispatch` с `force_override=true` (debug only).
+
+- **`docs/perf-governance.md` §Auto-generation**: новая секция с описанием auto-gen flow, hard policy, tuning и manual refresh escape.
+
+### Changed
+
+- **`docs/perf-governance.md` §Workflow integration**: добавлены `Median aggregation` (Issue #214) и `Auto-baseline trigger` (Issue #223) bullets.
+
+- **`docs/perf-governance.md` §Связанные документы**: добавлена ссылка на Issue #223.
+
+### Process improvement
+
+После этого release perf-regression gate больше не требует ручного bootstrap baseline перед каждым merge в main:
+- `perf/baselines/<new-main-sha>.json` создаётся автоматически через `perf-baseline-autogen.yml` сразу после merge.
+- Manual refresh через `scripts/perf-baseline.sh update <sha>` остаётся как legacy escape для backfill/debug use-cases.
+
+### Quality Gates
+
+- ✅ `actionlint .github/workflows/perf-baseline-autogen.yml` — clean.
+- ✅ `python3 yaml.safe_load` для all workflows — clean.
+- ✅ Workflow logic manual review: capture SHAs, idempotent skip, median-of-3, regression check, conditional commit.
+- ✅ Integration test plan: после merge в main, auto-gen должен сработать на следующем push.
+
+### Known limitations / external pending
+
+- **Threshold +10%** — compromise между strict detection и CI noise (single-run ±30-50%, median-of-3 ~±5%). Issue #218 (v12.0) планирует tighter threshold (+5%) если systematic CI variance будет reduced (bencher / paired A/B).
+- **Bootstrap baseline**: для первого merge этого workflow в main требовался manual baseline для `19a38ecf` (current main HEAD перед merge). Manual generation через `scripts/perf-regression-collect.sh hot_path` (1898 ns для rfc5424_with_faker). Все последующие baselines — automatic.
+- **Hot_path only**: workflow покрывает только `hot_path` bench. После Issue #211 (allocations bench) можно расширить.
+
 ## v10.7.22 - 2026-08-04 (Dependabot batch: GitHub Actions + Cargo production-deps)
 
 **Patch-release: batch update из 5 открытых Dependabot PR (#166, #168, #169, #172, #175), объединённых в единый PR #212 (per AGENTS.md §4 process).**

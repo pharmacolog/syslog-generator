@@ -1178,6 +1178,84 @@ echo "UUID: $UUID_BIN (matched)"
 - [Issue #133](https://github.com/pharmacolog/syslog-generator/issues/133) —
   parent issue для release profile hardening (split-debuginfo=packed).
 
+## 12. См. также
+
+- [docs/whitepaper-2026.md](whitepaper-2026.md) — Whitepaper 2026
+  (сравнительный benchmark 4 инструментов нагрузки).
+- [docs/whitepaper-2026.ru.md](whitepaper-2026.ru.md) — RU-черновик
+  для Habr.
+- [docs/whitepaper-2026.en.md](whitepaper-2026.en.md) — EN-черновик
+  для dev.to.
+
+## 13. Whitepaper & Citations
+
+> **Issue:** #199 (publication), #200 (citation tracking).
+> **Milestone:** v11.6.
+
+### 13.1 Где опубликован whitepaper
+
+После [Issue #199](https://github.com/pharmacolog/syslog-generator/issues/199)
+whitepaper будет опубликован в двух местах:
+
+- **Habr** (RU): **TBD** — permalink будет проставлен после публикации.
+  Следите за обновлениями в Issue #199.
+- **dev.to** (EN): **TBD** — permalink будет проставлен после публикации.
+
+Обе версии (RU + EN) уже доступны в этом репозитории:
+
+- [docs/whitepaper-2026.ru.md](whitepaper-2026.ru.md) — Habr draft.
+- [docs/whitepaper-2026.en.md](whitepaper-2026.en.md) — dev.to draft.
+
+### 13.2 Поддержать проект (UTM-tagged)
+
+Если whitepaper оказался полезен — поддержите проект звёздами на
+GitHub. Ссылка ниже **UTM-тегирована** для отслеживания конверсии
+(см. [Issue #200](https://github.com/pharmacolog/syslog-generator/issues/200)):
+
+- **[⭐ Star on GitHub](https://github.com/pharmacolog/syslog-generator/?utm_campaign=whitepaper-2026&utm_source=installation&utm_medium=docs)**
+
+> **Как работает UTM-тег:** utm_campaign=whitepaper-2026 добавлен в
+> URL; GitHub Stars API не предоставляет conversion attribution по
+> referrer, поэтому трекинг идёт через quarterly backlinks scan
+> (см. [docs/whitepaper-2026-tracking.md](whitepaper-2026-tracking.md)).
+
+### 13.3 Процитировать whitepaper
+
+Если вы ссылаетесь на whitepaper в статье / RFC proposal / benchmark —
+добавьте backlink в [docs/whitepaper-2026-tracking.md](whitepaper-2026-tracking.md)
+через PR. Это поможет трекать citations и обновлять impact section.
+
+**BibTeX (предварительно):**
+
+```bibtex
+@techreport{whitepaper2026,
+  title        = {Syslog load generators benchmark: 4 tools comparison},
+  author       = {{pharmacolog}},
+  institution  = {github.com/pharmacolog/syslog-generator},
+  year         = {2026},
+  month        = aug,
+  number       = {whitepaper-2026},
+  url          = {https://github.com/pharmacolog/syslog-generator/tree/main/docs/whitepaper-2026.md},
+  note         = {Harness spec: Issue \#106. Real run: Issue \#196. Available at \url{https://github.com/pharmacolog/syslog-generator}}
+}
+```
+
+### 13.4 Связанные маркетинговые активности
+
+Все — `EXTERNAL PENDING` (Issue #199, Issue #200):
+
+- ❌ **Telegram-анонсы** (DevOps Moscow, SRE Russia, Rust Russia) — отложено.
+- ❌ **Twitter/X thread** — отложено.
+- ❌ **Reddit r/rust, r/sysadmin** — отложено.
+- ❌ **Hacker News** — отложено.
+- ❌ **Citation count ≥ 5 / 3 мес** — acceptance-метрика Issue #106.
+- ❌ **GitHub stars ≥ 50 через UTM** — acceptance-метрика Issue #106.
+
+Quarterly backlinks scan (через
+[`.github/workflows/citation-tracker.yml`](../.github/workflows/citation-tracker.yml))
+обновляет [docs/whitepaper-2026-tracking.md](whitepaper-2026-tracking.md)
+каждые 3 месяца.
+
 ---
 
 <p align="center">

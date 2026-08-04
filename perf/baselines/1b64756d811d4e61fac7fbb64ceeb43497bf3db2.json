@@ -1,15 +1,38 @@
 {
-  "timestamp": "2026-08-04T10:12:54Z",
-  "baseline_sha": "1b64756d811d4e61fac7fbb64ceeb43497bf3db2",
+  "sha": "1b64756d811d4e61fac7fbb64ceeb43497bf3db2",
+  "mode": "quick",
+  "timestamp": "2026-08-04T11:56:59Z",
+  "status": "ok",
+  "estimate_count": 29,
   "estimates": [
-    {
-      "bench": "hot_path",
-      "group": "hot_path",
-      "label": "hot_path/rfc5424_with_faker",
-      "time_ns_median": 1740,
-      "time_ns_lower": 0,
-      "time_ns_upper": 0
-    }
-  ],
-  "notes": "Manually generated baseline for release/v10.7.22 (Dependabot batch) per docs/perf-governance.md \u2014 script: scripts/perf-regression-collect.sh hot_path"
+    {"bench": "hot_path", "group": "hot_path", "label": "hot_path/rfc5424_with_faker", "time_ns_median": 1694.043472290039, "time_ns_lower": 1678.5787048339844, "time_ns_upper": 1709.5082397460938},
+    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc3164_static", "time_ns_median": 35249484.625, "time_ns_lower": 35227104.5, "time_ns_upper": 35271864.75},
+    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_static", "time_ns_median": 31264052.0, "time_ns_lower": 30689146.0, "time_ns_upper": 31838958.0},
+    {"bench": "runtime", "group": "runtime", "label": "runtime/warmup_static", "time_ns_median": 10995078.1875, "time_ns_lower": 10857697.875, "time_ns_upper": 11132458.5},
+    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_faker", "time_ns_median": 39152489.75, "time_ns_lower": 38909333.5, "time_ns_upper": 39395646.0},
+    {"bench": "runtime", "group": "runtime", "label": "runtime/json_lines_static", "time_ns_median": 31023739.625, "time_ns_lower": 30812791.75, "time_ns_upper": 31234687.5},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_faker", "time_ns_median": 1971.7413787841797, "time_ns_lower": 1970.4183349609375, "time_ns_upper": 1973.0644226074219},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc3164_static", "time_ns_median": 1428.8581314086914, "time_ns_lower": 1428.3434753417969, "time_ns_upper": 1429.372787475586},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/protobuf_static", "time_ns_median": 681.5336494445801, "time_ns_lower": 679.4226913452148, "time_ns_upper": 683.6446075439453},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_static", "time_ns_median": 1135.1381912231445, "time_ns_lower": 1133.3961486816406, "time_ns_upper": 1136.8802337646484},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/cef_static", "time_ns_median": 1017.3772277832031, "time_ns_lower": 1017.0262756347656, "time_ns_upper": 1017.7281799316406},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_faker", "time_ns_median": 1528.7583465576172, "time_ns_lower": 1524.6899719238281, "time_ns_upper": 1532.8267211914062},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/raw_static", "time_ns_median": 1013.6849136352539, "time_ns_lower": 1012.5923156738281, "time_ns_upper": 1014.7775115966797},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_static", "time_ns_median": 1560.0770416259766, "time_ns_lower": 1558.0088500976562, "time_ns_upper": 1562.1452331542969},
+    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/leef_static", "time_ns_median": 1015.0601043701172, "time_ns_lower": 1013.9929504394531, "time_ns_upper": 1016.1272583007812},
+    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/16", "time_ns_median": 5021195.3125, "time_ns_lower": 4990026.0, "time_ns_upper": 5052364.625},
+    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/1", "time_ns_median": 5834584.625, "time_ns_lower": 5712319.0, "time_ns_upper": 5956850.25},
+    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/4", "time_ns_median": 4734252.59375, "time_ns_lower": 4731864.5625, "time_ns_upper": 4736640.625},
+    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/1", "time_ns_median": 8458690.125, "time_ns_lower": 8288885.5, "time_ns_upper": 8628494.75},
+    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/4", "time_ns_median": 6060721.375, "time_ns_lower": 6056156.25, "time_ns_upper": 6065286.5},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_4", "time_ns_median": 21240916.625, "time_ns_lower": 20758604.25, "time_ns_upper": 21723229.0},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_1", "time_ns_median": 15666635.25, "time_ns_lower": 15465479.0, "time_ns_upper": 15867791.5},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_16", "time_ns_median": 78215467.4375, "time_ns_lower": 76858825.5, "time_ns_upper": 79572109.375},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_1", "time_ns_median": 15625281.125, "time_ns_lower": 15547479.0, "time_ns_upper": 15703083.25},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_16", "time_ns_median": 29731140.625, "time_ns_lower": 29567781.25, "time_ns_upper": 29894500.0},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_4", "time_ns_median": 19728187.5, "time_ns_lower": 19399750.0, "time_ns_upper": 20056625.0},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_4", "time_ns_median": 31022356.8125, "time_ns_lower": 30575104.25, "time_ns_upper": 31469609.375},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_1", "time_ns_median": 15822281.375, "time_ns_lower": 15623854.25, "time_ns_upper": 16020708.5},
+    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_16", "time_ns_median": 23934832.51953125, "time_ns_lower": 23926584.9609375, "time_ns_upper": 23943080.078125}
+  ]
 }

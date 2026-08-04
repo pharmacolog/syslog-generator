@@ -17,6 +17,16 @@
 # - Production binary собирается на latest stable (1.97) — пользователи получают
 #   все последние performance improvements, bug fixes.
 # - rustc 1.95 → LLVM 22 (format v10); apt имеет only до llvm-18 (format v9) — mismatch.
+#
+# v11.6 follow-up (Issue #190): дополнительно собираем macOS release с
+# `split-debuginfo = "packed"` (`.dSYM/`) и публикуем в GitHub Release:
+#   - Linux:   syslog-generator.dwp  (для `addr2line` symbolication)
+#   - macOS:   syslog-generator.dSYM.tar.gz  (для `atos` symbolication)
+#   - Plus:    merged.profdata        (для reproducibility / future PGO reruns)
+# Honest disclosure: PGO остаётся Linux-only (llvm-profdata toolchain непереносим
+# на macOS). macOS-job делает обычный release build БЕЗ PGO, но с тем же
+# profile.release.split-debuginfo="packed" (Cargo.toml:21), который эмитит
+# `.dSYM/` автоматически. Debug artifacts → см. docs/installation.md §11.
 
 name: Release PGO build
 
@@ -190,6 +200,18 @@ jobs:
             cargo build --release
           echo "::endgroup::"
 
+          # Issue #190: assert .dwp was emitted by Cargo (profile.release has
+          # split-debuginfo="packed"). On Linux this places a .dwp file next
+          # to the binary. If a future profile change silently drops debug
+          # symbols, the release-publish job will fail loudly at the upload
+          # step rather than producing a release without symbolication data.
+          if [ ! -f target/release/syslog-generator.dwp ]; then
+            echo "::error::target/release/syslog-generator.dwp not found."
+            echo "::error::profile.release.split-debuginfo=\"packed\" (Cargo.toml) should emit it."
+            exit 1
+          fi
+          echo "Found .dwp: $(stat -c '%s' target/release/syslog-generator.dwp) bytes"
+
       - name: Verify PGO improvement (sanity bench)
         env:
           RUSTUP_TOOLCHAIN: stable
@@ -205,12 +227,13 @@ jobs:
             | head -5
           echo "::endgroup::"
 
-      - name: Upload PGO-optimized binary
+      - name: Upload PGO-optimized binary + .dwp + profdata (Issue #190)
         uses: actions/upload-artifact@v4
         with:
-          name: syslog-generator-pgo-${{ github.ref_name }}
+          name: syslog-generator-pgo-${{ github.ref_name }}-linux-amd64
           path: |
             target/release/syslog-generator
+            target/release/syslog-generator.dwp
             pgo/merged.profdata
           if-no-files-found: error
           retention-days: 90
@@ -220,6 +243,7 @@ jobs:
         run: |
           PROFRAW_COUNT=$(find "${{ github.workspace }}/pgo" -maxdepth 1 -type f -name '*.profraw' -print | wc -l | tr -d ' ')
           MERGED_SIZE=$(stat -c '%s' "${{ github.workspace }}/pgo/merged.profdata" 2>/dev/null || printf 'n/a')
+          DWP_SIZE=$(stat -c '%s' target/release/syslog-generator.dwp 2>/dev/null || printf 'n/a')
           {
             echo "## PGO build summary"
             echo "- Tag: ${{ github.ref_name }}"
@@ -228,5 +252,187 @@ jobs:
             echo "- Rust toolchain: ${LLVM_RUSTC_VERSION:-unknown}"
             echo "- Profile files: $PROFRAW_COUNT"
             echo "- Merged profdata: ${MERGED_SIZE} bytes"
+            echo "- .dwp: ${DWP_SIZE} bytes (Issue #190: для addr2line symbolication)"
             echo "- See docs/PERFORMANCE.md §6 for details"
+            echo "- See docs/installation.md §11 for symbolication recipes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pgo-build-macos:
+    # Issue #190: macOS release build with split-debuginfo (emits .dSYM/).
+    # Honest disclosure:
+    #   - НЕ PGO: llvm-profdata toolchain Linux-only. macOS-job делает обычный
+    #     release build (без PGO), но с profile.release.split-debuginfo="packed"
+    #     (Cargo.toml:21), который эмитит .dSYM/ автоматически.
+    #   - НЕ separate dsymutil step: Cargo вызывает dsymutil при split-debuginfo=packed
+    #     на macOS targets; явный вызов был бы no-op.
+    #   - macos-14 runner: arm64 (Apple Silicon). x86_64 build не делаем — Issue #190
+    #     не требует multi-arch; при необходимости добавить отдельный job.
+    name: Release build (macOS arm64, .dSYM)
+    runs-on: macos-14
+    timeout-minutes: 30
+    concurrency:
+      group: pgo-macos-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-release
+          cache-on-failure: true
+
+      - name: Build release binary (split-debuginfo=packed)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          # profile.release already declares split-debuginfo="packed", so Cargo
+          # invokes dsymutil automatically on macOS and emits:
+          #   target/release/syslog-generator
+          #   target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+          #   target/release/syslog-generator.dSYM/Contents/Info.plist
+          cargo build --release --locked
+          test -x target/release/syslog-generator
+          test -d target/release/syslog-generator.dSYM
+          test -f target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+          echo "Binary: $(file target/release/syslog-generator)"
+          echo "DWARF:  $(file target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator)"
+          BIN_SIZE=$(stat -f '%z' target/release/syslog-generator)
+          DWARF_SIZE=$(stat -f '%z' target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator)
+          echo "binary=${BIN_SIZE} bytes; dwarf=${DWARF_SIZE} bytes"
+
+      - name: Package .dSYM as tarball (Issue #190)
+        run: |
+          # gh release upload принимает individual files, не directories.
+          # .dSYM — это bundle directory; пакуем в tar.gz чтобы release-asset
+          # оставался самодостаточным (Info.plist + DWARF + resources).
+          # Альтернатива: положить .dSYM в symbolic-link tree в sparse-checkout,
+          # но tar.gz — стандартный формат для macOS debug bundles.
+          tar -C target/release -czf syslog-generator.dSYM.tar.gz syslog-generator.dSYM
+          ls -la syslog-generator.dSYM.tar.gz
+          tar -tzf syslog-generator.dSYM.tar.gz
+
+      - name: Upload macOS binary + .dSYM tarball (Issue #190)
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-release-${{ github.ref_name }}-macos-arm64
+          path: |
+            target/release/syslog-generator
+            syslog-generator.dSYM.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summary
+        if: always()
+        run: |
+          BIN_SIZE=$(stat -f '%z' target/release/syslog-generator 2>/dev/null || printf 'n/a')
+          DSYM_DWARF="target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator"
+          DSYM_SIZE=$(stat -f '%z' "$DSYM_DWARF" 2>/dev/null || printf 'n/a')
+          TARBALL_SIZE=$(stat -f '%z' syslog-generator.dSYM.tar.gz 2>/dev/null || printf 'n/a')
+          {
+            echo "## macOS release build summary (Issue #190)"
+            echo "- Tag: ${{ github.ref_name }}"
+            echo "- binary: ${BIN_SIZE} bytes"
+            echo "- .dSYM DWARF blob: ${DSYM_SIZE} bytes"
+            echo "- .dSYM.tar.gz: ${TARBALL_SIZE} bytes"
+            echo "- .dSYM/Contents/Info.plist присутствует: $(test -f target/release/syslog-generator.dSYM/Contents/Info.plist && echo yes || echo no)"
+            echo "- Symbolication через \`atos -o <dwarf> <addr>\` (см. docs/installation.md §11)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release-publish:
+    # Issue #190: aggregate Linux .dwp + macOS .dSYM + PGO profdata и attach
+    # к GitHub Release. Только tag push (workflow_dispatch — debug сборки,
+    # которые не должны трогать public release).
+    name: Upload debug artifacts to GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [pgo-build, pgo-build-macos]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux PGO artifact (binary + .dwp + profdata)
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-pgo-${{ github.ref_name }}-linux-amd64
+          path: artifacts/linux-amd64/
+
+      - name: Download macOS release artifact (binary + .dSYM.tar.gz)
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-release-${{ github.ref_name }}-macos-arm64
+          path: artifacts/macos-arm64/
+
+      - name: Verify required debug artifacts (Issue #190)
+        run: |
+          set -euo pipefail
+          required=(
+            artifacts/linux-amd64/syslog-generator
+            artifacts/linux-amd64/syslog-generator.dwp
+            artifacts/linux-amd64/merged.profdata
+            artifacts/macos-arm64/syslog-generator
+            artifacts/macos-arm64/syslog-generator.dSYM.tar.gz
+          )
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing required artifact: $f"
+              exit 1
+            fi
+          done
+          echo "All $(printf '%s\n' "${required[@]}" | wc -l | tr -d ' ') required artifacts present."
+
+      - name: List collected artifacts
+        run: |
+          echo "## artifacts/linux-amd64"
+          ls -la artifacts/linux-amd64/
+          echo
+          echo "## artifacts/macos-arm64"
+          ls -la artifacts/macos-arm64/
+
+      - name: Upload debug artifacts to GitHub Release (Issue #190)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Если release уже создан packages.yml (типичный flow), используем его.
+          # Если ещё нет (race condition между workflows), создаём draft.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG not yet created; packages.yml may still be running."
+            echo "Creating draft release as fallback."
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --draft
+          fi
+
+          # Upload .dwp/.dSYM/profdata/binary. Имена уникальны (per-target) и
+          # не конфликтуют с artifacts от packages.yml (.deb/.rpm/.apk/SHA256SUMS).
+          # `--clobber` перезаписывает если уже залит (re-run workflow).
+          gh release upload "$TAG" --clobber \
+            artifacts/linux-amd64/syslog-generator \
+            artifacts/linux-amd64/syslog-generator.dwp \
+            artifacts/linux-amd64/merged.profdata \
+            artifacts/macos-arm64/syslog-generator \
+            artifacts/macos-arm64/syslog-generator.dSYM.tar.gz
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Release debug artifacts uploaded (Issue #190)"
+            echo "- Tag: ${{ github.ref_name }}"
+            echo "- Linux:   syslog-generator, syslog-generator.dwp, merged.profdata"
+            echo "- macOS:   syslog-generator, syslog-generator.dSYM.tar.gz"
+            echo "- Symbolication: см. docs/installation.md §11"
           } >> "$GITHUB_STEP_SUMMARY"

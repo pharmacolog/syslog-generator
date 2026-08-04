@@ -82,10 +82,12 @@ WHITELIST_T=$(TOOLS="loggen tcpkali" all_tools)
 assert_eq "${WHITELIST_T}" "loggen tcpkali" "all_tools whitelist"
 
 log_section "test: tool_supports_transport (Issue #106 4-tool matrix)"
+# Issue #197 (v11.6): syslog_generator теперь supports kafka (real consumer
+# через kafka-python). Остальные 3×4 cells без изменений.
 if tool_supports_transport "syslog_generator" "udp" && \
    tool_supports_transport "syslog_generator" "tcp" && \
    tool_supports_transport "syslog_generator" "tls" && \
-   ! tool_supports_transport "syslog_generator" "kafka" && \
+   tool_supports_transport "syslog_generator" "kafka" && \
    tool_supports_transport "loggen" "udp" && \
    ! tool_supports_transport "loggen" "tcp" && \
    ! tool_supports_transport "loggen" "tls" && \
@@ -98,7 +100,7 @@ if tool_supports_transport "syslog_generator" "udp" && \
    tool_supports_transport "tcpkali" "tls" && \
    ! tool_supports_transport "tcpkali" "udp" && \
    ! tool_supports_transport "tcpkali" "kafka"; then
-    log_ok "PASS: tool_supports_transport matrix correct"
+    log_ok "PASS: tool_supports_transport matrix correct (syslog_generator now supports kafka per Issue #197)"
     PASSES=$((PASSES + 1))
 else
     log_error "FAIL: tool_supports_transport matrix wrong"

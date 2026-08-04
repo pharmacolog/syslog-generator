@@ -58,6 +58,30 @@ class TestCollect:
         self.assert_true(ok, "legal completed+measurements passes")
         self.assert_eq(msg, "", "no error message")
 
+    def test_invariant_kafka_completed_with_measurements(self):
+        # Issue #197 (v11.6): Kafka cells теперь могут быть `completed` (а не
+        # n/a). Этот тест — explicit regression guard: раньше `kafka_*` cells
+        # были всегда n/a, и `completed` с measurements означал fabricated data.
+        # Теперь `completed` для kafka_* — легальное состояние (kafka_receiver
+        # даёт real measurements), и инвариант это принимает.
+        runs = [
+            {
+                "workload_id": "kafka_50krps_256b",
+                "tool": "syslog_generator",
+                "run_idx": 1,
+                "status": "completed",
+                "measurements": {
+                    "achieved_msg_per_sec": 49900.0,
+                    "actual_bytes_per_msg": 256.0,
+                    "rate_pct_of_target": 99.8,
+                    "size_pct_deviation": 0.0,
+                },
+            }
+        ]
+        ok, msg = collect.invariant_no_fabricated(runs)
+        self.assert_true(ok, "kafka cell with completed+measurements passes (Issue #197)")
+        self.assert_eq(msg, "", "no error message for kafka completed cell")
+
     def test_invariant_completed_no_measurements_fails(self):
         runs = [
             {
@@ -290,6 +314,7 @@ def main():
     t = TestCollect()
     methods = [
         t.test_invariant_completed_with_measurements,
+        t.test_invariant_kafka_completed_with_measurements,
         t.test_invariant_completed_no_measurements_fails,
         t.test_invariant_skipped_with_measurements_fails,
         t.test_invariant_skipped_no_measurements,

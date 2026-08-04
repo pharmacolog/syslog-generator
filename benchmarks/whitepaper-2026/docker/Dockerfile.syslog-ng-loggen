@@ -1,0 +1,44 @@
+# Dockerfile.syslog-ng-loggen — Issue #198
+#
+# Pinned-by-tag (NOT by digest) Ubuntu 24.04 + syslog-ng-core.
+# `loggen` is the syslog-ng log generator (NOT rsyslog's loggen — see
+# benchmarks/whitepaper-2026/docker/README.md §2 for historical confusion).
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. Базовый image `ubuntu:24.04` НЕ pinned by digest (sha256:... не указан).
+#      Ubuntu регулярно пересобирает manifest для tag'а 24.04; digest ротируется
+#      с каждым security update. Если нужна строгая воспроизводимость — замените
+#      `FROM ubuntu:24.04` на `FROM ubuntu:24.04@sha256:<digest>` после
+#      `docker pull ubuntu:24.04 && docker images --digests`.
+#   2. `apt-get install syslog-ng-core` берёт пакет из текущего Ubuntu 24.04
+#      (noble) pocket. Версия syslog-ng-core в noble на 2026-07: 4.6.x
+#      (зависит от mirror state). Пакет подписан Ubuntu Archive Signing Key
+#      (https://help.ubuntu.com/community/SecureApt), так что tampering
+#      детектится на install; но конкретная версия не pinned.
+#   3. `sleep infinity` — entrypoint для долгоживущего sidecar; `docker
+#      compose exec syslog-ng-loggen loggen ...` запускает workload.
+#      Ubuntu image имеет /bin/sh, в отличие от distroless (см. Issue #106
+#      historical concern в benchmarks/whitepaper-2026/docker/README.md).
+#
+# TODO (Issue #198 follow-up): pin к digest + добавить multi-stage build
+# (builder для apt-get download, runtime только с /usr/sbin/loggen +
+# /lib/x86_64-linux-gnu/{libsyslog-ng,libglib,...}) — уменьшит image size
+# с ~200 MB до ~20 MB. Tracking: issue comments в upstream
+# https://github.com/pharmacolog/syslog-generator/issues/198
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        syslog-ng-core \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && which loggen \
+    && loggen --version
+
+# Sidecar: docker compose exec запускает workload по требованию.
+# sleep infinity + Ubuntu base (has /bin/sh) — не distroless, что и требовалось.
+ENTRYPOINT ["sleep", "infinity"]
+CMD ["infinity"]

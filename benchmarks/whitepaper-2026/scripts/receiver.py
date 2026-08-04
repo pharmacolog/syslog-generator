@@ -199,7 +199,132 @@ def tls_receiver(host, port, duration, cert, key, framing="octet-counting"):
     return _tcp_receiver_common(host, port, duration, framing, ssl_ctx=ctx)
 
 
+# -----------------------------------------------------------------------
+# Kafka real consumer (Issue #197)
+# -----------------------------------------------------------------------
+#
+# Honest disclosure:
+#   * Использует pure-Python `kafka-python` (stdlib + no native build) — это
+#     явный выбор Issue #197 (вместо librdkafka / confluent-kafka / aiokafka,
+#     которые требуют C-extension или asyncio).
+#   * Lazy import: `kafka` модуль импортируется ТОЛЬКО при первом вызове
+#     `kafka_receiver(...)`. Это позволяет `make harness-tests` работать на
+#     машинах, где `kafka-python` ещё не установлен (для UDP/TCP/TLS path).
+#   * Synchronous consumer с poll-loop, max 1000 records per batch,
+#     consumer_timeout_ms=200. Этого достаточно для whitepaper 50k msg/s
+#     (один record — одно syslog-сообщение; syslog-generator использует
+#     linger_ms=5 + max_batch_size=4096, → ~10-20 batches/sec).
+#   * Конфиг consumer group: `whitepaper-2026-<topic>`. auto_offset_reset='latest'
+#     чтобы receiver не "догонял" предыдущие прогоны (иначе measurements будут
+#     contaminated stale data).
+#
+# Backwards compatibility:
+#   * `kafka_stub_receiver` СОХРАНЁН (deprecation-soft): существующие тесты
+#     `test_kafka_stub_unreachable` / `test_kafka_stub_never_completes`
+#     продолжают проходить; в production path `main()` использует
+#     `kafka_receiver` (см. ниже). Stub помечен как legacy для будущего удаления
+#     (Issue #199 / next milestone).
+# -----------------------------------------------------------------------
+
+_DEFAULT_KAFKA_GROUP_PREFIX = "whitepaper-2026"
+_KAFKA_POLL_BATCH = 1000
+_KAFKA_CONSUMER_TIMEOUT_MS = 200
+
+
+def kafka_receiver(
+    host,
+    port,
+    duration,
+    topic,
+    group_id=None,
+    bootstrap_servers=None,
+    auto_offset_reset="latest",
+):
+    """Real Kafka consumer через kafka-python (pure-Python, no native build).
+
+    Параметры:
+      host, port:        Kafka broker host/port (для default bootstrap_servers).
+      duration:          seconds — сколько consume'ить.
+      topic:             Kafka topic.
+      group_id:          Consumer group id. Default: 'whitepaper-2026-<topic>'.
+      bootstrap_servers: Default: '<host>:<port>'.
+      auto_offset_reset: 'latest' (default) или 'earliest'. 'latest' — НЕ
+                         догонять stale messages от предыдущих прогонов.
+
+    Returns: dict (same shape as _recv_result).
+    """
+    start = _now()
+    deadline = start + duration
+    r = Receiver()
+
+    bootstrap = bootstrap_servers or f"{host}:{port}"
+    if group_id is None:
+        group_id = f"{_DEFAULT_KAFKA_GROUP_PREFIX}-{topic}"
+
+    # Lazy import — критично для test_receiver.py без kafka-python installed.
+    try:
+        from kafka import KafkaConsumer  # type: ignore[import-not-found]
+    except ImportError as e:
+        return _recv_result(r, start, "kafka", "kafka-protocol") | {
+            "error": f"kafka-python not installed: {e!r}. "
+                     f"Install via: pip install -r benchmarks/whitepaper-2026/requirements.txt",
+        }
+
+    consumer = None
+    try:
+        try:
+            consumer = KafkaConsumer(
+                topic,
+                bootstrap_servers=bootstrap,
+                group_id=group_id,
+                auto_offset_reset=auto_offset_reset,
+                # Минимизировать client-side buffering — нам нужны свежие замеры.
+                fetch_min_bytes=1,
+                fetch_max_wait_ms=100,
+                enable_auto_commit=False,
+                consumer_timeout_ms=_KAFKA_CONSUMER_TIMEOUT_MS,
+                # security_protocol=PLAINTEXT (default) — TLS/SASL настраивается
+                # через доп. kwargs в следующих sub-tasks.
+            )
+        except Exception as e:
+            return _recv_result(r, start, "kafka", "kafka-protocol") | {
+                "error": f"kafka broker unreachable at {bootstrap}: {e!r}",
+            }
+
+        while _now() < deadline and not r.stop.is_set():
+            try:
+                # poll() возвращает {TopicPartition: [records]} dict.
+                batches = consumer.poll(timeout_ms=_KAFKA_CONSUMER_TIMEOUT_MS,
+                                        max_records=_KAFKA_POLL_BATCH)
+            except Exception as e:
+                r.error = f"kafka poll failed: {e!r}"
+                break
+            if not batches:
+                continue
+            for _tp, records in batches.items():
+                if not records:
+                    continue
+                body_total = 0
+                for rec in records:
+                    if rec.value is None:
+                        continue
+                    body_total += len(rec.value)
+                _record(r, body=body_total, wire=body_total, msgs=len(records))
+    finally:
+        if consumer is not None:
+            try:
+                consumer.close(autocommit=False)
+            except Exception:
+                pass
+
+    return _recv_result(r, start, "kafka", "kafka-protocol")
+
+
 def kafka_stub_receiver(host, port, duration, topic):
+    """Legacy stub. Сохранён для backwards-compat с test_receiver.py; помечен
+    как deprecated (Issue #197). Production path использует kafka_receiver.
+    Issue #199 (next milestone): удалить после подтверждения что все 4 workload
+    cells переключены на real consumer."""
     start = _now()
     deadline = start + duration
     sock = None
@@ -222,7 +347,7 @@ def kafka_stub_receiver(host, port, duration, topic):
     return {"bytes": 0, "wire_bytes": 0, "messages": 0,
             "duration_secs": _now() - start,
             "framing": "kafka-protocol", "protocol": "kafka",
-            "error": "kafka_stub: full consumer requires librdkafka; v1 never marks Kafka cells as completed"}
+            "error": "kafka_stub: deprecated since v11.6 (Issue #197); use kafka_receiver"}
 
 
 def main(argv):
@@ -253,7 +378,9 @@ def main(argv):
             result = tls_receiver(host, port, duration, cert, key, framing)
         elif proto == "kafka":
             topic = argv[4] if len(argv) > 4 else "default"
-            result = kafka_stub_receiver(host, port, duration, topic)
+            # Issue #197: production path использует real consumer (kafka-python).
+            # kafka_stub_receiver сохранён для backwards-compat с test_receiver.py.
+            result = kafka_receiver(host, port, duration, topic)
         else:
             print(json.dumps({"error": f"unknown protocol: {proto}"}))
             return 2

@@ -1,6 +1,46 @@
 
 # Changelog
 
+## v10.7.24 - 2026-08-04 (local perf-regression check, Issue #228)
+
+**Patch-release: добавлен hard rule о локальной perf-regression проверке перед PR (Issue #228).**
+
+### Added
+
+- **`AGENTS.md §10.1` "Локальная perf-regression проверка (hard rule)"** — maintainer
+  обязан локально запускать perf-regression gate с честным baseline перед PR. При
+  regression — fix before push.
+
+- **`scripts/perf-local-check.sh`** (new, Issue #228) — helper script для local
+  perf-regression check. Median-of-3-runs + comparison с baseline. Exit codes:
+  0 (pass) / 1 (regression, fix before push) / 2 (invalid usage).
+
+- **`scripts/tests/test_perf_local_check.sh`** (new) — unit tests (5/5 PASS):
+  syntax check, missing baseline (no args, no files), synthetic compare (5% vs
+  10% threshold), synthetic compare (100% regression).
+
+- **`docs/perf-governance.md` §Local PR check** — cross-reference на AGENTS.md
+  §10.1 + hard policy "fix before push" + helper script documentation.
+
+### Changed
+
+- **`AGENTS.md` §10 "Pre-PR Gate-check"** — добавлен §10.1 с детальным описанием
+  honest baseline, thresholds (v11.9 vs target v12.0), exit codes, когда применять,
+  helper scripts.
+
+### Process improvement
+
+Maintainer теперь обязан перед каждым PR с hot-path изменениями:
+1. `git fetch origin main` — получить latest baseline
+2. `bash scripts/perf-local-check.sh <baseline-file>` — local check
+3. Если exit 1 — **fix before push** (оптимизировать код, использовать `_cached`
+   API, убрать hot-path allocations)
+4. Если exit 0 — push в remote и ждать CI
+
+CI может false-positive fail из-за systematic variance ±15-20% (Issue #218) —
+в таких случаях maintainer может approve несмотря на CI fail если есть local
+PASS evidence в PR body.
+
 ## v10.7.23 - 2026-08-04 (perf-baseline auto-generation)
 
 **Patch-release: автоматическая генерация perf baseline после каждого push в main (Issue #223, PR #224).**

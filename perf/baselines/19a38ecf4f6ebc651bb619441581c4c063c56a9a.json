@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-08-04T13:08:50Z",
+  "baseline_sha": "35b6c4e22f845aea615d26dc173656be67584104",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "allocations",
+      "group": "allocations_format_encoding",
+      "label": "allocations_format_encoding/json_lines",
+      "time_ns_median": 394,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    },
+    {
+      "bench": "allocations",
+      "group": "allocations_format_encoding",
+      "label": "allocations_format_encoding/rfc5424",
+      "time_ns_median": 157,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    },
+    {
+      "bench": "allocations",
+      "group": "allocations_message_generation",
+      "label": "allocations_message_generation/rfc5424_with_faker",
+      "time_ns_median": 1699,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    },
+    {
+      "bench": "allocations",
+      "group": "allocations_payload",
+      "label": "allocations_payload/render_template",
+      "time_ns_median": 406,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    },
+    {
+      "bench": "allocations",
+      "group": "allocations_transport_buffering",
+      "label": "allocations_transport_buffering/bytesmut_accumulation",
+      "time_ns_median": 61,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    },
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1695,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ]
+}

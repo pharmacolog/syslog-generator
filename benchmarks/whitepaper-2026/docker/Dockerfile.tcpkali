@@ -1,0 +1,79 @@
+# Dockerfile.tcpkali — Issue #198
+#
+# STATUS: **UNVERIFIED** (per Issue #198 requirements).
+#
+# Preserved source build от форка MumiaiGene/tcpkali (community-maintained
+# fork upstream `segmentio/tcpkali` — оригинал archived с 2022).
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. **UNVERIFIED** — upstream fork `MumiaiGene/tcpkali` (GitHub) НЕ
+#      проверен лично на момент 2026-07. Возможные проблемы:
+#        a) fork может быть удалён / rebased / force-pushed → build fail;
+#        b) default branch может переименоваться (master → main / другая);
+#        c) build зависимости (cmake, libprotobuf, libssl-dev, libboost,
+#           etc.) могут конфликтовать с Ubuntu 24.04 (noble);
+#        d) `v2.3.3` tag может быть перевыпущен с другим commit (не
+#           рекомендуется GitHub, но GitHub позволяет force-push tag'и).
+#      **TODO**: перед использованием проверить (a)-(d) и обновить Dockerfile
+#      с verified commit SHA + build log. Tracking: issue comments в
+#      https://github.com/pharmacolog/syslog-generator/issues/198 +
+#      апстрим issue (если есть).
+#   2. `git clone --depth 1 --branch v2.3.3` использует tag, а не commit
+#      SHA. Tag НЕ cryptographic anchor (можно переподписать); commit SHA
+#      надёжнее. После первого `git ls-remote https://github.com/MumiaiGene/tcpkali.git`
+#      замените `--branch v2.3.3` на `--branch <verified-commit-sha>`.
+#   3. CMake build steps основаны на upstream tcpkali README, но
+#      скрипт НЕ тестировался end-to-end в этом Dockerfile. Если cmake
+#      падает на Ubuntu 24.04 — см. upstream issue tracker.
+#   4. Base image `ubuntu:24.04` NOT pinned by digest (см. Dockerfile.syslog-ng-loggen
+#      для обоснования).
+#   5. **flog cells N/A для network workloads** (см.
+#      benchmarks/whitepaper-2026/README.md §3). tcpkali — для TCP/TLS cells
+#      только.
+#
+# Альтернатива: использовать `babashka/tcpkali` или
+# `docker.io/segmentio/tcpkali:v2.3.3` (если кто-то опубликовал official image
+# после archive upstream'а). Не делаем это предположение без проверки.
+
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        libssl-dev \
+        libprotobuf-dev \
+        protobuf-compiler \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# UNVERIFIED: см. Honest disclosure §1-§2.
+RUN git clone --depth 1 --branch v2.3.3 https://github.com/MumiaiGene/tcpkali.git . \
+    && cmake -DCMAKE_BUILD_TYPE=Release . \
+    && make -j"$(nproc)" \
+    && test -x tcpkali \
+    && ./tcpkali --version
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libssl3 \
+        libprotobuf-lite32 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /src/tcpkali /usr/local/bin/tcpkali
+
+RUN tcpkali --version 2>&1 | head -5 || echo "tcpkali --version: see upstream docs"
+
+# Sidecar: docker compose exec запускает workload по требованию.
+ENTRYPOINT ["sleep", "infinity"]
+CMD ["infinity"]

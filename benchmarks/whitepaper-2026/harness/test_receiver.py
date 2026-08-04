@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 RECEIVER_PY = SCRIPT_DIR.parent / "scripts" / "receiver.py"
@@ -172,6 +173,127 @@ class TestReceiver:
         self.assert_eq(result["messages"], 0,
                       "kafka_stub.messages is always 0 (no fabricated completion)")
 
+    # ------------------------------------------------------------------
+    # Issue #197: real Kafka consumer (kafka-python) tests.
+    # Mocking strategy:
+    #   * `kafka` модуль lazy-imported внутри `kafka_receiver` (см. receiver.py),
+    #     поэтому мы подменяем `sys.modules['kafka']` ДО вызова и перехватываем
+    #     создание `KafkaConsumer`. Это позволяет тестам работать без
+    #     установленного `kafka-python` (Issue #197 honest disclosure).
+    #   * На каждой итерации `consumer.poll()` возвращает dict с
+    #     `TopicPartition -> [ConsumerRecord(...)]`; мы генерируем fake records
+    #     с заданным body_size и считаем, что receiver правильно суммирует.
+    # ------------------------------------------------------------------
+
+    def _make_fake_record(self, value):
+        rec = MagicMock()
+        rec.value = value
+        rec.error = None
+        return rec
+
+    def test_kafka_receiver_not_installed(self):
+        """Если kafka-python не установлен, kafka_receiver возвращает понятный
+        error (а не падает с ImportError)."""
+        # Удаляем `kafka` из sys.modules чтобы сработал ImportError внутри
+        # receiver.kafka_receiver (lazy import).
+        with patch.dict(sys.modules, {"kafka": None}):
+            result = receiver.kafka_receiver("127.0.0.1", 9092, 0.1, "topic")
+        self.assert_true(result["error"] is not None,
+                        "kafka_receiver returns error when kafka-python is not installed")
+        self.assert_true("kafka-python" in result["error"].lower() or
+                        "no module" in result["error"].lower(),
+                        f"error mentions kafka-python/no module: {result['error']}")
+        self.assert_eq(result["messages"], 0,
+                      "kafka_receiver.messages=0 when not installed")
+        self.assert_eq(result["protocol"], "kafka", "protocol=kafka")
+        self.assert_eq(result["framing"], "kafka-protocol", "framing=kafka-protocol")
+
+    def test_kafka_receiver_unreachable(self):
+        """KafkaConsumer ctor падает (broker недоступен) → error в result."""
+        fake_kafka = MagicMock()
+        fake_consumer = MagicMock()
+        fake_consumer.__enter__ = MagicMock(return_value=fake_consumer)
+        fake_consumer.__exit__ = MagicMock(return_value=False)
+
+        def _raise_ctor(*_a, **_kw):
+            raise OSError("Connection refused: 127.0.0.1:1")
+        fake_consumer.side_effect = _raise_ctor
+        fake_kafka.KafkaConsumer = fake_consumer
+
+        with patch.dict(sys.modules, {"kafka": fake_kafka}):
+            result = receiver.kafka_receiver("127.0.0.1", 1, 0.5, "topic")
+        self.assert_true(result["error"] is not None,
+                        "kafka_receiver returns error on broker connection failure")
+        self.assert_true("unreachable" in result["error"].lower() or
+                        "refused" in result["error"].lower() or
+                        "kafka broker" in result["error"].lower(),
+                        f"error mentions broker/unreachable/refused: {result['error']}")
+
+    def test_kafka_receiver_counts_records(self):
+        """Happy path: poll возвращает batches, receiver суммирует body bytes
+        и messages корректно."""
+        fake_kafka = MagicMock()
+        fake_consumer_inst = MagicMock()
+        fake_consumer_inst.__enter__ = MagicMock(return_value=fake_consumer_inst)
+        fake_consumer_inst.__exit__ = MagicMock(return_value=False)
+        # Ctor возвращает наш instance.
+        fake_kafka.KafkaConsumer = MagicMock(return_value=fake_consumer_inst)
+
+        # poll() возвращает 2 batch'a: 5 records по 100B + 3 records по 50B.
+        # На 3-й вызов возвращает {} (deadline exceeded), loop завершается.
+        # Используем plain object (не TopicPartition из kafka.structs) — это
+        # позволяет тесту работать без установленного kafka-python. receiver
+        # использует TP только как dict key, equality matters, not type.
+        class _FakeTP:
+            def __init__(self, topic, partition):
+                self.topic = topic
+                self.partition = partition
+            def __hash__(self):
+                return hash((self.topic, self.partition))
+            def __eq__(self, other):
+                return (self.topic, self.partition) == (other.topic, other.partition)
+        tp = _FakeTP(topic="topic", partition=0)
+        batch1 = {tp: [self._make_fake_record(b"x" * 100) for _ in range(5)]}
+        batch2 = {tp: [self._make_fake_record(b"y" * 50) for _ in range(3)]}
+        poll_results = iter([batch1, batch2, {}])
+
+        def _fake_poll(*_a, **_kw):
+            try:
+                return next(poll_results)
+            except StopIteration:
+                return {}
+        fake_consumer_inst.poll = MagicMock(side_effect=_fake_poll)
+        fake_consumer_inst.close = MagicMock()
+
+        # Mock kafka module так, чтобы lazy `from kafka import KafkaConsumer`
+        # внутри kafka_receiver подхватил fake_consumer_inst.
+        with patch.dict(sys.modules, {"kafka": fake_kafka}):
+            result = receiver.kafka_receiver("127.0.0.1", 9092, 2.0, "topic",
+                                            bootstrap_servers="127.0.0.1:9092")
+
+        self.assert_eq(result["error"], None, "kafka_receiver happy path: no error")
+        self.assert_eq(result["messages"], 8, "8 records consumed (5 + 3)")
+        self.assert_eq(result["bytes"], 5 * 100 + 3 * 50, "650 body bytes (5*100 + 3*50)")
+        self.assert_eq(result["protocol"], "kafka", "protocol=kafka")
+        self.assert_eq(result["framing"], "kafka-protocol", "framing=kafka-protocol")
+        self.assert_true(result["duration_secs"] >= 0,
+                        f"duration_secs sane (got {result['duration_secs']})")
+        # consumer.close() должен быть вызван для cleanup.
+        self.assert_true(fake_consumer_inst.close.called,
+                        "consumer.close() called in finally block")
+
+    def test_kafka_receiver_lazy_import_isolates_no_kafka_python(self):
+        """Sanity: receiver.py модуль импортируется УСПЕШНО без kafka-python.
+        Это критично для `make harness-tests` на машинах без kafka-python."""
+        # receiver уже загружен в начале файла. Если импорт не упал, тест
+        # проходит по определению. Проверяем явно:
+        self.assert_true(hasattr(receiver, "kafka_receiver"),
+                        "receiver has kafka_receiver function (Issue #197)")
+        self.assert_true(callable(receiver.kafka_receiver),
+                        "kafka_receiver is callable")
+        self.assert_true(hasattr(receiver, "kafka_stub_receiver"),
+                        "kafka_stub_receiver preserved for backwards-compat")
+
     def test_main_usage_error(self):
         rc = receiver.main([])
         self.assert_eq(rc, 2, "main() with no args returns 2")
@@ -216,6 +338,10 @@ def main():
         t.test_tls_no_cert,
         t.test_kafka_stub_unreachable,
         t.test_kafka_stub_never_completes,
+        t.test_kafka_receiver_not_installed,
+        t.test_kafka_receiver_unreachable,
+        t.test_kafka_receiver_counts_records,
+        t.test_kafka_receiver_lazy_import_isolates_no_kafka_python,
         t.test_main_usage_error,
         t.test_main_unknown_proto,
         t.test_parse_octet_counting_buffer,

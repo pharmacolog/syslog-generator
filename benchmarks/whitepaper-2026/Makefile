@@ -20,6 +20,7 @@ PERF_DIR       := $(REPO_ROOT)/perf
 WP_RESULTS     := $(PERF_DIR)/whitepaper-results.json
 WP_REPORT      := $(RESULTS_DIR)/REPORT.md
 HARNESS_DIR    := $(SCRIPT_DIR)/harness
+DOCKER_DIR     := $(SCRIPT_DIR)/docker
 
 SYSLOG_GENERATOR_BIN := $(REPO_ROOT)/target/release/syslog-generator
 LOGGEN_BIN  := $(shell command -v loggen 2>/dev/null || echo "")
@@ -44,13 +45,14 @@ endif
 
 export REQUIRE_TOOLS SKIP_BUILD PRESERVE_RESULTS DURATION_SECS RUNS WORKLOADS TOOLS
 export SCRIPT_DIR WHITEPAPER_DIR REPO_ROOT CONFIGS_DIR SCRIPTS_DIR RESULTS_DIR PERF_DIR
-export WP_RESULTS WP_REPORT HARNESS_DIR
+export WP_RESULTS WP_REPORT HARNESS_DIR DOCKER_DIR
 export SYSLOG_GENERATOR_BIN LOGGEN_BIN FLOG_BIN TCPKALI_BIN
 export C_RED C_GREEN C_YELLOW C_BLUE C_BOLD C_OFF
 
 .PHONY: help all dry-run validate report check-tools harness-tests clean \
         build-syslog-generator reset \
-        run-syslog-generator run-loggen run-flog run-tcpkali
+        run-syslog-generator run-loggen run-flog run-tcpkali \
+        docker-build docker-up docker-down docker-ps docker-logs docker-exec
 
 help:
 	@printf "$(C_BOLD)Whitepaper 2026 — benchmark harness$(C_OFF)\n"
@@ -64,6 +66,13 @@ help:
 	@printf "  $(C_GREEN)make harness-tests$(C_OFF)     Run self-tests only.\n"
 	@printf "  $(C_GREEN)make check-tools$(C_OFF)       Detect available tools + host.\n"
 	@printf "  $(C_GREEN)make clean$(C_OFF)             Remove results/ + perf/whitepaper-results.json.\n"
+	@printf "  $(C_GREEN)make docker-build$(C_OFF)      Build all 5 docker images (Issue #198).\n"
+	@printf "  $(C_GREEN)make docker-up$(C_OFF)         Start 5 docker services (background).\n"
+	@printf "  $(C_GREEN)make docker-down$(C_OFF)       Stop + remove 5 docker services.\n"
+	@printf "  $(C_GREEN)make docker-ps$(C_OFF)         Show running services.\n"
+	@printf "  $(C_GREEN)make docker-logs$(C_OFF)       Tail logs (all services).\n"
+	@printf "  $(C_GREEN)make docker-exec TOOL=loggen ARGS='--help'$(C_OFF)\n"
+	@printf "                            Run tool inside container (e.g. loggen/tcpkali/flog/kafka-receiver).\n"
 	@printf "\n"
 	@printf "$(C_BOLD)Variables:$(C_OFF)\n"
 	@printf "  REQUIRE_TOOLS=0|1   default: 0 (dry-run)\n"
@@ -157,6 +166,55 @@ clean:
 reset:
 	@printf "$(C_BOLD)== reset to schema_only ==$(C_OFF)\n"
 	@python3 $(SCRIPTS_DIR)/reset_schema.py $(WP_RESULTS)
+
+# -----------------------------------------------------------------------
+# Issue #198: Docker compose targets (5 services: redpanda, syslog-ng-loggen,
+# flog, tcpkali, kafka-receiver). Honest disclosure — все images pinned
+# by TAG, NOT by digest. tcpkali — UNVERIFIED (см. docker/README.md).
+# -----------------------------------------------------------------------
+
+DOCKER_COMPOSE_FILE := $(DOCKER_DIR)/docker-compose.yml
+DOCKER_COMPOSE := docker compose -f $(DOCKER_COMPOSE_FILE)
+
+docker-build:
+	@printf "$(C_BOLD)== docker build (5 services) ==$(C_OFF)\n"
+	@$(DOCKER_COMPOSE) build
+
+docker-up:
+	@printf "$(C_BOLD)== docker up (5 services) ==$(C_OFF)\n"
+	@$(DOCKER_COMPOSE) up -d
+	@printf "$(C_GREEN)[OK] services started. Try: make docker-ps$(C_OFF)\n"
+
+docker-down:
+	@printf "$(C_BOLD)== docker down (5 services) ==$(C_OFF)\n"
+	@$(DOCKER_COMPOSE) down
+
+docker-ps:
+	@$(DOCKER_COMPOSE) ps
+
+docker-logs:
+	@$(DOCKER_COMPOSE) logs -f --tail=200
+
+docker-exec:
+	@if [[ -z "$(TOOL)" ]]; then \
+		printf "$(C_RED)[ERROR] docker-exec: set TOOL=<loggen|flog|tcpkali|kafka-receiver> and ARGS='...'$(C_OFF)\n"; \
+		exit 2; \
+	fi
+	@case "$(TOOL)" in \
+		loggen)           container=whitepaper-loggen;          cmd=loggen ;; \
+		flog)             container=whitepaper-flog;            cmd=flog ;; \
+		tcpkali)          container=whitepaper-tcpkali;         cmd=tcpkali ;; \
+		kafka-receiver)   container=whitepaper-kafka-receiver;  cmd="python3 /opt/receiver/receiver.py" ;; \
+		*) printf "$(C_RED)[ERROR] unknown TOOL='$(TOOL)' (use loggen|flog|tcpkali|kafka-receiver)$(C_OFF)\n"; exit 2 ;; \
+	esac; \
+	ARGS_REAL="$(ARGS)"; \
+	if [[ -z "$$ARGS_REAL" ]]; then \
+		printf "$(C_YELLOW)[INFO] no ARGS provided; running '$(TOOL) --version' for sanity check$(C_OFF)\n"; \
+		docker compose -f $(DOCKER_COMPOSE_FILE) exec $$container $$cmd --version 2>&1 || true; \
+	else \
+		printf "$(C_BLUE)[INFO] docker exec $$container $$cmd $$ARGS_REAL$(C_OFF)\n"; \
+		docker compose -f $(DOCKER_COMPOSE_FILE) exec $$container $$cmd $$ARGS_REAL; \
+	fi
 
 %:
 	@true

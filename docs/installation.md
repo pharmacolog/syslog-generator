@@ -38,6 +38,7 @@ PR: [#146](https://github.com/pharmacolog/syslog-generator/pull/146)
 8. [Удаление (uninstall)](#8-удаление-uninstall)
 9. [Troubleshooting](#9-troubleshooting)
 10. [Кросс-ссылки и история](#10-кросс-ссылки-и-история)
+11. [Извлечение debug-символов (symbolication)](#11-извлечение-debug-символов-symbolication)
 
 ---
 
@@ -1002,6 +1003,180 @@ docker manifest inspect local/syslog-generator:${VERSION}     # multi-arch info
 - **Язык:** русский (по AGENTS.md §1).
 - **Cross-references обновляются через:**
   `docs/USER_GUIDE.md` §1, `README.md` секция «Установка».
+
+---
+
+## 11. Извлечение debug-символов (symbolication)
+
+> **Доступно с milestone v11.6+** (Issue #190). Сборка `release-pgo.yml`
+> публикует debug-артефакты рядом с бинарём в GitHub Release:
+>
+> | Платформа | Файл | Инструмент |
+> |---|---|---|
+> | Linux x86_64 | `syslog-generator.dwp` | `addr2line` (из `binutils`) |
+> | macOS arm64 | `syslog-generator.dSYM.tar.gz` | `atos` (Xcode Command Line Tools) |
+> | Linux x86_64 | `merged.profdata` | profile data, для reproducibility |
+>
+> Debug-артефакты **эмитятся автоматически** благодаря
+> `[profile.release].split-debuginfo = "packed"` в `Cargo.toml:21`:
+> Cargo на Linux кладёт DWARF в `.dwp` рядом с бинарём, на macOS
+> вызывает `dsymutil` и создаёт bundle `.dSYM/`. Никаких
+> дополнительных RUSTFLAGS не требуется.
+
+### 11.1 Linux: `addr2line` + `.dwp`
+
+#### 11.1.1 Скачать debug-артефакт
+
+```bash
+VERSION="11.6.0"
+TAG="v${VERSION}"
+curl -fsSL -O "https://github.com/pharmacolog/syslog-generator/releases/download/${TAG}/syslog-generator.dwp"
+# Verify SHA-256 (см. SHA256SUMS из Release)
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+#### 11.1.2 Получить backtrace из core dump
+
+```bash
+# Предполагается, что бинарь установлен стандартно (deb/rpm → /usr/bin/syslog-generator)
+# или скачан из Release как syslog-generator.
+
+BIN="/usr/bin/syslog-generator"           # или ./syslog-generator
+DWP="./syslog-generator.dwp"
+
+# 1. Адрес из core dump (пример: 0x555555aabbcc)
+ADDR="0x555555aabbcc"
+
+# 2. Symbolicate через addr2line
+addr2line -f -C -e "$BIN" --dwp="$DWP" "$ADDR"
+# Ожидаемый вывод (пример):
+#   syslog_generator::transport::tcp::send
+#   src/transport/tcp.rs:42
+```
+
+#### 11.1.3 Полный backtrace из gdb
+
+```bash
+gdb -batch \
+    -ex "file $BIN" \
+    -ex "core-file /tmp/core.syslog-generator.12345" \
+    -ex "echo --- backtrace ---\n" \
+    -ex "bt full" \
+    -ex "echo --- symbolicate each frame ---\n" \
+    -ex "frame 0; addr2line -f -C -e $BIN --dwp=$DWP \$pc" \
+    -ex "frame 1; addr2line -f -C -e $BIN --dwp=$DWP \$pc" \
+    -ex "frame 2; addr2line -f -C -e $BIN --dwp=$DWP \$pc"
+```
+
+#### 11.1.4 Проверка соответствия бинаря и `.dwp`
+
+```bash
+# build-id бинаря должен совпадать с build-id .dwp:
+B1=$(readelf -n "$BIN" | awk '/Build ID:/ {print $3; exit}')
+B2=$(readelf -n "$DWP" | awk '/Build ID:/ {print $3; exit}')
+test "$B1" = "$B2" || { echo "::error::build-id mismatch"; exit 1; }
+echo "build-id: $B1 (matched)"
+```
+
+### 11.2 macOS: `atos` + `.dSYM`
+
+#### 11.2.1 Скачать и распаковать `.dSYM`
+
+```bash
+VERSION="11.6.0"
+TAG="v${VERSION}"
+curl -fsSL -O "https://github.com/pharmacolog/syslog-generator/releases/download/${TAG}/syslog-generator.dSYM.tar.gz"
+mkdir -p ~/dwarf && tar -C ~/dwarf -xzf syslog-generator.dSYM.tar.gz
+ls -la ~/dwarf/syslog-generator.dSYM/Contents/Resources/DWARF/
+# Ожидается: syslog-generator (DWARF blob)
+```
+
+#### 11.2.2 Получить backtrace из crash log (console / `~/Library/Logs/DiagnosticReports/`)
+
+macOS crash report содержит `Binary Images` секцию с адресами загрузки модулей.
+Для symbolication нужны: `Load Address` (image base) и `Sample Address` (frame).
+
+Пример строки из crash report:
+
+```
+0x100abc000 -        0x100affff7  syslog-generator (11.6.0) <UUID> /usr/local/bin/syslog-generator
+```
+
+Восстановление смещения (offset) и вызов `atos`:
+
+```bash
+DWARF=~/dwarf/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+LOAD_ADDR="0x100abc000"   # из Binary Images
+FRAME_ADDR="0x100abd2c0"  # из Thread 0 .. frame N
+ARCH="arm64"              # или "x86_64"
+
+OFFSET=$(printf '0x%x' $((FRAME_ADDR - LOAD_ADDR)))
+xcrun atos -o "$DWARF" -arch "$ARCH" "$OFFSET"
+# Ожидаемый вывод (пример):
+#   syslog_generator::transport::tcp::send (in syslog-generator) (src/transport/tcp.rs:42)
+```
+
+#### 11.2.3 Полный backtrace через `lldb`
+
+```bash
+DWARF=~/dwarf/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+BIN="/usr/local/bin/syslog-generator"
+lldb -o "target create $BIN" \
+     -o "command script import ~/dwarf/syslog-generator.dSYM" \
+     -o "process launch" \
+     -o "thread backtrace --count 30" \
+     --batch
+```
+
+#### 11.2.4 Проверка соответствия бинаря и `.dSYM`
+
+```bash
+DWARF=~/dwarf/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+UUID_BIN=$(dwarfdump --uuid "$BIN" 2>/dev/null | awk '/^UUID: / {print $2; exit}')
+UUID_DSYM=$(dwarfdump --uuid ~/dwarf/syslog-generator.dSYM 2>/dev/null | awk '/^UUID: / {print $2; exit}')
+test "$UUID_BIN" = "$UUID_DSYM" || { echo "::error::dSYM UUID mismatch"; exit 1; }
+echo "UUID: $UUID_BIN (matched)"
+```
+
+### 11.3 Где артефакты живут в Release
+
+| Файл | Назначение | Совместимость |
+|---|---|---|
+| `syslog-generator` (linux-amd64) | stripped PGO-optimized binary | bind к `.dwp` и `merged.profdata` |
+| `syslog-generator.dwp` | packed DWARF для `addr2line` / `gdb` | build-id должен совпадать с бинарём |
+| `merged.profdata` | merged LLVM profile (PGO) | для reproducibility / rerun PGO |
+| `syslog-generator` (macos-arm64) | stripped release binary (без PGO) | bind к `.dSYM.tar.gz` |
+| `syslog-generator.dSYM.tar.gz` | `.dSYM/Contents/{Info.plist,Resources/DWARF/...}` | UUID должен совпадать с бинарём |
+
+### 11.4 Известные ограничения
+
+> **Honest disclosure** (Issue #190):
+> 1. **macOS-сборка НЕ использует PGO.** PGO toolchain (LLVM 20 / `llvm-profdata`)
+>    Linux-only; macOS-job делает обычный release build (без PGO), но
+>    сохраняет `split-debuginfo = "packed"` (→ `.dSYM/`). Throughput macOS-бинаря
+>    может отличаться от Linux-PGO на ±5% (см. `docs/PERFORMANCE.md §6`).
+> 2. **`merged.profdata` специфичен для LLVM 20 raw format v10.** При обновлении
+>    rustc до версии, использующей другой raw format, профиль нужно собирать заново.
+> 3. **macOS build → `arm64` only** (`macos-14` runner). x86_64 darwin build
+>    не делается; Issue #190 не требовал multi-arch. Для добавления — отдельный job
+>    на `macos-13`.
+> 4. **Debug-артефакты публикуются только для tag push.** `workflow_dispatch`
+>    (debug сборки) не трогает public release.
+
+### 11.5 Связанные документы
+
+- [scripts/verify-release-profile.sh](../scripts/verify-release-profile.sh) —
+  локальный paired measurement `addr2line` (Linux) / `atos` (macOS), подтверждает
+  что `split-debuginfo = "packed"` даёт рабочий symbolication pipeline.
+- [Cargo.toml:21](../Cargo.toml) — `split-debuginfo = "packed"` в
+  `[profile.release]`. **Не удалять без миграции на rustc-managed DWARF**
+  (`-Csplit-debuginfo=...`) и обновления §11.
+- [CHANGELOG.md v10.7.20](../CHANGELOG.md) — paired measurement (Issue #133, PR #178):
+  baseline 11,757,008 bytes, strip=symbols −25.53%, opt-level=s −40.96%.
+- [Issue #190](https://github.com/pharmacolog/syslog-generator/issues/190) —
+  оригинальный issue с описанием и acceptance criteria.
+- [Issue #133](https://github.com/pharmacolog/syslog-generator/issues/133) —
+  parent issue для release profile hardening (split-debuginfo=packed).
 
 ---
 

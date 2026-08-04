@@ -325,8 +325,7 @@ jobs:
           - [ ] All CI blocking checks pass (incl. perf-regression gate на base SHA)
           - [ ] Auto-merge via workflow \`auto-merge\` API (or solo-maintainer \`gh pr merge --admin\`)
 
-          🤖 Generated with [opencode](https://opencode.ai)" \
-            --json url --jq '.url')
+          🤖 Generated with [opencode](https://opencode.ai)")
 
           echo "PR created: ${PR_URL}"
           echo "url=${PR_URL}" >> "${GITHUB_OUTPUT}"

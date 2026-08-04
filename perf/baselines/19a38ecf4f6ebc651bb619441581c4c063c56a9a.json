@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-08-04T13:01:54Z",
+  "baseline_sha": "19a38ecf4f6ebc651bb619441581c4c063c56a9a",
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1898,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0
+    }
+  ],
+  "notes": "Manually generated baseline for 19a38ec (PR #222 follow-up) per docs/perf-governance.md \u00a7Refresh"
+}

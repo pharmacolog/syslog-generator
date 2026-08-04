@@ -26,6 +26,7 @@
 8. [Test Coverage Requirement (S11/P9)](#8-test-coverage-requirement-s11p9)
 9. [File Ownership matrix](#9-file-ownership-matrix)
 10. [Pre-PR Gate-check (S6)](#10-pre-pr-gate-check-s6)
+    - [10.1 Локальная perf-regression проверка (hard rule)](#101-локальная-perf-regression-проверка-hard-rule)
 11. [Worktree-based isolation (S1)](#11-worktree-based-isolation-s1)
 12. [Sub-agent Dispatch Protocol (S7)](#12-sub-agent-dispatch-protocol-s7)
 13. [Conflict Resolution Protocol (S8)](#13-conflict-resolution-protocol-s8)
@@ -417,6 +418,89 @@ bash -n scripts/*.sh               # shell syntax check
 **Coverage gate** (в CI, не в pre-pr-check): `cargo llvm-cov --fail-under-lines=97`
 для Tier 1 модулей (см. `docs/COVERAGE.md`).
 
+### 10.1 Локальная perf-regression проверка (hard rule)
+
+> **Hard rule**: перед `git push` (или `gh pr create`) maintainer обязан **локально**
+> запустить perf-regression gate с **честным baseline** и **чинить**, если есть
+> реальная regression. Issue #228.
+
+**Зачем**: CI systematic variance на GitHub Actions runners ±15-20% даже после
+median-of-N-runs aggregation (Issue #218). Это значит, что **CI gate может
+false-positive fail** для PR, которые локально не показывают regression. Также
+наоборот — CI может пропустить реальную regression из-за variance.
+
+**Локальная проверка** даёт **honest baseline** (warm cache, controlled
+environment) и сразу показывает реальную regression без CI noise.
+
+**Процедура:**
+
+```bash
+# 1. Fetch latest main + baseline
+git fetch origin main
+LATEST_BASELINE="$(ls -t perf/baselines/*.json | grep -v '\.gitignore\|README' | head -1)"
+
+# 2. Run local perf check (median-of-3)
+bash scripts/perf-local-check.sh "${LATEST_BASELINE}"
+
+# 3. Если exit 0 — push OK. Если exit 1 — FIX before push.
+```
+
+**Exit codes:**
+- `0` — no regressions, push OK
+- `1` — regression detected, **fix before push**
+- `2` — invalid usage / missing baseline
+
+**Когда применять:**
+
+- ✅ Перед PR, который меняет hot-path код (`src/generator/`, `src/format/`, `src/transport/`)
+- ✅ Перед PR, который меняет `Cargo.toml` deps (может влиять на inlining)
+- ✅ Перед PR, который добавляет новые bench targets
+- ❌ **НЕ применять** для docs-only changes (AGENTS.md, README.md, CHANGELOG.md)
+- ❌ **НЕ применять** для CI workflow changes (`.github/workflows/*.yml`)
+- ❌ **НЕ применять** для `Cargo.toml` version bumps без dep changes
+
+**Definition "честного baseline"** (honest baseline):
+
+- ✅ Создан на свежем main HEAD (latest available в `perf/baselines/`)
+- ✅ Использует median-of-≥3 runs (Issue #214 methodology)
+- ✅ Не содержит cold cache bias (warm-up step выполнен, Issue #164)
+- ❌ Не single-run (variance ±30-50%, не acceptable)
+
+**Thresholds** (median-of-3):
+
+| Категория | Threshold (v11.9) | Threshold (target v12.0) |
+|---|---|---|
+| `hot_path/` | **+10%** | +5-10% |
+| `format/` | **+15%** | +10-15% |
+| `transport/` | **+15%** | +10-15% |
+| `allocations/` | **+100%** | +15-20% |
+
+**Когда local показывает regression:**
+
+1. **Сначала fix**: оптимизировать код, использовать `_cached` API, убрать hot-path allocations.
+2. **Потом re-run local check** — должно пройти.
+3. **Только после fix push в remote** и ждать CI.
+
+**Когда CI показывает regression, а local прошёл:**
+
+- Это **CI variance issue** (Issue #218).
+- В PR body добавить comment "Local perf check: PASS, CI variance: ±X%".
+- Maintainer может approve несмотря на CI fail (если variance в пределах Issue #218 bounds).
+
+**Helper scripts:**
+
+- `scripts/perf-local-check.sh` — main entry point
+- `scripts/perf-regression-collect.sh` — collect (median-of-N-runs)
+- `scripts/compute-median.py` — median aggregation
+- `scripts/tests/test_perf_local_check.sh` — unit tests (5/5 PASS)
+
+**Acceptance:**
+
+- ❌ PR **заблокирован** если local perf check показывает regression
+  (даже если CI green — fix before push)
+- ❌ PR с **CI false-positive regression** может быть merged только с
+  explicit maintainer approval + local PASS evidence в PR body
+
 ## 11. Worktree-based isolation (S1)
 
 **Каждый агент работает в отдельном worktree** от своего base-ветки:
@@ -635,6 +719,14 @@ gh issue comment <N> --body "🤖 Agent-X: blocked on Agent-Y's PR #M. Waiting f
 ---
 
 ## История изменений
+
+### v2.1 (2026-08-04) — Local perf-regression check
+- §10.1 "Локальная perf-regression проверка" (Issue #228) — hard rule для
+  maintainer'а: проверять perf-regression локально с честным baseline перед
+  PR. При regression — fix before push.
+- `scripts/perf-local-check.sh` (new) + `scripts/tests/test_perf_local_check.sh`
+  (5/5 PASS).
+- `docs/perf-governance.md` §Local PR check — cross-reference на §10.1.
 
 ### v2.0 (2026-07-24) — Single source of truth
 - Объявлен **single source of truth** для AI-агентов.

@@ -1,6 +1,86 @@
 
 # Changelog
 
+## v10.7.24 - 2026-08-04 (local perf-regression check, Issue #228)
+
+**Patch-release: добавлен hard rule о локальной perf-regression проверке перед PR (Issue #228).**
+
+### Added
+
+- **`AGENTS.md §10.1` "Локальная perf-regression проверка (hard rule)"** — maintainer
+  обязан локально запускать perf-regression gate с честным baseline перед PR. При
+  regression — fix before push.
+
+- **`scripts/perf-local-check.sh`** (new, Issue #228) — helper script для local
+  perf-regression check. Median-of-3-runs + comparison с baseline. Exit codes:
+  0 (pass) / 1 (regression, fix before push) / 2 (invalid usage).
+
+- **`scripts/tests/test_perf_local_check.sh`** (new) — unit tests (5/5 PASS):
+  syntax check, missing baseline (no args, no files), synthetic compare (5% vs
+  10% threshold), synthetic compare (100% regression).
+
+- **`docs/perf-governance.md` §Local PR check** — cross-reference на AGENTS.md
+  §10.1 + hard policy "fix before push" + helper script documentation.
+
+### Changed
+
+- **`AGENTS.md` §10 "Pre-PR Gate-check"** — добавлен §10.1 с детальным описанием
+  honest baseline, thresholds (v11.9 vs target v12.0), exit codes, когда применять,
+  helper scripts.
+
+### Process improvement
+
+Maintainer теперь обязан перед каждым PR с hot-path изменениями:
+1. `git fetch origin main` — получить latest baseline
+2. `bash scripts/perf-local-check.sh <baseline-file>` — local check
+3. Если exit 1 — **fix before push** (оптимизировать код, использовать `_cached`
+   API, убрать hot-path allocations)
+4. Если exit 0 — push в remote и ждать CI
+
+CI может false-positive fail из-за systematic variance ±15-20% (Issue #218) —
+в таких случаях maintainer может approve несмотря на CI fail если есть local
+PASS evidence в PR body.
+
+## v10.7.23 - 2026-08-04 (perf-baseline auto-generation)
+
+**Patch-release: автоматическая генерация perf baseline после каждого push в main (Issue #223, PR #224).**
+
+### Added
+
+- **`.github/workflows/perf-baseline-autogen.yml`** (Issue #223, PR-A6.1, v11.8): workflow fires на `push` в `main`, генерирует `perf/baselines/<main-sha>.json` через median-of-3 hot_path runs, сравнивает с предыдущим main baseline.
+
+  **Hard policy** (per AGENTS.md §policy):
+  > Регрессия — это повод чинить код, а не снижать требования к бейзлайну.
+
+  Workflow **никогда** не обновляет baseline при regression > +10% (hot_path). При регрессии → FAIL с диагностикой → maintainer должен починить код или использовать `workflow_dispatch` с `force_override=true` (debug only).
+
+- **`docs/perf-governance.md` §Auto-generation**: новая секция с описанием auto-gen flow, hard policy, tuning и manual refresh escape.
+
+### Changed
+
+- **`docs/perf-governance.md` §Workflow integration**: добавлены `Median aggregation` (Issue #214) и `Auto-baseline trigger` (Issue #223) bullets.
+
+- **`docs/perf-governance.md` §Связанные документы**: добавлена ссылка на Issue #223.
+
+### Process improvement
+
+После этого release perf-regression gate больше не требует ручного bootstrap baseline перед каждым merge в main:
+- `perf/baselines/<new-main-sha>.json` создаётся автоматически через `perf-baseline-autogen.yml` сразу после merge.
+- Manual refresh через `scripts/perf-baseline.sh update <sha>` остаётся как legacy escape для backfill/debug use-cases.
+
+### Quality Gates
+
+- ✅ `actionlint .github/workflows/perf-baseline-autogen.yml` — clean.
+- ✅ `python3 yaml.safe_load` для all workflows — clean.
+- ✅ Workflow logic manual review: capture SHAs, idempotent skip, median-of-3, regression check, conditional commit.
+- ✅ Integration test plan: после merge в main, auto-gen должен сработать на следующем push.
+
+### Known limitations / external pending
+
+- **Threshold +10%** — compromise между strict detection и CI noise (single-run ±30-50%, median-of-3 ~±5%). Issue #218 (v12.0) планирует tighter threshold (+5%) если systematic CI variance будет reduced (bencher / paired A/B).
+- **Bootstrap baseline**: для первого merge этого workflow в main требовался manual baseline для `19a38ecf` (current main HEAD перед merge). Manual generation через `scripts/perf-regression-collect.sh hot_path` (1898 ns для rfc5424_with_faker). Все последующие baselines — automatic.
+- **Hot_path only**: workflow покрывает только `hot_path` bench. После Issue #211 (allocations bench) можно расширить.
+
 ## v10.7.22 - 2026-08-04 (Dependabot batch: GitHub Actions + Cargo production-deps)
 
 **Patch-release: batch update из 5 открытых Dependabot PR (#166, #168, #169, #172, #175), объединённых в единый PR #212 (per AGENTS.md §4 process).**

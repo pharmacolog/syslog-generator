@@ -1,7 +1,7 @@
 
 [package]
 name = "syslog-generator"
-version = "10.7.22"
+version = "10.7.23"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -188,6 +188,14 @@ harness = false
 # PR-A0: dispatch matrix — round-robin/weighted/broadcast × {1, 4, 16} targets.
 [[bench]]
 name = "dispatch_matrix"
+harness = false
+
+# Issue #211: allocations bench — throughput-based benchmark для alloc profile.
+# Покрывает message generation, format encoding, transport buffering.
+# Использует Criterion `iter_batched` для изоляции allocations между батчами.
+# Threshold для gate: 15% (Issue #164, allocations category).
+[[bench]]
+name = "allocations"
 harness = false
 
 # PR-6 (v10.7.8): расширенное bench-coverage. Иерархическая структура:

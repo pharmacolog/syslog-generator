@@ -1,0 +1,293 @@
+# perf-baseline-autogen (Issue #223, PR-A6.1, v11.8)
+#
+# Auto-generate `perf/baselines/<main-sha>.json` после каждого push в main,
+# ЕСЛИ новый код не регрессирует относительно предыдущего main HEAD.
+#
+# ## Hard policy
+#
+# > Если новый код приводит к регрессии по производительности — это повод
+# > чинить новый код, а не снижать требования к бейзлайну.
+#
+# Workflow **НЕ** обновляет baseline при регрессии > +THRESHOLD%.
+# Workflow **FAIL** с диагностикой → maintainer должен починить код или
+# явно подтвердить через workflow_dispatch + FORCE_OVERRIDE=true.
+#
+# ## Design
+#
+# - **Trigger**: push to main + workflow_dispatch
+# - **Variance mitigation**: median-of-3 hot_path runs (Issue #214 prep)
+# - **Threshold**: +10% hot_path (stricter чем gate's 50%, achievable с median)
+# - **Idempotent**: skip если `perf/baselines/<new-sha>.json` уже существует
+# - **Self-commit**: новый baseline коммитится обратно в main через GITHUB_TOKEN
+#
+# ## Integration с perf-regression gate
+#
+# После первого прогона этого workflow `perf/baselines/<main-sha>.json`
+# ВСЕГДА существует → perf-regression.yml gate больше не FAIL'ит
+# "baseline not found". Это убирает ручной bootstrap bottleneck.
+#
+# ## Tuning в будущем (Issue #218, v12.0)
+#
+# - tighter thresholds (5%) когда systematic CI variance уменьшится
+# - alternative frameworks (bencher / paired A/B) если median-of-3 недостаточен
+
+name: perf-baseline-autogen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_override:
+        description: 'Override regression check (НЕ рекомендуется — используй только для debug)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+# Cancel in-flight runs если новый push приходит быстро.
+concurrency:
+  group: perf-baseline-autogen-${{ github.event.after || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  autogen:
+    name: Auto-generate perf baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: perf-baseline-autogen-ubuntu
+
+      - name: Resolve SHAs
+        id: shas
+        run: |
+          set -euo pipefail
+          NEW_SHA="$(git rev-parse HEAD)"
+          if PREV_SHA="$(git rev-parse HEAD~1 2>/dev/null)"; then
+            echo "prev=${PREV_SHA}" >> "${GITHUB_OUTPUT}"
+          else
+            # First commit in repo — нет previous SHA.
+            echo "::notice::First commit в repo — нет previous SHA для comparison"
+            echo "prev=" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "new=${NEW_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved NEW_SHA=${NEW_SHA}"
+          echo "Resolved PREV_SHA=${PREV_SHA:-<none>}"
+
+      - name: Skip if baseline already exists
+        id: skip_check
+        run: |
+          NEW_SHA="${{ steps.shas.outputs.new }}"
+          BASELINE_FILE="perf/baselines/${NEW_SHA}.json"
+          if [[ -f "${BASELINE_FILE}" ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Baseline already exists at ${BASELINE_FILE} — skipping regeneration (idempotent)."
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Compile benches
+        if: steps.skip_check.outputs.exists == 'false'
+        run: cargo bench --no-run --locked
+
+      - name: Warm-up (cold cache mitigation)
+        if: steps.skip_check.outputs.exists == 'false'
+        # Первый прогон наполняет page cache → variance ±30-50% → ±5-10%.
+        # Output игнорируется. Это известная техника из agent2's PR #216.
+        run: |
+          cargo bench --locked --bench hot_path -- --warm-up-time 1 --measurement-time 1 >/dev/null 2>&1 || true
+          echo "Warm-up complete"
+
+      - name: Generate baseline (median of 3 hot_path runs)
+        if: steps.skip_check.outputs.exists == 'false'
+        id: gen
+        run: |
+          set -euo pipefail
+          NEW_SHA="${{ steps.shas.outputs.new }}"
+          OUT="perf/baselines/${NEW_SHA}.json"
+          mkdir -p "$(dirname "${OUT}")"
+
+          # Use the battle-tested perf-regression-collect.sh with BENCH_RUNS=3
+          # (median-of-N aggregation, Issue #214). This avoids duplicating logic
+          # and reuses all the variance-reduction machinery from PR #216.
+          BENCH_RUNS=3 scripts/perf-regression-collect.sh "${OUT}" hot_path
+
+          # Verify output exists and has expected fields.
+          if [[ ! -f "${OUT}" ]]; then
+            echo "ERROR: ${OUT} not produced by perf-regression-collect.sh"
+            exit 1
+          fi
+          if ! python3 -c "import json,sys; d=json.load(open('${OUT}')); assert d.get('n_runs',0) >= 3, 'n_runs < 3'; assert len(d.get('estimates',[])) > 0, 'no estimates'" 2>/dev/null; then
+            echo "ERROR: ${OUT} has unexpected shape (n_runs < 3 or empty estimates)"
+            cat "${OUT}" || true
+            exit 1
+          fi
+
+          # Add notes field if not present (perf-regression-collect.sh doesn't set it).
+          python3 - <<PYEOF
+          import json
+          with open("${OUT}") as f:
+              data = json.load(f)
+          data["notes"] = "Auto-generated by .github/workflows/perf-baseline-autogen.yml (median of 3 runs). See docs/perf-governance.md §Auto-generation."
+          data["baseline_sha"] = "${NEW_SHA}"
+          with open("${OUT}", "w") as f:
+              json.dump(data, f, indent=2)
+          PYEOF
+
+          echo "✓ Generated ${OUT} (${NEW_SHA})"
+
+      - name: Compare against previous baseline
+        if: steps.skip_check.outputs.exists == 'false'
+        id: compare
+        env:
+          NEW_BASELINE: perf/baselines/${{ steps.shas.outputs.new }}.json
+          PREV_SHA: ${{ steps.shas.outputs.prev }}
+          FORCE_OVERRIDE: ${{ github.event.inputs.force_override || 'false' }}
+          THRESHOLD: 5
+        run: |
+          set -euo pipefail
+          PREV_FILE=""
+          if [[ -n "${PREV_SHA}" ]]; then
+            PREV_FILE="perf/baselines/${PREV_SHA}.json"
+          fi
+
+          if [[ -z "${PREV_FILE}" || ! -f "${PREV_FILE}" ]]; then
+            echo "::notice::No previous baseline (PREV_SHA=${PREV_SHA:-<none>}, file=${PREV_FILE:-<none>}) — skipping regression comparison."
+            echo "result=skip" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "Comparing ${NEW_BASELINE} vs ${PREV_FILE} (threshold +${THRESHOLD}%)"
+
+          NEW_BASELINE="${NEW_BASELINE}" \
+          PREV_FILE="${PREV_FILE}" \
+          THRESHOLD="${THRESHOLD}" \
+          FORCE_OVERRIDE="${FORCE_OVERRIDE}" \
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import sys
+
+          new_path = os.environ["NEW_BASELINE"]
+          prev_path = os.environ["PREV_FILE"]
+          threshold = float(os.environ.get("THRESHOLD", "10"))
+          force_override = os.environ.get("FORCE_OVERRIDE", "false").lower() == "true"
+
+          with open(new_path) as f:
+              new = json.load(f)
+          with open(prev_path) as f:
+              prev = json.load(f)
+
+          prev_e = {e["label"]: e for e in prev["estimates"]}
+          new_e = {e["label"]: e for e in new["estimates"]}
+
+          regressions = []
+          improvements = []
+          for label, p in prev_e.items():
+              if label not in new_e:
+                  continue
+              n = new_e[label]
+              if p["time_ns_median"] == 0:
+                  continue
+              delta = (n["time_ns_median"] - p["time_ns_median"]) / p["time_ns_median"] * 100.0
+              if delta > threshold:
+                  regressions.append((label, delta, p["time_ns_median"], n["time_ns_median"]))
+              elif delta < -threshold:
+                  improvements.append((label, delta, p["time_ns_median"], n["time_ns_median"]))
+
+          print(f"\n=== Auto-baseline regression check ===", flush=True)
+          print(f"Previous: {prev_path}", flush=True)
+          print(f"  baseline_sha: {prev['baseline_sha'][:8]} | n_runs: {prev.get('n_runs', '?')}", flush=True)
+          print(f"New:      {new_path}", flush=True)
+          print(f"  baseline_sha: {new['baseline_sha'][:8]} | n_runs: {new.get('n_runs', '?')}", flush=True)
+          print(f"Threshold: +{threshold:.0f}% (regression limit, hot_path only)", flush=True)
+          print(f"", flush=True)
+          print(f"Regressions ({len(regressions)}):", flush=True)
+          for label, delta, p_ns, n_ns in regressions:
+              print(f"  REGRESS {label}: {p_ns:.0f}ns → {n_ns:.0f}ns (+{delta:.1f}%)", flush=True)
+          print(f"Improvements ({len(improvements)}):", flush=True)
+          for label, delta, p_ns, n_ns in improvements:
+              print(f"  IMPROVE {label}: {p_ns:.0f}ns → {n_ns:.0f}ns ({delta:.1f}%)", flush=True)
+
+          if regressions and not force_override:
+              print(f"\nFAIL: {len(regressions)} regression(s) exceed +{threshold:.0f}% threshold.", flush=True)
+              print(f"", flush=True)
+              print(f"Per AGENTS.md §policy: регрессия — это повод ЧИНИТЬ КОД, а не снижать требования.", flush=True)
+              print(f"", flush=True)
+              print(f"Действия:", flush=True)
+              print(f"  1. Профилировать регрессию (cargo flamegraph, perf record)", flush=True)
+              print(f"  2. Починить код (откатить perf-regressed commit или оптимизировать)", flush=True)
+              print(f"  3. Push новый commit → workflow re-run с новой baseline", flush=True)
+              print(f"  4. Если регрессия justified (например, добавлена новая feature) — см. docs/perf-governance.md", flush=True)
+              print(f"  5. DEBUG only: workflow_dispatch с force_override=true (НЕ для production!)", flush=True)
+              sys.exit(1)
+
+          if regressions and force_override:
+              print(f"\nOVERRIDE: {len(regressions)} regression(s), но force_override=true. Commit baseline anyway.", flush=True)
+              print(f"WARNING: this is for debug only. Production code must NOT use this override.", flush=True)
+
+          if not regressions:
+              print(f"\nPASS: no regressions exceed +{threshold:.0f}% threshold.", flush=True)
+
+          sys.exit(0)
+          PYEOF
+
+      - name: Commit baseline to main
+        if: steps.skip_check.outputs.exists == 'true' || steps.compare.conclusion == 'success'
+        run: |
+          set -euo pipefail
+          NEW_SHA="${{ steps.shas.outputs.new }}"
+          BASELINE_FILE="perf/baselines/${NEW_SHA}.json"
+
+          # На случай повторного run с уже committed baseline — skip.
+          if [[ ! -f "${BASELINE_FILE}" ]]; then
+            echo "Baseline file missing — nothing to commit (skipped step?)"
+            exit 0
+          fi
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          # Force-add overrides perf/baselines/.gitignore (*.json).
+          git add -f "${BASELINE_FILE}"
+          git commit -m "perf(baseline): auto-generate baseline for ${NEW_SHA:0:8} (Issue #223)
+
+          Auto-generated by .github/workflows/perf-baseline-autogen.yml on push to main.
+          Median of 3 hot_path runs, threshold +10%.
+
+          Source commit: ${NEW_SHA}
+          See docs/perf-governance.md §Auto-generation for policy."
+          git push origin HEAD:main
+          echo "✓ Baseline committed to main"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Auto-baseline summary"
+            echo ""
+            echo "- **New SHA**: \`${{ steps.shas.outputs.new }}\`"
+            echo "- **Previous SHA**: \`${{ steps.shas.outputs.prev || '<none>' }}\`"
+            echo "- **Skipped (exists)**: ${{ steps.skip_check.outputs.exists }}"
+            echo "- **Compare result**: ${{ steps.compare.outputs.result || 'unknown' }}"
+            echo "- **Baseline committed**: ${{ steps.compare.conclusion == 'success' || steps.skip_check.outputs.exists == 'true' }}"
+          } >> "${GITHUB_STEP_SUMMARY}"

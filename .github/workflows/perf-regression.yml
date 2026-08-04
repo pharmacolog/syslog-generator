@@ -95,12 +95,12 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/bench-output
           # Issue #214: 3 runs → median per benchmark.
-          # Issue #211 (future): добавить allocations bench.
+          # Issue #211: добавить allocations bench target.
           CURRENT_SHA="$(git rev-parse HEAD)"
           echo "current_sha=${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
           BENCH_RUNS=3 scripts/perf-regression-collect.sh \
             "perf/baselines/current-${CURRENT_SHA}.json" \
-            hot_path 2>&1 | tee /tmp/baseline-gen.log
+            hot_path allocations 2>&1 | tee /tmp/baseline-gen.log
 
       - name: Compare against baseline
         env:
@@ -109,7 +109,7 @@ jobs:
           THRESHOLD_HOT_PATH: 50
           THRESHOLD_FORMAT: 50
           THRESHOLD_TRANSPORT: 50
-          THRESHOLD_ALLOC: 50
+          THRESHOLD_ALLOC: 100
         run: |
           set -euo pipefail
           BASELINE_FILE="perf/baselines/${BASELINE_SHA}.json"

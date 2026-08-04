@@ -1,38 +1,17 @@
 {
-  "sha": "66a137ecad25fece984570cde05ff6b21c163221",
-  "mode": "quick",
-  "timestamp": "2026-08-04T20:57:53Z",
-  "status": "ok",
-  "estimate_count": 29,
+  "timestamp": "2026-08-04T21:03:17Z",
+  "baseline_sha": "66a137ecad25fece984570cde05ff6b21c163221",
+  "n_runs": 3,
   "estimates": [
-    {"bench": "hot_path", "group": "hot_path", "label": "hot_path/rfc5424_with_faker", "time_ns_median": 1728.8487854003906, "time_ns_lower": 1689.776123046875, "time_ns_upper": 1767.9214477539062},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc3164_static", "time_ns_median": 35362812.75, "time_ns_lower": 35317917.0, "time_ns_upper": 35407708.5},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_static", "time_ns_median": 31203984.625, "time_ns_lower": 30883979.5, "time_ns_upper": 31523989.75},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/warmup_static", "time_ns_median": 10818497.375, "time_ns_lower": 10760593.75, "time_ns_upper": 10876401.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_faker", "time_ns_median": 40370067.625, "time_ns_lower": 39904468.75, "time_ns_upper": 40835666.5},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/json_lines_static", "time_ns_median": 31863765.625, "time_ns_lower": 31495468.75, "time_ns_upper": 32232062.5},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_faker", "time_ns_median": 1966.9627838134766, "time_ns_lower": 1964.3262023925781, "time_ns_upper": 1969.599365234375},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc3164_static", "time_ns_median": 1437.9965362548828, "time_ns_lower": 1434.6249694824219, "time_ns_upper": 1441.3681030273438},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/protobuf_static", "time_ns_median": 680.1759376525879, "time_ns_lower": 679.4271469116211, "time_ns_upper": 680.9247283935547},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_static", "time_ns_median": 1145.9328308105469, "time_ns_lower": 1144.0957336425781, "time_ns_upper": 1147.7699279785156},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/cef_static", "time_ns_median": 1025.8468017578125, "time_ns_lower": 1025.6843566894531, "time_ns_upper": 1026.0092468261719},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_faker", "time_ns_median": 1549.048110961914, "time_ns_lower": 1547.2259521484375, "time_ns_upper": 1550.8702697753906},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/raw_static", "time_ns_median": 1020.0363845825195, "time_ns_lower": 1017.5336303710938, "time_ns_upper": 1022.5391387939453},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_static", "time_ns_median": 1556.5160217285156, "time_ns_lower": 1550.6998901367188, "time_ns_upper": 1562.3321533203125},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/leef_static", "time_ns_median": 1021.8365936279297, "time_ns_lower": 1019.4664001464844, "time_ns_upper": 1024.206787109375},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/16", "time_ns_median": 5311801.75, "time_ns_lower": 5276028.0, "time_ns_upper": 5347575.5},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/1", "time_ns_median": 5589013.671875, "time_ns_lower": 5550738.28125, "time_ns_upper": 5627289.0625},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/4", "time_ns_median": 4594980.46875, "time_ns_lower": 4523750.0, "time_ns_upper": 4666210.9375},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/1", "time_ns_median": 8351325.5625, "time_ns_lower": 8313744.875, "time_ns_upper": 8388906.25},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/4", "time_ns_median": 6264973.96875, "time_ns_lower": 6184130.1875, "time_ns_upper": 6345817.75},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_4", "time_ns_median": 19299843.6875, "time_ns_lower": 19199520.875, "time_ns_upper": 19400166.5},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_1", "time_ns_median": 16873677.125, "time_ns_lower": 16508125.0, "time_ns_upper": 17239229.25},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_16", "time_ns_median": 79580692.75, "time_ns_lower": 77411062.5, "time_ns_upper": 81750323.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_1", "time_ns_median": 15244005.125, "time_ns_lower": 15025343.75, "time_ns_upper": 15462666.5},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_16", "time_ns_median": 26814746.765625, "time_ns_lower": 26227401.0625, "time_ns_upper": 27402092.46875},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_4", "time_ns_median": 19201510.5, "time_ns_lower": 18761104.0, "time_ns_upper": 19641917.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_4", "time_ns_median": 30979830.75, "time_ns_lower": 30444406.25, "time_ns_upper": 31515255.25},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_1", "time_ns_median": 16434364.625, "time_ns_lower": 16271396.0, "time_ns_upper": 16597333.25},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_16", "time_ns_median": 24479355.4765625, "time_ns_lower": 24405463.546875, "time_ns_upper": 24553247.40625}
-  ]
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1707,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manual bootstrap for 66a137e."
 }

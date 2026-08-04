@@ -249,3 +249,37 @@ jobs:
           # PR-12: SLSA Build L1 provenance + SBOM.
           provenance: true
           sbom: true
+
+      - name: Archive multi-arch image to tarball (Issue #180.3)
+        # docker save после успешного push в registry.
+        # Сохраняет multi-arch manifest + все arch layers в один tar.gz.
+        # gzip → ~50-100 MB compressed (OK для GitHub Release лимита 2 GB).
+        # Только на release tag push (НЕ на каждом push в main).
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+
+          # Pull multi-arch manifest с registry (buildx создал → registry содержит).
+          docker pull "$IMAGE"
+
+          # Save в tar.gz (multi-arch manifest включён в tarball).
+          mkdir -p dist
+          docker save "$IMAGE" | gzip > "dist/syslog-generator-${VERSION}-docker.tar.gz"
+
+          # Verify tarball
+          echo "--- tarball contents (first 10) ---"
+          tar -tzf "dist/syslog-generator-${VERSION}-docker.tar.gz" | head -10
+          echo "--- tarball size ---"
+          ls -la "dist/syslog-generator-${VERSION}-docker.tar.gz"
+
+      - name: Upload docker image archive artifact (Issue #180.3)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-docker-archive-${{ github.ref_name }}
+          path: dist/syslog-generator-*-docker.tar.gz
+          if-no-files-found: error
+          retention-days: 90

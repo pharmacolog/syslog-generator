@@ -215,6 +215,39 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Stage PGO artifacts (Issue #180.1: rename для читаемых имён в Release)
+        # Промежуточный шаг: переименовываем `target/release/syslog-generator`
+        # (бинарь без расширения) → `syslog-generator-pgo` (PGO marker), чтобы
+        # пользовательский download URL содержал semantic PGO-suffix.
+        # `merged.profdata` остаётся как есть (PGO-профиль).
+        run: |
+          set -euo pipefail
+          mkdir -p dist-pgo
+          cp target/release/syslog-generator dist-pgo/syslog-generator-pgo
+          cp pgo/merged.profdata dist-pgo/merged.profdata
+          ls -la dist-pgo/
+          file dist-pgo/syslog-generator-pgo
+
+      - name: Upload PGO artifacts to GitHub Release (Issue #180.1)
+        # Только на tag push (не на PR-merge, не на workflow_dispatch).
+        # Если не на tag — step skip (no upload).
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          echo "=== PGO artifacts для upload в $TAG ==="
+          ls -la dist-pgo/
+          # Upload в GitHub Release: PGO бинарь + profile.
+          # PGP подпись НЕ добавляется в этом PR (deferred — выделить reusable
+          # sign workflow, см. Issue #180 out-of-scope).
+          gh release upload "$TAG" \
+            dist-pgo/syslog-generator-pgo \
+            dist-pgo/merged.profdata \
+            --clobber
+          echo "::notice::PGO artifacts attached to release $TAG"
+
       - name: Summary
         if: always()
         run: |

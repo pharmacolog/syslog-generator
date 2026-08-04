@@ -70,6 +70,12 @@
   - `docs/installation.md` §4 обновлён: Alpine через GitHub Releases с GPG
     signature verification (apk v2.14+).
   - `docs/distribution-channels.md` Alpine секция: статус ❌ → ✅.
+- **Release assets — PGO бинарь + SBOM CycloneDX + Docker multi-arch archive** ([Issue #180](https://github.com/pharmacolog/syslog-generator/issues/180), milestone v11.5):
+  - `release-pgo.yml`: новый `Stage PGO artifacts` + `Upload PGO artifacts to GitHub Release` (только на tag push, `gh release upload`).
+  - `docker.yml`: новый `Archive multi-arch image to tarball` + `Upload docker image archive artifact` (только на release).
+  - `packages.yml:release`: 3 новых download-artifact steps (PGO бинарь, SBOM, Docker archive); расширен `find dist` glob для upload.
+  - `sbom.yml`: фикс — добавлен `tags: [v*.*.*]` в `on.push`; удалён dead-code `softprops/action-gh-release` step (централизован upload в packages.yml).
+  - `docs/installation.md §10.5`: расширена supply-chain таблица + verification blocks для PGO / SBOM / Docker archive.
 
 ### Policy update
 

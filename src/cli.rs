@@ -10,7 +10,7 @@
 //! применяются ко ВСЕМ фазам — это осознанный выбор для быстрых экспериментов из
 //! CLI; для тонкой настройки отдельных фаз используйте JSON-профиль.
 
-use crate::config::{Phase, Profile, TargetConfig};
+use crate::config::{GeneratorMode, Phase, Profile, RuntimeConfig, TargetConfig};
 use clap::{Parser, Subcommand};
 
 /// v10.6.0: subcommand'ы для генерации shell completions и man page.
@@ -156,6 +156,28 @@ pub struct Args {
     /// (octet-counting | non-transparent).
     #[arg(long, value_name = "MODE")]
     pub framing: Option<String>,
+
+    /// A4 (Issue #236): --generator-mode MODE — переопределить
+    /// `RuntimeConfig::generator_mode` (deterministic|fast).
+    /// Deterministic — byte-for-byte identical output (replay-friendly).
+    /// Fast — thread-local RNG, max throughput.
+    #[arg(long, value_name = "MODE", value_parser = ["deterministic", "fast"])]
+    pub generator_mode: Option<String>,
+
+    /// A4 (Issue #236): --generator-threads N — число generator worker threads.
+    /// None → автоопределение (NCPU или 1).
+    #[arg(long, value_name = "N")]
+    pub generator_threads: Option<usize>,
+
+    /// Issue #238 / A4: --batch-size N — батч размер для pipeline mode.
+    /// None → 1 (no batching). Clamped до >= 1.
+    #[arg(long, value_name = "N")]
+    pub batch_size: Option<usize>,
+
+    /// A4 (Issue #236): --pacer-tick-interval MS — pacer tick interval в мс.
+    /// None → 1ms (sub-millisecond precision). Clamped до >= 1.
+    #[arg(long, value_name = "MS")]
+    pub pacer_tick_interval: Option<u64>,
 }
 
 /// «Чистое» представление CLI-оверрайдов, не зависящее от clap.
@@ -181,6 +203,24 @@ pub struct Overrides {
     pub tls_insecure: bool,
     pub connections: Option<usize>,
     pub framing: Option<String>,
+    /// A4 (Issue #236): Runtime configuration overrides из CLI.
+    /// None внутри Option означает "не переопределять соответствующее поле".
+    pub runtime: RuntimeConfig,
+    /// A4 tracker: какие runtime-поля явно заданы через CLI
+    /// (используется в `apply_overrides` чтобы не затирать существующие
+    /// значения из Profile `runtime` блока).
+    #[doc(hidden)]
+    pub runtime_overrides_set: RuntimeOverridesSet,
+}
+
+/// Helper: tracks which A4 runtime fields explicitly set via CLI.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RuntimeOverridesSet {
+    pub generator_mode: bool,
+    pub generator_threads: bool,
+    pub queue_capacity: bool,
+    pub batch_size: bool,
+    pub pacer_tick_interval: bool,
 }
 
 /// Ошибка разбора спецификации цели `--target`.
@@ -276,6 +316,36 @@ impl Args {
             }
             targets.push(tgt);
         }
+        // A4 (Issue #236): build RuntimeConfig from CLI flags.
+        // `RuntimeConfig::default()` имеет все None / defaults, поэтому
+        // эффективно конструируем fields в зависимости от того, что задано.
+        let mut runtime = RuntimeConfig::default();
+        let mut runtime_overrides_set = RuntimeOverridesSet::default();
+        if let Some(ref mode) = self.generator_mode {
+            runtime.generator_mode = GeneratorMode::parse(mode).unwrap_or_else(|| {
+                // clap value_parser уже отфильтровал невалидные значения,
+                // но на всякий случай — fallback на Deterministic.
+                eprintln!(
+                    "warning: --generator-mode {mode:?} неизвестный; \
+                     используется deterministic"
+                );
+                GeneratorMode::Deterministic
+            });
+            runtime_overrides_set.generator_mode = true;
+        }
+        if let Some(n) = self.generator_threads {
+            runtime.generator_threads = Some(n);
+            runtime_overrides_set.generator_threads = true;
+        }
+        if let Some(n) = self.batch_size {
+            runtime.batch_size = Some(n);
+            runtime_overrides_set.batch_size = true;
+        }
+        if let Some(ms) = self.pacer_tick_interval {
+            runtime.pacer_tick_interval_ms = Some(ms);
+            runtime_overrides_set.pacer_tick_interval = true;
+        }
+
         Ok(Overrides {
             targets,
             distribution: self.distribution.clone(),
@@ -306,6 +376,8 @@ impl Args {
             tls_insecure: self.tls_insecure,
             connections: self.connections,
             framing: self.framing.clone(),
+            runtime,
+            runtime_overrides_set,
         })
     }
 }
@@ -383,6 +455,33 @@ pub fn apply_overrides(profile: &mut Profile, o: &Overrides) {
         if let Err(e) = crate::cli::set_override::apply_set_overrides(profile, &o.set_overrides) {
             eprintln!("warning: --set overrides failed: {e}");
         }
+    }
+
+    // A4 (Issue #236): apply runtime overrides LAST (после --set, после preset),
+    // чтобы CLI флаги явно override'или всё предыдущее. Для каждого поля
+    // из `runtime_overrides_set` — перезаписываем соответствующее поле
+    // `profile.runtime`. Если поле НЕ задано через CLI — оставляем как было
+    // (из Profile YAML или RuntimeConfig::default()).
+    let set = &o.runtime_overrides_set;
+    if set.generator_mode {
+        profile.runtime.generator_mode = o.runtime.generator_mode;
+    }
+    if set.generator_threads {
+        profile.runtime.generator_threads = o.runtime.generator_threads;
+    }
+    if set.queue_capacity {
+        // Issue #238: queue_capacity хранится в runtime, но для
+        // backward-compat (и для `run_phase_multi`) также синхронизируем
+        // с profile.queue_capacity (которое historically используется
+        // как Profile-уровневое поле).
+        profile.runtime.queue_capacity = o.runtime.queue_capacity;
+        profile.queue_capacity = o.runtime.queue_capacity;
+    }
+    if set.batch_size {
+        profile.runtime.batch_size = o.runtime.batch_size;
+    }
+    if set.pacer_tick_interval {
+        profile.runtime.pacer_tick_interval_ms = o.runtime.pacer_tick_interval_ms;
     }
 }
 #[cfg(test)]
@@ -594,6 +693,189 @@ mod tests {
         use clap::Parser;
         let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
         assert!(!args.dry_run, "--dry-run по умолчанию false");
+    }
+
+    // === A4 (Issue #236): CLI flags для RuntimeConfig ===
+
+    /// `--generator-mode fast` парсится в RuntimeConfig.
+    #[test]
+    fn a4_generator_mode_fast_parses() {
+        use clap::Parser;
+        let args = Args::parse_from([
+            "syslog-generator",
+            "-p",
+            "x.json",
+            "--generator-mode",
+            "fast",
+        ]);
+        assert_eq!(args.generator_mode.as_deref(), Some("fast"));
+
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime.generator_mode, GeneratorMode::Fast);
+        assert!(o.runtime_overrides_set.generator_mode);
+    }
+
+    /// `--generator-mode deterministic` (default).
+    #[test]
+    fn a4_generator_mode_deterministic_default() {
+        use clap::Parser;
+        let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
+        assert!(args.generator_mode.is_none());
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime.generator_mode, GeneratorMode::Deterministic);
+        assert!(!o.runtime_overrides_set.generator_mode);
+    }
+
+    /// `--generator-mode` отвергает невалидные значения (clap value_parser).
+    #[test]
+    fn a4_generator_mode_invalid_rejected() {
+        use clap::Parser;
+        let result = Args::try_parse_from([
+            "syslog-generator",
+            "-p",
+            "x.json",
+            "--generator-mode",
+            "wrong",
+        ]);
+        assert!(result.is_err(), "clap должен reject'ить unknown mode");
+    }
+
+    /// `--generator-threads N` парсится.
+    #[test]
+    fn a4_generator_threads_parses() {
+        use clap::Parser;
+        let args = Args::parse_from([
+            "syslog-generator",
+            "-p",
+            "x.json",
+            "--generator-threads",
+            "8",
+        ]);
+        assert_eq!(args.generator_threads, Some(8));
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime.generator_threads, Some(8));
+        assert!(o.runtime_overrides_set.generator_threads);
+    }
+
+    /// `--batch-size N` парсится.
+    #[test]
+    fn a4_batch_size_parses() {
+        use clap::Parser;
+        let args = Args::parse_from(["syslog-generator", "-p", "x.json", "--batch-size", "64"]);
+        assert_eq!(args.batch_size, Some(64));
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime.batch_size, Some(64));
+        assert!(o.runtime_overrides_set.batch_size);
+    }
+
+    /// `--pacer-tick-interval MS` парсится.
+    #[test]
+    fn a4_pacer_tick_interval_parses() {
+        use clap::Parser;
+        let args = Args::parse_from([
+            "syslog-generator",
+            "-p",
+            "x.json",
+            "--pacer-tick-interval",
+            "10",
+        ]);
+        assert_eq!(args.pacer_tick_interval, Some(10));
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime.pacer_tick_interval_ms, Some(10));
+        assert!(o.runtime_overrides_set.pacer_tick_interval);
+    }
+
+    /// По умолчанию все runtime flags — None.
+    #[test]
+    fn a4_runtime_flags_default_none() {
+        use clap::Parser;
+        let args = Args::parse_from(["syslog-generator", "-p", "x.json"]);
+        let o = args.to_overrides().expect("to_overrides ok");
+        assert_eq!(o.runtime, RuntimeConfig::default());
+        assert!(!o.runtime_overrides_set.generator_mode);
+        assert!(!o.runtime_overrides_set.generator_threads);
+        assert!(!o.runtime_overrides_set.batch_size);
+        assert!(!o.runtime_overrides_set.pacer_tick_interval);
+    }
+
+    /// `apply_overrides` применяет runtime overrides к Profile.
+    #[test]
+    fn a4_apply_overrides_sets_runtime_config() {
+        let mut p = Profile::default();
+        let o = Overrides {
+            runtime: RuntimeConfig {
+                generator_mode: GeneratorMode::Fast,
+                generator_threads: Some(4),
+                queue_capacity: Some(65536),
+                batch_size: Some(64),
+                pacer_tick_interval_ms: Some(10),
+            },
+            runtime_overrides_set: RuntimeOverridesSet {
+                generator_mode: true,
+                generator_threads: true,
+                queue_capacity: true,
+                batch_size: true,
+                pacer_tick_interval: true,
+            },
+            ..Default::default()
+        };
+        apply_overrides(&mut p, &o);
+        assert_eq!(p.runtime.generator_mode, GeneratorMode::Fast);
+        assert_eq!(p.runtime.generator_threads, Some(4));
+        assert_eq!(p.runtime.batch_size, Some(64));
+        assert_eq!(p.runtime.pacer_tick_interval_ms, Some(10));
+        // Issue #238: queue_capacity синхронизируется BOTH в profile.runtime
+        // (для YAML-style config) AND в profile.queue_capacity (для
+        // backward-compat с `run_phase_multi`).
+        assert_eq!(p.runtime.queue_capacity, Some(65536));
+        assert_eq!(p.queue_capacity, Some(65536));
+    }
+
+    /// `apply_overrides` сохраняет runtime из Profile если CLI флаги не заданы.
+    #[test]
+    fn a4_apply_overrides_preserves_profile_runtime() {
+        let mut p = Profile {
+            runtime: RuntimeConfig {
+                generator_mode: GeneratorMode::Fast,
+                generator_threads: Some(8),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let o = Overrides::default();
+        apply_overrides(&mut p, &o);
+        // Profile.runtime НЕ затёрт (CLI не задал overrides).
+        assert_eq!(p.runtime.generator_mode, GeneratorMode::Fast);
+        assert_eq!(p.runtime.generator_threads, Some(8));
+    }
+
+    /// `apply_overrides` частично override'ит RuntimeConfig (per-field).
+    #[test]
+    fn a4_apply_overrides_partial_override() {
+        let mut p = Profile {
+            runtime: RuntimeConfig {
+                generator_mode: GeneratorMode::Fast,
+                generator_threads: None,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let o = Overrides {
+            runtime: RuntimeConfig {
+                generator_threads: Some(16),
+                ..Default::default()
+            },
+            runtime_overrides_set: RuntimeOverridesSet {
+                generator_threads: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        apply_overrides(&mut p, &o);
+        // generator_mode profile сохранён (CLI не override).
+        assert_eq!(p.runtime.generator_mode, GeneratorMode::Fast);
+        // generator_threads override'нут CLI.
+        assert_eq!(p.runtime.generator_threads, Some(16));
     }
 }
 

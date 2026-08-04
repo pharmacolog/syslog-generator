@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-04T14:57:46Z",
+  "baseline_sha": "588443c0fe49460f8ec2bb89c1e8ccb115c10459",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1697,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manually generated baseline for 588443c (PR #217 allocations bench merge) per docs/perf-governance.md \u00a7Refresh. hot_path/rfc5424_with_faker: 1697 ns (median of 3 runs)"
+}

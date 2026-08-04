@@ -87,6 +87,12 @@ def list_run_indices():
 
 
 def invariant_no_fabricated(runs):
+    # Issue #197 (v11.6): Kafka cells теперь могут быть `completed` (а не
+    # всегда n/a). Инвариант ниже не делает workload-specific проверок —
+    # `completed` для kafka_* легален, ЕСЛИ есть measurements от
+    # `kafka_receiver` (kafka-python). Тест
+    # `harness/test_collect.py::test_invariant_kafka_completed_with_measurements`
+    # — regression guard для этого состояния.
     for r in runs:
         status = r.get("status")
         meas = r.get("measurements")

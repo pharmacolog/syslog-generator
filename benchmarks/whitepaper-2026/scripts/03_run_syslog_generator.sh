@@ -26,14 +26,20 @@ META_FILE="${RESULT_DIR}/syslog_generator.meta.json"
 
 TRANSPORT=$(python3 -c "import json; print(json.load(open('${CONFIG_PATH}'))['_issue_spec']['transport'])")
 
+# Issue #197 (v11.6): Kafka transport теперь supported для syslog_generator —
+# `kafka_receiver` через kafka-python (pure-Python) даёт real measurements,
+# а не n/a через stub. Установка: `pip install -r requirements.txt`.
 SUPPORTED="false"
 NA_REASON=""
-if [[ "${TRANSPORT}" == "udp" || "${TRANSPORT}" == "tcp" || "${TRANSPORT}" == "tls" ]]; then
-    SUPPORTED="true"
-elif [[ "${TRANSPORT}" == "kafka" ]]; then
-    SUPPORTED="false"
-    NA_REASON="syslog-generator Kafka transport exists but no real consumer; marked N/A until kafka consumer dependency is satisfied"
-fi
+case "${TRANSPORT}" in
+    udp|tcp|tls|kafka)
+        SUPPORTED="true"
+        ;;
+    *)
+        SUPPORTED="false"
+        NA_REASON="syslog_generator does not support transport ${TRANSPORT}"
+        ;;
+esac
 
 SG_AVAILABLE="false"
 [[ -x "${SYSLOG_GENERATOR_BIN}" ]] && SG_AVAILABLE="true"
@@ -134,6 +140,12 @@ if [[ "${TRANSPORT}" == "tls" ]]; then
 fi
 if [[ "${TRANSPORT}" == "tcp" || "${TRANSPORT}" == "tls" ]]; then
     RECV_ARGS+=("${FRAMING}")
+fi
+# Issue #197: Kafka receiver требует topic (5-й arg). Берём из `_receiver.topic`
+# workload'а (validated в configs/validate.py — required для kafka_* workloads).
+if [[ "${TRANSPORT}" == "kafka" ]]; then
+    KAFKA_TOPIC=$(python3 -c "import json; print(json.load(open('${CONFIG_PATH}'))['_receiver'].get('topic', 'syslog'))")
+    RECV_ARGS+=("${KAFKA_TOPIC}")
 fi
 
 log_info "starting receiver: ${RECV_ARGS[*]}"

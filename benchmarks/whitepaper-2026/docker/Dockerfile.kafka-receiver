@@ -1,0 +1,44 @@
+# Dockerfile.kafka-receiver — Issue #198
+#
+# Sidecar для real Kafka consumer'а (Issue #197). Запускает
+# `benchmarks/whitepaper-2026/scripts/receiver.py kafka <host> <port> <secs> <topic>`
+# в loop, готов принимать `docker compose exec` от harness'а.
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. Base image `python:3.12-slim` pinned by TAG. Для строгой
+#      воспроизводимости замените на `python:3.12-slim@sha256:<digest>`.
+#   2. `kafka-python>=2.0` — pure-Python, не требует librdkafka build.
+#      См. benchmarks/whitepaper-2026/requirements.txt для pin'а.
+#   3. Entrypoint = `sleep infinity` (sidecar pattern). Реальный receiver
+#      запускается через `docker compose exec kafka-receiver python3
+#      /opt/receiver/receiver.py kafka ...` из harness'а (Makefile target).
+#   4. Source-копирование: receiver.py и requirements.txt копируются в
+#      /opt/receiver/. Это позволяет receiver'у `import` без PYTHONPATH
+#      hacking'а.
+#
+# Это 5-й сервис в docker-compose.yml (Issue #198):
+#   redpanda + syslog-ng-loggen + flog + tcpkali + kafka-receiver
+
+FROM python:3.12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /opt/receiver
+
+# Install kafka-python ДО копирования source (для layer cache).
+COPY ../requirements.txt /opt/receiver/requirements.txt
+RUN pip install -r /opt/receiver/requirements.txt \
+    && python3 -c "from kafka import KafkaConsumer; print('kafka-python import OK')"
+
+# Copy source. `..` — родитель benchmarks/whitepaper-2026/, что даёт
+# /opt/receiver/scripts/receiver.py.
+COPY ../scripts/receiver.py /opt/receiver/receiver.py
+
+# Sanity check.
+RUN python3 /opt/receiver/receiver.py 2>&1 | head -3 || true
+
+# Sidecar: receiver запускается по требованию через `docker compose exec`.
+ENTRYPOINT ["sleep", "infinity"]
+CMD ["infinity"]

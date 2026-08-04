@@ -1,0 +1,48 @@
+# Dockerfile.redpanda — Issue #198
+#
+# Redpanda broker для Kafka workload'ов (Issue #197: заменяет kcat,
+# которую Issue #106 вынес из scope).
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. Base image `redpandadata/redpanda:v24.2.7` pinned by TAG, NOT by
+#      digest. Redpanda release tags считаются стабильными (не перевыпускаются),
+#      но `docker pull redpandadata/redpanda:v24.2.7` всегда возвращает
+#      latest manifest для этого тега. Для строгого pinning замените на
+#      `redpandadata/redpanda:v24.2.7@sha256:<digest>`.
+#   2. v24.2.7 — selected because v24.2.x — последняя stable series с
+#      Kafka protocol compatible с librdkafka 2.x И kafka-python 2.x
+#      (на момент Issue #197). Более новые v24.3+ требуют Kafka 3.6+ и
+#      могут ломать совместимость с kafka-python 2.0.
+#   3. Entrypoint и config — стандартный Redpanda standalone mode для
+#      single-node test broker. НЕ production-grade: нет TLS, нет SASL,
+#      нет ACL. Только для whitepaper harness на localhost.
+#   4. `--overprovisioned --smp 1 --memory 1G --reserve-memory 0M --check=false`
+#      — dev/test settings. Уменьшает memory overhead для CI / laptop runs.
+#   5. **Только для Issue #197/198 scope**: этот image НЕ intended для
+#      production Kafka кластера. Используйте официальный Redpanda operator
+#      / ansible / helm chart для production.
+
+FROM redpandata/redpanda:v24.2.7
+
+# Redpanda official image уже содержит /usr/bin/rpk + /usr/bin/redpanda
+# + /etc/redpanda/redpanda.yaml. Не нужно дополнительных COPY.
+
+# Sanity: rpk version + redpanda version на runtime.
+RUN rpk version \
+    && redpanda --version 2>&1 | head -1 || true
+
+# Single-node test broker config (override-able через volume mount).
+# Используем переменные окружения Redpanda для single-node mode:
+#   - REDPANDA_NODE_ID=0        (single-node)
+#   - REDPANDA_AUTO_CREATE_TOPICS=true (для `kafka_receiver` consuming
+#     из auto-created topic)
+ENTRYPOINT ["/usr/bin/rpk"]
+CMD ["redpanda", "start", \
+     "--overprovisioned", \
+     "--smp", "1", \
+     "--memory", "1G", \
+     "--reserve-memory", "0M", \
+     "--check=false", \
+     "--node-id", "0", \
+     "--kafka-addr", "PLAINTEXT://0.0.0.0:9092", \
+     "--advertise-kafka-addr", "PLAINTEXT://redpanda:9092"]

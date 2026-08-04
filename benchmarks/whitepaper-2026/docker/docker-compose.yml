@@ -1,0 +1,135 @@
+# docker-compose.yml — Issue #198
+#
+# 5-сервисный compose для whitepaper-2026 benchmark harness:
+#   1. redpanda           — Kafka-compatible broker (Issue #197/198)
+#   2. syslog-ng-loggen   — syslog-ng loggen для UDP workload'ов
+#   3. flog               — mingrammer/flog v0.4.3 (N/A для network cells)
+#   4. tcpkali            — MumiaiGene/tcpkali (UNVERIFIED, see Dockerfile)
+#   5. kafka-receiver     — Python kafka_receiver (Issue #197)
+#
+# Honest disclosure (per Issue #198 requirements):
+#   1. **ВСЕ images pinned by TAG, NOT by digest.** Для строгого
+#      воспроизводимого build замените `image: foo:1.2.3` на
+#      `image: foo:1.2.3@sha256:<digest>` после первого `docker pull`.
+#      Tracking: https://github.com/pharmacolog/syslog-generator/issues/198
+#   2. 4 из 5 Dockerfile'ов (syslog-ng-loggen, flog, tcpkali, kafka-receiver)
+#      собираются локально через `docker compose build` (build.context).
+#      Dockerfile.redpanda идёт как `image:` reference (official upstream).
+#   3. `kafka-receiver` собирается из `docker/Dockerfile.kafka-receiver`,
+#      требует доступа к `../requirements.txt` и `../scripts/receiver.py`
+#      (build context = `benchmarks/whitepaper-2026/`, см. context ниже).
+#   4. Network: `benchmarks` bridge. Redpanda слушает 0.0.0.0:9092 внутри
+#      сети, ADVERTISE на `redpanda:9092` — kafka-receiver connects по
+#      DNS-имени `redpanda:9092`. Если запускаете с host-network, замените
+#      ADVERTISE на `localhost:9092`.
+#   5. **Только для dev/CI/laptop runs.** Production-grade Kafka cluster
+#      использует Redpanda operator / ansible / helm (см. upstream docs).
+#      Этот compose НЕ intended для production.
+#   6. **Volumes:** нет bind-mount'ов в compose (всё в images). Harness
+#      получает доступ к бинарям через `docker compose exec` (см. Makefile
+#      target'ы `docker/exec-loggen` и т.п.).
+#
+# Использование:
+#   make docker/up       # build + start все 5 сервисов
+#   make docker/down     # stop + remove
+#   make docker/logs     # tail logs
+#   make docker/exec TOOL=loggen ARGS="--help"
+
+services:
+  redpanda:
+    # Официальный Redpanda image (НЕ локальный build).
+    image: redpandadata/redpanda:v24.2.7
+    container_name: whitepaper-redpanda
+    hostname: redpanda
+    networks:
+      - benchmarks
+    ports:
+      - "127.0.0.1:9092:9092"      # Kafka protocol на localhost
+      - "127.0.0.1:9644:9644"      # Admin/RPC (для rpk debug)
+    healthcheck:
+      # rpk cluster health — официальный recipe из Redpanda docs.
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    # ulimits для Redpanda (default values из upstream docker-compose.yml).
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --check=false
+      - --node-id=0
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+
+  syslog-ng-loggen:
+    # Local build из docker/Dockerfile.syslog-ng-loggen.
+    build:
+      context: .
+      dockerfile: Dockerfile.syslog-ng-loggen
+    image: whitepaper/syslog-ng-loggen:local
+    container_name: whitepaper-loggen
+    networks:
+      - benchmarks
+    # `loggen` запускается через `docker compose exec`. Entrypoint
+    # `sleep infinity` держит контейнер живым.
+    restart: unless-stopped
+
+  flog:
+    # Local build из docker/Dockerfile.flog.
+    build:
+      context: .
+      dockerfile: Dockerfile.flog
+    image: whitepaper/flog:local
+    container_name: whitepaper-flog
+    networks:
+      - benchmarks
+    # `flog` запускается через `docker compose exec`. Flog — stdout/file only,
+    # для network cells помечен N/A в harness (см. METHODOLOGY.md).
+    restart: unless-stopped
+
+  tcpkali:
+    # Local build из docker/Dockerfile.tcpkali (UNVERIFIED — см. Dockerfile).
+    build:
+      context: .
+      dockerfile: Dockerfile.tcpkali
+    image: whitepaper/tcpkali:local
+    container_name: whitepaper-tcpkali
+    networks:
+      - benchmarks
+    # `tcpkali` запускается через `docker compose exec` для TCP/TLS cells.
+    restart: unless-stopped
+
+  kafka-receiver:
+    # Local build из docker/Dockerfile.kafka-receiver.
+    # ВНИМАНИЕ: build.context = родительская директория benchmarks/whitepaper-2026/
+    # (НЕ docker/), чтобы COPY ../requirements.txt и ../scripts/receiver.py
+    # работали. Это non-standard pattern; альтернатива — отдельный
+    # build-helper Dockerfile. Текущий вариант explicit и читаемый.
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.kafka-receiver
+    image: whitepaper/kafka-receiver:local
+    container_name: whitepaper-kafka-receiver
+    networks:
+      - benchmarks
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    # `python3 /opt/receiver/receiver.py kafka ...` запускается через
+    # `docker compose exec` из harness (Makefile).
+    restart: unless-stopped
+
+networks:
+  benchmarks:
+    driver: bridge
+    name: whitepaper-benchmarks

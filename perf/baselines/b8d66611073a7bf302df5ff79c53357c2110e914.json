@@ -1,11 +1,18 @@
 {
+<<<<<<< HEAD
   "timestamp": "2026-08-04T11:10:41Z",
   "baseline_sha": "b8d66611073a7bf302df5ff79c53357c2110e914",
+=======
+  "timestamp": "2026-08-04T11:07:35Z",
+  "baseline_sha": "9c824fa20f1eaac1e694a5d7cbb959cf66cb93fd",
+  "n_runs": 3,
+>>>>>>> origin/main
   "estimates": [
     {
       "bench": "hot_path",
       "group": "hot_path",
       "label": "hot_path/rfc5424_with_faker",
+<<<<<<< HEAD
       "time_ns_median": 1725,
       "time_ns_lower": 0,
       "time_ns_upper": 0
@@ -13,3 +20,12 @@
   ],
   "notes": "Manually generated baseline for sync PR #219 (main \u2192 dev after v10.7.22) per docs/perf-governance.md"
 }
+=======
+      "time_ns_median": 1710,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ]
+}
+>>>>>>> origin/main

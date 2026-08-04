@@ -98,6 +98,11 @@
           "minimum": 1,
           "description": "F16: максимальный размер батча Kafka (число записей). None → 1024."
         },
+        "udp_batch_size": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Issue #162 (A5 adaptive batching): максимальный batch size для UDP datagrams. None → 1 (legacy single-datagram path). Some(64) → собрать до 64 datagrams, отправить batch. Снижает syscall overhead на high-throughput workloads."
+        },
         "file_rotation_size_mb": {
           "type": ["integer", "null"],
           "minimum": 1,

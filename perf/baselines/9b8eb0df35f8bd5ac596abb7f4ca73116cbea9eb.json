@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-04T16:39:05Z",
+  "baseline_sha": "9b8eb0df35f8bd5ac596abb7f4ca73116cbea9eb",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1658,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manually generated baseline for 9b8eb0d (current main HEAD). Last manual bootstrap \u2014 after this, perf-baseline-autogen.yml takes over (Issue #223). hot_path/rfc5424_with_faker: 1658 ns (median of 3)"
+}

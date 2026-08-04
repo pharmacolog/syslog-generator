@@ -118,6 +118,7 @@ mod tests {
             broadcast_policy: None,
             queue_capacity: None,
             on_target_failure: None,
+            runtime: crate::config::RuntimeConfig::default(),
         }
     }
 

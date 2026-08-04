@@ -1061,6 +1061,7 @@ mod tests {
             on_target_failure: None,
             phases: vec![valid_phase()],
             metrics_addr: None,
+            runtime: crate::config::RuntimeConfig::default(),
         }
     }
 

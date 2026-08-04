@@ -13,6 +13,8 @@ on:
       - main
       - dev
       - 'release/v*.*.*'
+    tags:
+      - 'v*.*.*'
     paths-ignore:
       - 'docs/**'
       - '*.md'
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # для softprops/action-gh-release (Issue #180 fix)
 
 jobs:
   sbom:
@@ -93,9 +95,6 @@ jobs:
           path: sbom-*.cdx.json
           if-no-files-found: error
 
-      - name: Attach SBOM to GitHub release (только на тегах)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: sbom-*.cdx.json
-          fail_on_unmatched_files: true
+      # DELETED: SBOM upload в GitHub Release вынесен в packages.yml:release
+      # (PR #180) — централизованный upload для traceability и единого источника
+      # правды. В sbom.yml оставлен только GHA artifact + tag trigger fix.

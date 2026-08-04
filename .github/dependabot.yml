@@ -34,7 +34,7 @@ updates:
           - "minor"
           - "patch"
     # Major updates — отдельные PR (могут ломать API).
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "cargo"
@@ -52,7 +52,7 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "github-actions"

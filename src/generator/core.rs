@@ -1461,6 +1461,15 @@ pub async fn run_phase_multi(
     // между сообщениями в hot-path. Экономит ~80-150 нс/msg на каждой
     // `HashMap::with_capacity(16)` аллокации.
     let mut values: HashMap<String, String> = HashMap::with_capacity(16);
+    // Issue #160 (A2.3 hot-path migration): caller-owned ValueArena + body_buf
+    // для slot-based path. Reuse между сообщениями — zero alloc per msg.
+    let mut plan_arena: crate::plan::ValueArena = crate::plan::ValueArena::new(
+        ctx.compiled_plan
+            .as_ref()
+            .map(|p| p.value_slot_count)
+            .unwrap_or(16),
+    );
+    let mut plan_body_buf: String = String::with_capacity(256);
     loop {
         if shutdown.is_cancelled() {
             break;
@@ -1527,7 +1536,22 @@ pub async fn run_phase_multi(
         // per-message `phase.format_type()` парсинга.
         // PR-5: PhaseContext резолвится ОДИН раз вне loop, не per-message.
         // Issue #85 \[A1\] sub-task 1: cached values HashMap reused per msg.
-        let msg = generate_message_with_format_cached(&ctx, phase, &format_kind, seq, &mut values)?;
+        // Issue #160 (A2.3 hot-path migration): используем slot-based path через
+        // CompiledPlan (generate_message_with_plan) с caller-owned ValueArena +
+        // body_buf. Fallback на legacy cached path для unsupported cases
+        // (schema задан, rfc5424/rfc3164/protobuf formats).
+        let msg = generate_message_with_plan(
+            &ctx,
+            phase,
+            &format_kind,
+            seq,
+            &mut plan_arena,
+            &mut plan_body_buf,
+        )
+        .or_else(|_| {
+            // Fallback path — schema or unsupported format.
+            generate_message_with_format_cached(&ctx, phase, &format_kind, seq, &mut values)
+        })?;
         // PR-17d (v10.7.19): cached IntCounter handles — inc = atomic, no HashMap lookup.
         msg_counter.inc();
         // N2 (v8.6.0): счётчик сообщений по формату. Инкрементируется
@@ -3008,5 +3032,40 @@ phases:
         assert!(hirs[0].is_none(), "string field → None HIR");
         // user_agent (regex) → Some HIR
         assert!(hirs[1].is_some(), "regex field → Some HIR");
+    }
+
+    /// Issue #160 (A2.3 hot-path migration): smoke test для slot-based
+    /// path через \`generate_message_with_plan\`. Использует минимальный
+    /// Phase без schema.
+    #[test]
+    fn a2_3_hot_path_migration_smoke() {
+        use crate::format::FormatKind;
+        use crate::plan::ValueArena;
+
+        // Simple static template — slot-based path должен сработать
+        // (Plan path без schema, без dynamic syslog header).
+        let phase = Phase {
+            name: "a2_3_smoke".into(),
+            duration_secs: 0,
+            messages_per_second: 0,
+            total_messages: Some(1),
+            templates: vec!["static text".to_string()],
+            format: Some("raw".to_string()),
+            seed: Some(42),
+            ..Default::default()
+        };
+        let ctx = PhaseContext::resolve(&phase).expect("resolve ok");
+        let mut arena = ValueArena::new(16);
+        let mut body_buf = String::with_capacity(64);
+        let msg = generate_message_with_plan(
+            &ctx,
+            &phase,
+            &FormatKind::Raw,
+            1,
+            &mut arena,
+            &mut body_buf,
+        )
+        .expect("simple static template должен работать");
+        assert_eq!(msg, b"static text");
     }
 }

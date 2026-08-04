@@ -654,18 +654,6 @@ Alpine .apk оставлен **deferred** — musl build + APKBUILD + Alpine bui
 
 ---
 
-## Политика по distribution channels (2026-07-25)
-
-PPA и COPR НЕ реализуются для проекта (Not Planned). Alpine `.apk` покрывает
-тот же use-case без external account overhead — см. `docs/distribution-channels.md`
-§Политика для обоснования.
-
-Этот документ покрывает **только sub-task 1** (GPG release signing subkey) —
-единственный manual setup, который нужен для `packages.yml` infrastructure.
-
-Остальные sub-tasks Issue #155 (sub-task 4 PPA, sub-task 5 COPR, sub-task 6
-Alpine) — **Not Planned** (см. `docs/distribution-channels.md`).
-
 ## Acceptance checklist (overall)
 
 | Sub-task | Action | Verification | Status |

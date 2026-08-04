@@ -1,0 +1,6 @@
+---
+source: src/format/snapshot_tests.rs
+assertion_line: 44
+expression: "s[idx..].to_string()"
+---
+test-host test-app[12345]: test msg

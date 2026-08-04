@@ -75,15 +75,21 @@ pub fn ensure_rustls_provider_for_tests() {
     ensure_rustls_provider();
 }
 
+#[cfg(test)]
+mod anomaly_proptests;
 pub mod cli;
 pub mod error;
 pub mod format;
 pub mod generator;
 pub mod load_shape;
+#[cfg(test)]
+mod load_shape_proptests;
 pub mod observability;
 pub mod payload;
 #[cfg(test)]
 mod payload_proptests;
+#[cfg(test)]
+mod validate_proptests;
 // PR-A2 (v10.8.0): Compiled ExecutionPlan.
 pub mod plan;
 pub mod schema;

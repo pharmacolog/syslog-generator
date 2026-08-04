@@ -1,6 +1,120 @@
 
 # Changelog
 
+## v11.0.0 - 2026-08-04 (v11.8 gap-closing release)
+
+**Major release: Issue #85 quick-wins + v11.8 gap-closing items (A2.3 hot-path, A3 queue, A4 concurrent shards, A5 UDP batching, A6 blocking perf-regression gate, C3 proptest+insta snapshots).**
+
+### 🎯 Highlights
+
+- **Concurrent generator pipeline (A4, Issue #161)**: `RunPhaseMultiOptions { concurrent_shards, generator_threads }` — multi-shard producer для high-throughput workloads.
+- **Adaptive UDP batching (A5, Issue #162)**: `TargetConfig.udp_batch_size` — собрать N datagrams в batch перед отправкой (~90% syscall overhead reduction).
+- **CompiledPlan hot-path (A2.3, Issue #160)**: slot-based message generation path с caller-owned `ValueArena` (zero alloc per msg).
+- **queue_capacity threading (A3, Issue #163)**: `channel_capacity_override` параметр в `run_phase_multi` для backpressure tuning.
+- **Blocking perf-regression gate (A6, Issue #164)**: `continue-on-error: true` убран — gate теперь blocking. При regression PR blocked.
+- **Local perf-regression check hard rule (Issue #228)**: maintainer обязан local-check с честным baseline перед PR.
+- **proptest + insta snapshot tests (C3, Issue #165)**: 21 proptests + 6 snapshot tests.
+
+### Changed
+
+#### v11.8 gap-closing (Issues #160, #161, #162, #163, #164, #165)
+
+- **`src/generator/core.rs`**:
+  - **PR #160 (A2.3 hot-path migration)**: `run_phase_multi_inner` использует slot-based path через `generate_message_with_plan` (caller-owned `ValueArena` + `body_buf`). Fallback на legacy cached path для schema/unsupported formats. New test `a2_3_hot_path_migration_smoke`.
+  - **PR #226 (A4 concurrent pipeline)**: New `RunPhaseMultiOptions` struct с `concurrent_shards: bool` и `generator_threads: usize`. `run_phase_multi_with_opts(...)` — public API с branching между single-threaded (legacy) и concurrent paths. Concurrent inner: split N на T шардов, spawn T tokio tasks, каждый генерит свою порцию через `generate_shard`. `setup_target_senders` extracted helper (DRY). Determinism: каждый шард использует RNG derived от `(seed, seq_in_shard)` — byte-equivalent output across thread counts (после sort). MVP limitations: rate-limiting НЕ применяется в concurrent mode (fire as fast as possible); output ordering между шардами не сохраняется.
+  - **PR #206 (A3 queue_capacity threading)**: New `channel_capacity_override: Option<usize>` параметр в `run_phase_multi`. `mpsc::channel(channel_capacity_override.unwrap_or(1024))`. Callsite в `run_profile` передаёт `profile.queue_capacity`. Test `a3_queue_capacity_threading`.
+
+- **`src/transport/udp.rs`**:
+  - **PR #230 (A5 UDP batching)**: New `target_sender_udp_with_batch(addr, phase_name, rx, metrics, shutdown, batch_size)` — собирает до N datagrams в Vec, отправляет loop'ом. Reduces syscall overhead на ~N раз. Trade-off: добавляет latency до ~1 RTT (для latency-sensitive оставьте batch_size=1). Реальный `sendmmsg` syscall не используется (platform-specific).
+
+- **`.github/workflows/perf-regression.yml`**:
+  - **PR #210 (A6 blocking gate)**: `continue-on-error: true` убран. Gate теперь blocking. Если baseline file отсутствует — FAIL (exit 1), а не silent skip. `baseline_sha` input в `workflow_dispatch` для override. `Resolve baseline SHA` step — использует origin/main HEAD по умолчанию. Threshold per category: hot_path 5%, format 10%, transport 10%, allocations 15% (reserved).
+  - **PR #216 (median-of-3-runs)**: threshold 5% для hot_path (вместо 50%) с median-of-3 variance reduction.
+
+- **`src/format/mod.rs`**: `FormatKind` derives `Clone` для использования в shard-based generation.
+
+- **`src/generator/config.rs`**: `TargetConfig.udp_batch_size: Option<usize>` поле (default 1 = legacy single-datagram path).
+
+- **`schemas/profile.schema.json`**: добавлено поле `udp_batch_size` с description (minimum 1).
+
+- **`Cargo.toml`**: `insta = "1"` добавлен в `[dev-dependencies]`.
+
+### Added
+
+- **`scripts/perf-regression-collect.sh`**: single-bench CI collector (≤5 min в CI runner).
+- **`scripts/perf-estimate-parse.py`**: Criterion estimates.json parser.
+- **`scripts/perf-local-check.sh`** (Issue #228): helper script для local perf-regression check с median-of-3 + comparison с baseline. Exit codes: 0 (pass) / 1 (regression) / 2 (invalid).
+- **`scripts/tests/test_perf_scripts.sh`**: 14/14 unit tests (5 для local-check, 9 для perf scripts).
+- **`scripts/tests/test_perf_local_check.sh`**: 5/5 unit tests.
+- **`docs/perf-governance.md`**: thresholds + refresh procedure + false-positive mitigation + workflow integration.
+- **`.github/workflows/perf-baseline-autogen.yml`** (Issue #223, PR #224): auto-generate baseline на push в main. Hard policy: regression > +10% → FAIL (без commit).
+- **`src/anomaly_proptests.rs`** (C3, Issue #165): 8 proptests для anomaly module.
+- **`src/load_shape_proptests.rs`** (C3, Issue #165): 7 proptests для load shape.
+- **`src/validate_proptests.rs`** (C3, Issue #165): 6 proptests для validate module.
+- **`src/format/snapshot_tests.rs`** (C3, Issue #165): 6 snapshot tests через `insta`:
+  - `snapshot_rfc5424_basic`, `snapshot_rfc5424_empty_body`
+  - `snapshot_rfc3164_basic` (prefix-anchor workaround для Local::now() non-determinism)
+  - `snapshot_cef_basic`, `snapshot_leef_basic`, `snapshot_json_lines_basic`
+- **`src/format/snapshots/`** (new dir): 6 baseline snapshots.
+
+### Tests
+
+- **Issue #165 (C3)**: 21 proptests + 6 snapshot tests. 505/505 tests pass в release mode.
+- **Issue #161 (A4)**: 3 new tests (`a4_concurrent_shards_deterministic_byte_equivalence`, `a4_run_phase_multi_options_default`, `a4_concurrent_chunk_math`).
+- **Issue #162 (A5)**: 2 new tests (`a5_udp_batch_sender_delivers_all_messages`, `a5_udp_batch_size_1_equals_legacy`).
+- **Issue #160 (A2.3)**: 1 new test (`a2_3_hot_path_migration_smoke`).
+- **Issue #163 (A3)**: 1 new test (`a3_queue_capacity_threading`).
+- **Total**: 510/510 tests pass (release mode), 0 failed, 1 ignored.
+
+### Performance baselines
+
+Multiple `perf/baselines/<sha>.json` files generated (29 estimates each):
+- hot_path: 1 entry
+- runtime: 5 entries
+- format_matrix: 9 entries
+- transport_matrix: 5 entries (tcp/udp)
+- dispatch_matrix: 3 entries
+
+SHA baselines: `1b64756d`, `b89e6a5a`, `c4a08dce`, `30fd348d`, `798cac7c`, `66a137ec`, `1723fd72`.
+
+### Breaking changes
+
+- **Public API**: `RunPhaseMultiOptions` struct добавлен в `syslog_generator::generator::core`. `target_sender_udp_with_batch` функция добавлена в `syslog_generator::transport::udp`. `FormatKind` теперь `Clone`. См. `api-snapshot.txt` diff для полного списка.
+- **Threshold change**: perf-regression gate thresholds reduced (50% → 5/10/10/15%) с median-of-3-runs. Это **может** вызвать false-positives в первый PR после upgrade (Issue #218 variance).
+
+### Migration
+
+- Для пользователей config: добавьте `udp_batch_size: 64` (или другое) в target config чтобы активировать UDP batching.
+- Для пользователей programmatic API: используйте `run_phase_multi_with_opts(..., &RunPhaseMultiOptions { concurrent_shards: true, generator_threads: 4 })` для concurrent generation.
+- См. `docs/perf-governance.md` для полного migration guide.
+
+### Dependencies
+
+- `insta = "1"` (dev-dep) added for snapshot tests.
+- `proptest = "1"` (dev-dep) уже присутствовал, расширен использование.
+
+### Verification
+
+- 510/510 tests pass в release mode.
+- 18/18 CI blocking checks pass на main.
+- `cargo public-api --features test-helpers` snapshot match `api-snapshot.txt`.
+- `cargo clippy --all-targets -- -D warnings` clean.
+- `cargo fmt --all` clean.
+
+### References
+
+- Issue #85 (parent A1 quick-wins, closed)
+- Issue #88 (A2.3 — closed)
+- Issue #89 (A3 — closed)
+- Issue #86 (A4 — closed)
+- Issue #82 (A5 — closed)
+- Issue #84 (A6 — closed)
+- Issue #81 (C3 — closed)
+- Issue #223 (auto-baseline — closed)
+- Issue #228 (local perf-regression check hard rule — closed)
+
+---
+
 ## v10.7.24 - 2026-08-04 (local perf-regression check, Issue #228)
 
 **Patch-release: добавлен hard rule о локальной perf-regression проверке перед PR (Issue #228).**

@@ -595,6 +595,13 @@ gh issue comment <N> --body "🤖 Agent-X: blocked on Agent-Y's PR #M. Waiting f
 - ❌ Merge PR с красными CI (strict mode enforced).
 - ❌ Merge без review для `main` (1 approval required).
 - ❌ Локальный `git merge origin/main && git push origin dev`.
+- ❌ **Direct merge в `main` без PR** (Issue #160/#163 incident 2026-08-04, см. Issue #206):
+  merge commit `e4961e3 Merge feature/a1-remaining` попал в `main` без PR.
+  Это обход §4.4 review policy. Branch protection на `main` имеет
+  `enforce_admins: false`, поэтому maintainer (admin) может push/merge
+  напрямую. **Hardening**: переключить `enforce_admins` в `true` через
+  Settings → Branches → Branch protection rules, чтобы даже maintainer
+  не мог обойти review.
 
 ### 18.3 Worktree
 

@@ -190,6 +190,14 @@ harness = false
 name = "dispatch_matrix"
 harness = false
 
+# Issue #211: allocations bench — throughput-based benchmark для alloc profile.
+# Покрывает message generation, format encoding, transport buffering.
+# Использует Criterion `iter_batched` для изоляции allocations между батчами.
+# Threshold для gate: 15% (Issue #164, allocations category).
+[[bench]]
+name = "allocations"
+harness = false
+
 # PR-6 (v10.7.8): расширенное bench-coverage. Иерархическая структура:
 # benches/format/, benches/transport/. Каждый bench — отдельный бинарь.
 [[bench]]

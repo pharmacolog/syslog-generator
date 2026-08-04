@@ -16,7 +16,7 @@ merge Issue #164 (`feat(perf): make perf-regression gate truly blocking`).
 | `hot_path/` | **+50%** | +5-10% | `benches/hot_path.rs` — message generation hot-path |
 | `format/` | **+50%** | +10-15% | `benches/format/*.rs` — rfc5424/rfc3164/cef/leef/json encoding |
 | `transport/` | **+50%** | +10-15% | `benches/transport/*.rs` — TCP/UDP/TLS/file-rotation |
-| `allocations/` | **+50%** | +15-20% | Reserved. Нет allocations bench; готовится в Issue #211 |
+| `allocations/` | **+50%** | +15-20% | `benches/allocations.rs` — alloc profile (msg/sec через hot-path/format/transport/payload) |
 
 **History**:
 - v11.8 (Issue #164) — gate blocking, thresholds = 50% (cold cache variance ±30-50%).
@@ -37,11 +37,15 @@ merge Issue #164 (`feat(perf): make perf-regression gate truly blocking`).
    ```
    BENCH_RUNS=3 scripts/perf-regression-collect.sh \
        "perf/baselines/current-${CURRENT_SHA}.json" \
-       hot_path
+       hot_path allocations
    ```
-   Это запускает `cargo bench` 3 раза, сохраняет estimates каждого run в
-   `${WORKDIR}/run-N.jsonl`, затем `scripts/compute-median.py` агрегирует
-   median per benchmark.
+   Это запускает `cargo bench` 3 раза для каждого bench target, сохраняет
+   estimates каждого run в `${WORKDIR}/run-N.jsonl`, затем
+   `scripts/compute-median.py` агрегирует median per benchmark.
+
+   **Bench targets** (Issue #211 добавил allocations):
+   - `hot_path` — message generation hot-path
+   - `allocations` — alloc profile (msg/sec через format/transport/payload)
 4. Median result сравнивается с baseline из `perf/baselines/<origin/main-sha>.json`.
 5. Если deltas в пределах thresholds — PASS (job exit 0).
 6. Если delta превышает threshold — FAIL (job exit 1, PR blocked).

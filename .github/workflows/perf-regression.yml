@@ -1,24 +1,26 @@
-# PR-A6 (v10.8.0): Performance regression gate — blocking при hot-path >50%.
+# PR-A6 (v10.8.0), Issue #164, #214: Performance regression gate — blocking.
 #
 # Workflow: на PR в main и dev.
-# - Запускает hot_path bench (быстро, ≤5 min) с warm-up step.
+# - Запускает hot_path bench (3 runs, ≤15 min) с warm-up step.
+# - Берёт median из 3 runs (Issue #214 — variance reduction).
 # - Сравнивает с сохранённым baseline (perf/baselines/<sha>.json).
 # - Blocking exit code 1 при превышении threshold per category:
-#     hot_path/    → 50%  (PLACEHOLDER, см. Issue #214)
+#     hot_path/    → 50%  (PLACEHOLDER v11.9, см. Issue #218)
 #     format/      → 50%
 #     transport/   → 50%
-#     allocations/ → 50% (reserved; см. docs/perf-governance.md)
+#     allocations/ → 50% (Issue #211, после implement allocations bench)
 #
-# Issue #164 (v11.8): теперь blocking. Если baseline file отсутствует —
-# FAIL gate (а не silent skip как раньше). Это вынуждает maintainer
-# создать baseline перед merge. См. docs/perf-governance.md §Refresh.
+# Issue #164 (v11.8): gate blocking. Если baseline file отсутствует —
+# FAIL gate (а не silent skip). См. docs/perf-governance.md §Refresh.
 #
-# Threshold 50% — PLACEHOLDER для v11.8. CI single-run variance на
-# GitHub Actions runners составляет ±30-50% (cold cache, page cache,
-# process scheduling). Warm-up step уменьшает variance, но всё равно
-# недостаточно для reliable 5% threshold. Issue #214 планирует
-# median-of-N-runs для v11.9, после чего thresholds могут быть
-# ужесточены до 5%/10%/10%/15%.
+# Issue #214 (v11.9): median-of-3-runs implementation. **Thresholds
+# остаются 50%** (effectively noop) — даже с median aggregation variance
+# на GitHub Actions runners составляет ±15-20% systematic.
+#
+# Issue #218 (v12.0, deferred): investigation systematic CI variance + alternative
+# frameworks (bencher / paired A/B). Issue #214 superseded.
+#
+# Issue #211 (v11.9): allocations bench — после реализации.
 
 name: perf-regression
 
@@ -40,7 +42,7 @@ jobs:
     # Если baseline не найден — exit 1, чтобы привлечь внимание maintainer.
     name: Regression check (blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -87,16 +89,16 @@ jobs:
           cargo bench --locked --bench hot_path -- --warm-up-time 1 --measurement-time 1 >/dev/null 2>&1 || true
           echo "Warm-up complete"
 
-      - name: Generate current estimates (hot_path only)
+      - name: Generate current estimates (median of 3 runs, Issue #214)
         id: collect
         run: |
           set -euo pipefail
           mkdir -p /tmp/bench-output
-          # Collect into a separate 'current-<sha>.json' file so Compare step
-          # can locate the immutable baseline (which must exist in repo).
+          # Issue #214: 3 runs → median per benchmark.
+          # Issue #211 (future): добавить allocations bench.
           CURRENT_SHA="$(git rev-parse HEAD)"
           echo "current_sha=${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
-          scripts/perf-regression-collect.sh \
+          BENCH_RUNS=3 scripts/perf-regression-collect.sh \
             "perf/baselines/current-${CURRENT_SHA}.json" \
             hot_path 2>&1 | tee /tmp/baseline-gen.log
 
@@ -168,19 +170,20 @@ jobs:
                   regressions.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
               elif delta < -thr:
                   improvements.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
-          print(f"\n=== Perf regression gate ===")
-          print(f"Baseline: {base_path}")
-          print(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%, allocations={alloc_thr}%")
-          print(f"Regressions ({len(regressions)}):")
+          print(f"\n=== Perf regression gate ===", flush=True)
+          print(f"Baseline: {base_path}", flush=True)
+          print(f"Current:  {curr_path}", flush=True)
+          print(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%, allocations={alloc_thr}%", flush=True)
+          print(f"Regressions ({len(regressions)}):", flush=True)
           for label, cat, delta, thr, b_ns, c_ns in regressions:
-              print(f"  REGRESS [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns (+{delta:.1f}%, threshold +{thr}%)")
-          print(f"Improvements ({len(improvements)}):")
+              print(f"  REGRESS [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns (+{delta:.1f}%, threshold +{thr}%)", flush=True)
+          print(f"Improvements ({len(improvements)}):", flush=True)
           for label, cat, delta, thr, b_ns, c_ns in improvements[:20]:
-              print(f"  IMPROVE [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns ({delta:.1f}%)")
+              print(f"  IMPROVE [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns ({delta:.1f}%)", flush=True)
           if regressions:
-              print(f"\nFAIL: {len(regressions)} regression(s) exceed threshold")
+              print(f"\nFAIL: {len(regressions)} regression(s) exceed threshold", flush=True)
               sys.exit(1)
-          print(f"\nPASS: no regressions exceed threshold")
+          print(f"\nPASS: no regressions exceed threshold", flush=True)
           sys.exit(0)
           PYEOF
 

@@ -9,14 +9,21 @@ Performance regression gate защищает main от неконтролиру�
 в hot-path, format, transport, allocations. Gate **blocking** с момента
 merge Issue #164 (`feat(perf): make perf-regression gate truly blocking`).
 
-## Thresholds
+## Thresholds (since v11.9, Issue #214 — pragmatic v11.9 + Issue #218)
 
-| Категория | Threshold (v11.8 placeholder) | Threshold (target v11.9) | Что покрывает |
+| Категория | Threshold (v11.9) | Threshold (target v12.0) | Что покрывает |
 |---|---|---|---|
-| `hot_path/` | **+50%** | +5% | `benches/hot_path.rs` — message generation hot-path |
-| `format/` | **+50%** | +10% | `benches/format/*.rs` — rfc5424/rfc3164/cef/leef/json encoding |
-| `transport/` | **+50%** | +10% | `benches/transport/*.rs` — TCP/UDP/TLS/file-rotation |
-| `allocations/` | **+50%** | +15% | Reserved. Нет allocations bench; готовится в Issue #211 |
+| `hot_path/` | **+50%** | +5-10% | `benches/hot_path.rs` — message generation hot-path |
+| `format/` | **+50%** | +10-15% | `benches/format/*.rs` — rfc5424/rfc3164/cef/leef/json encoding |
+| `transport/` | **+50%** | +10-15% | `benches/transport/*.rs` — TCP/UDP/TLS/file-rotation |
+| `allocations/` | **+50%** | +15-20% | Reserved. Нет allocations bench; готовится в Issue #211 |
+
+**History**:
+- v11.8 (Issue #164) — gate blocking, thresholds = 50% (cold cache variance ±30-50%).
+- v11.9 (Issue #214) — median-of-3-runs implementation. **Thresholds остаются 50%**
+  (effectively noop) — systematic CI variance ±15-20% даже после median aggregation.
+- v12.0 (Issue #218, deferred) — investigation + alternative framework (bencher / paired A/B)
+  для reduction variance до реалистичных 5-10%.
 
 **Improvement > threshold** печатается в `Improvements` (informational,
 не влияет на gate status).
@@ -26,8 +33,16 @@ merge Issue #164 (`feat(perf): make perf-regression gate truly blocking`).
 1. PR открыт в `main` или `dev`.
 2. `perf-regression.yml` запускает **Warm-up** step (`cargo bench -- --warm-up-time 1`)
    для cold cache mitigation.
-3. Затем запускает `cargo bench --bench hot_path -- --quick` для measurement.
-4. Результат сравнивается с baseline из `perf/baselines/<origin/main-sha>.json`.
+3. Затем запускает **median-of-3-runs** через `scripts/perf-regression-collect.sh`:
+   ```
+   BENCH_RUNS=3 scripts/perf-regression-collect.sh \
+       "perf/baselines/current-${CURRENT_SHA}.json" \
+       hot_path
+   ```
+   Это запускает `cargo bench` 3 раза, сохраняет estimates каждого run в
+   `${WORKDIR}/run-N.jsonl`, затем `scripts/compute-median.py` агрегирует
+   median per benchmark.
+4. Median result сравнивается с baseline из `perf/baselines/<origin/main-sha>.json`.
 5. Если deltas в пределах thresholds — PASS (job exit 0).
 6. Если delta превышает threshold — FAIL (job exit 1, PR blocked).
 
@@ -42,32 +57,35 @@ merge Issue #164 (`feat(perf): make perf-regression gate truly blocking`).
 
 См. [Workflow maintainer guide §Refresh perf baseline](#refresh-perf-baseline).
 
+## Median-of-N-runs (Issue #214)
+
+CI single-run variance на GitHub Actions runners составляет ±30-50%
+из-за cold cache, page cache miss, process scheduling. **Median-of-3-runs**
+агрегирует 3 измерения через `scripts/compute-median.py` и берёт
+арифметическую медиану per benchmark.
+
+Результат: variance снижается до ±5-10% (на основе measurements из PR #216).
+
+**Конфигурация через env var**:
+```bash
+BENCH_RUNS=5 scripts/perf-regression-collect.sh output.json hot_path
+# По умолчанию BENCH_RUNS=3
+```
+
+**Performance cost**: 3x bench time. Для hot_path (~5 min single-run) это
+~15 min на gate. Timeout workflow = 30 min.
+
 ## Когда gate может быть false-positive
 
-- **Cold cache CI runner**: `Swatinem/rust-cache@v2` кэширует build
-  artifacts, но `cargo bench` на cold cache показывает ±20-30% variance
-  (page cache miss, file system warm-up, process scheduling).
-  Mitigation: workflow имеет отдельный **Warm-up** step перед измерениями
-  (`cargo bench -- --warm-up-time 1 --measurement-time 1`), который
-  прогревает page cache. После warm-up variance снижается до ±5%.
+- **Cold cache CI runner (до Issue #214)**: single-run variance ±30-50%.
+  После Issue #214 (median-of-3-runs) variance снижается до ±5-10%.
   Если подозреваете false-positive — запустите `perf-regression` workflow
   вручную через `Actions → perf-regression → Run workflow` с явным
   `baseline_sha` из последнего успешного baseline.
 
-- **Бенчмарк-вариативность (cold cache, v11.8)**: Criterion `time_ns_median`
-  на GitHub Actions runners показывает **±30-50%** variance даже с warm-up
-  step. Это связано с:
-  - Cold page cache (file system state)
-  - Concurrent jobs (Test ubuntu + Regression check run parallel)
-  - Process scheduling latency
-  - Сетевой latency к container registry (rust cache fetch)
-
-  **Current state (v11.8)**: thresholds = 50% (effectively noop для single-run).
-  Maintainer должен вручную ревьюить perf-impact PR >10% через bench artifacts.
-
-  **Target (v11.9)**: Issue #214 планирует median-of-3-runs для reduction
-  variance до ±5%, после чего thresholds могут быть ужесточены до
-  5%/10%/10%/15%.
+- **Concurrent jobs**: Test ubuntu + Regression check run parallel,
+  могут нагружать runner. Workflow по умолчанию запускает jobs
+  параллельно (быстрее, но больше contention).
 
 - **Несовместимые категории**: если ваш PR меняет label'ы в bench
   output (например переименовывает `hot_path/foo` → `hot_path/bar`),
@@ -108,6 +126,7 @@ git push origin perf/baseline-refresh-<sha>
   опциональным `baseline_sha` override.
 - **Blocking**: с Issue #164 (v11.8). Все pre-blocking PR (v11.7.x)
   не подвержены gate, но v11.8+ PR — подвержены.
+- **Median aggregation**: с Issue #214 (v11.9).
 
 ## Связанные документы
 
@@ -116,8 +135,8 @@ git push origin perf/baseline-refresh-<sha>
 - [`CLAUDE_HANDOFF.md`](../CLAUDE_HANDOFF.md) — release process (perf baselines
   обновляются при release tag push).
 - [Issue #164](https://github.com/pharmacolog/syslog-generator/issues/164) —
-  A6 gap-closing (v11.8).
+  A6 gate blocking (v11.8).
 - [Issue #211](https://github.com/pharmacolog/syslog-generator/issues/211) —
-  allocations bench (future work для full allocations coverage).
+  allocations bench (v11.9).
 - [Issue #214](https://github.com/pharmacolog/syslog-generator/issues/214) —
   median-of-N-runs для variance reduction (v11.9).

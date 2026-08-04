@@ -111,6 +111,16 @@ pub struct TargetConfig {
     /// None → default 2.0.
     #[serde(default)]
     pub reconnect_multiplier: Option<f64>,
+    /// Issue #162 (A5 adaptive batching): максимальный batch size для
+    /// UDP datagrams. UDP не имеет встроенного batching в user-space,
+    /// но мы можем collect N datagrams → loop send_to. Это снижает
+    /// syscall overhead на ~N раз (1 syscall вместо N).
+    ///
+    /// `None` → default 1 (legacy single-datagram path).
+    /// `Some(64)` → собрать до 64 datagrams, отправить batch.
+    /// Применяется только для `transport: "udp"`.
+    #[serde(default)]
+    pub udp_batch_size: Option<usize>,
 }
 /// Ручной `Default`, согласованный с serde-дефолтами: connections=1, weight=1,
 /// framing="non-transparent". Это важно, чтобы `TargetConfig::default()` в коде
@@ -149,6 +159,7 @@ impl Default for TargetConfig {
             reconnect_initial_backoff_ms: None,
             reconnect_max_backoff_ms: None,
             reconnect_multiplier: None,
+            udp_batch_size: None,
         }
     }
 }

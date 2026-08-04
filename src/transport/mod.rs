@@ -383,6 +383,7 @@ pub use tls::{
     TlsVersion,
 };
 pub use udp::target_sender_udp;
+pub use udp::target_sender_udp_with_batch;
 
 // ===== N10 (v9.1.0): тесты trait Transport =====
 #[cfg(test)]

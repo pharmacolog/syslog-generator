@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-04T18:58:07Z",
+  "baseline_sha": "30fd348db51c8fcc56c8fd207c267a81dc62a375",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1704,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manually generated baseline for 30fd348 (PR #229 governance docs). hot_path/rfc5424_with_faker: median of 3 runs. Required for autogen PR #244 to pass gate."
+}

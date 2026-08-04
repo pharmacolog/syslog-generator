@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-04T19:54:25Z",
+  "baseline_sha": "798cac71c321e1fa63713b86df6ac549495a8a3b",
+  "n_runs": 3,
+  "estimates": [
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 1701,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Manual bootstrap for 798cac7 (PR #243 30fd348 baseline refresh). hot_path/rfc5424_with_faker: median of 3."
+}

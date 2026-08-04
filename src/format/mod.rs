@@ -210,6 +210,7 @@ pub trait Format {
 /// этих форматов (`CefConfig`/`LeefConfig`/`json_lines_fields`) живут в
 /// `Phase` и передаются через `FormatContext` при вызове `render` —
 /// здесь они не нужны (варианты без параметров — данные идут в ctx).
+#[derive(Debug, Clone)]
 pub enum FormatKind {
     Rfc5424,
     Rfc3164,

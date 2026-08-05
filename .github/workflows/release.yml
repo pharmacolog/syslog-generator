@@ -651,7 +651,8 @@ jobs:
           pattern: syslog-generator-rpm-*
           merge-multiple: true
 
-      - name: Download .apk artifact
+      - name: Download .apk artifact (Issue #261 — optional, .apk может not exist)
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: syslog-generator-apk-${{ env.TAG }}
@@ -859,7 +860,8 @@ jobs:
           path: staging/rpm-true/
         continue-on-error: true
 
-      - name: Download .apk artifact
+      - name: Download .apk artifact (Issue #261 — optional)
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: syslog-generator-apk-${{ env.TAG }}

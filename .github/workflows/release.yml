@@ -610,7 +610,8 @@ jobs:
     name: Sign + SHA256SUMS
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [deb, rpm, apk]
+    # Issue #261: .apk non-blocking. .deb и .rpm — required для sign.
+    needs: [deb, rpm]
     environment: release
     steps:
       - uses: actions/checkout@v7

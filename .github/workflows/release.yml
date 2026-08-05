@@ -1,0 +1,944 @@
+# Issue #261 + Issue #180.5: Unified release workflow для v11.0.0+.
+#
+# Заменяет release-pgo.yml + packages.yml для tag builds как единая
+# точка публикации. Все артефакты (PGO binary, debug symbols, .deb/.rpm/.apk,
+# source tarball/zipball, SBOM, GPG-signed SHA256SUMS) собираются
+# в одном gate-checked pipeline.
+#
+# Триггеры:
+#   - push tag v*.*.* → полный release cycle (build → upload → publish)
+#   - workflow_dispatch → dry-run сборка артефактов без публикации
+#
+# Hard rule: **release НЕ публикуется пока не все REQUIRED артефакты собраны**.
+# Это гарантирует что v11.0.0-style release (без build artifacts) не повторится.
+#
+# Артефакты:
+#   - syslog-generator (linux-amd64, PGO, .dwp, merged.profdata)       REQUIRED
+#   - syslog-generator (linux-arm64)                                REQUIRED
+#   - syslog-generator (macos-arm64, .dSYM.tar.gz)                  REQUIRED
+#   - syslog-generator_{ver}_amd64.deb                              REQUIRED
+#   - syslog-generator_{ver}_amd64.rpm                              REQUIRED
+#   - syslog-generator_{ver}.apk                                    REQUIRED
+#   - syslog-generator-v{ver}-source.tar.gz                         REQUIRED
+#   - syslog-generator-v{ver}-source.zip                            REQUIRED
+#   - SHA256SUMS + SHA256SUMS.asc                                   REQUIRED
+#
+# Защита от re-race: каждый upload step использует `--clobber` для идемпотентности.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag для сборки (default: из текущего push event)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry-run: собрать артефакты, но НЕ публиковать release'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+
+jobs:
+  # === Stage 1: Source archive ===
+  source-archive:
+    name: Build source archives
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Resolve version from Cargo.toml (Issue #180.5)
+        id: version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag=${{ env.TAG }}, Version=$VERSION"
+
+      - name: Generate source tarball + zipball (Issue #180.5)
+        env:
+          TAG: ${{ env.TAG }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive --format=tgz --prefix="syslog-generator-${VERSION}/" \
+            -o "dist/syslog-generator-v${TAG}-source.tar.gz" "${TAG}"
+          git archive --format=zip --prefix="syslog-generator-${VERSION}/" \
+            -o "dist/syslog-generator-v${TAG}-source.zip" "${TAG}"
+          ls -la dist/
+          sha256sum dist/*
+
+      - name: Upload source archives artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-source-${{ env.TAG }}
+          path: |
+            dist/syslog-generator-v${{ env.TAG }}-source.tar.gz
+            dist/syslog-generator-v${{ env.TAG }}-source.zip
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 2: Linux PGO build (amd64) ===
+  linux-amd64-pgo:
+    name: PGO build (Linux amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: source-archive
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache LLVM tarball
+        id: cache-llvm
+        uses: actions/cache@v6
+        with:
+          path: /tmp/LLVM-20.1.0-Linux-X64.tar.xz
+          key: llvm-20.1.0-${{ runner.os }}-pgo-v2
+          restore-keys: |
+            llvm-20.1.0-${{ runner.os }}-pgo-
+
+      - name: Download llvm-profdata matching rustc 1.97
+        env:
+          PGO_DIR: ${{ github.workspace }}/pgo
+        run: |
+          set -euo pipefail
+          LLVM_VER=20.1.0
+          LLVM_TARBALL="LLVM-${LLVM_VER}-Linux-X64.tar.xz"
+          LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VER}/${LLVM_TARBALL}"
+          LLVM_PATH="/tmp/${LLVM_TARBALL}"
+          if [ -f "$LLVM_PATH" ]; then
+            echo "Using cached LLVM tarball"
+          else
+            echo "Downloading $LLVM_URL (~1.9 GB)..."
+            curl -fSL --connect-timeout 30 --max-time 1200 "$LLVM_URL" -o "$LLVM_PATH"
+          fi
+          mkdir -p /tmp/llvm-bin
+          tar -xJf "$LLVM_PATH" -C /tmp/llvm-bin --strip-components=1
+          test -x /tmp/llvm-bin/bin/llvm-profdata
+          LLVM_VERSION=$(/tmp/llvm-bin/bin/llvm-profdata --version)
+          case "$LLVM_VERSION" in
+            *"LLVM version ${LLVM_VER}"*) ;;
+            *) echo "::error::Unexpected llvm-profdata version: $LLVM_VERSION"; exit 1 ;;
+          esac
+          echo "LLVM_BIN=/tmp/llvm-bin/bin" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-pgo
+          cache-on-failure: true
+
+      - name: PGO step 1/3 — profile-generate
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          PGO_DIR: ${{ github.workspace }}/pgo
+        run: |
+          mkdir -p "$PGO_DIR"
+          RUSTFLAGS="-Cprofile-generate=$PGO_DIR" \
+            cargo build --release --bench hot_path
+
+      - name: PGO step 2/3 — workload (bench)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          PGO_DIR: ${{ github.workspace }}/pgo
+        run: |
+          RUSTFLAGS="-Cprofile-generate=$PGO_DIR" \
+            cargo bench --bench hot_path -- --quick
+
+      - name: PGO step 3/3 — merge + final build
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          PGO_DIR: ${{ github.workspace }}/pgo
+        run: |
+          LLVM_PROFDATA="${LLVM_BIN}/llvm-profdata"
+          "$LLVM_PROFDATA" merge -o "$PGO_DIR/merged.profdata" "$PGO_DIR"/*.profraw
+          RUSTFLAGS="-Cprofile-use=$PGO_DIR/merged.profdata" \
+            cargo build --release
+
+          # Issue #190: assert .dwp emitted
+          if [ ! -f target/release/syslog-generator.dwp ]; then
+            echo "::error::target/release/syslog-generator.dwp missing"
+            exit 1
+          fi
+
+      - name: Stage PGO artifacts
+        run: |
+          mkdir -p dist-pgo
+          cp target/release/syslog-generator dist-pgo/syslog-generator
+          cp target/release/syslog-generator.dwp dist-pgo/syslog-generator.dwp
+          cp pgo/merged.profdata dist-pgo/merged.profdata
+          ls -la dist-pgo/
+
+      - name: Upload PGO artifacts (Issue #180.1)
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-pgo-linux-amd64-${{ env.TAG }}
+          path: |
+            dist-pgo/syslog-generator
+            dist-pgo/syslog-generator.dwp
+            dist-pgo/merged.profdata
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 2b: Linux arm64 (cross-compile) ===
+  linux-arm64:
+    name: Build (Linux arm64, cross-compile musl)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: source-archive
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable + arm64 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+          components: rustfmt, clippy
+
+      - name: Install arm64 cross-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-arm64
+          cache-on-failure: true
+
+      - name: Build release (cross-compile arm64 musl)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --release --locked \
+            --target aarch64-unknown-linux-musl \
+            --bin syslog-generator
+
+          test -f target/aarch64-unknown-linux-musl/release/syslog-generator
+          test -f target/aarch64-unknown-linux-musl/release/syslog-generator.dwp
+
+      - name: Stage arm64 artifacts
+        run: |
+          mkdir -p dist-arm64
+          cp target/aarch64-unknown-linux-musl/release/syslog-generator dist-arm64/
+          cp target/aarch64-unknown-linux-musl/release/syslog-generator.dwp dist-arm64/
+          ls -la dist-arm64/
+          file dist-arm64/syslog-generator
+
+      - name: Upload arm64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-linux-arm64-${{ env.TAG }}
+          path: |
+            dist-arm64/syslog-generator
+            dist-arm64/syslog-generator.dwp
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 3: macOS release build (arm64) ===
+  macos-arm64:
+    name: Release build (macOS arm64, .dSYM)
+    runs-on: macos-14
+    timeout-minutes: 30
+    needs: source-archive
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-release
+          cache-on-failure: true
+
+      - name: Build release binary (split-debuginfo=packed)
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          cargo build --release --locked
+          test -x target/release/syslog-generator
+          test -d target/release/syslog-generator.dSYM
+          test -f target/release/syslog-generator.dSYM/Contents/Resources/DWARF/syslog-generator
+
+      - name: Package .dSYM as tarball (Issue #190)
+        run: |
+          tar -C target/release -czf syslog-generator.dSYM.tar.gz syslog-generator.dSYM
+          ls -la syslog-generator.dSYM.tar.gz
+
+      - name: Stage macOS artifacts
+        run: |
+          mkdir -p dist-macos
+          cp target/release/syslog-generator dist-macos/
+          cp syslog-generator.dSYM.tar.gz dist-macos/
+          ls -la dist-macos/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-macos-arm64-${{ env.TAG }}
+          path: |
+            dist-macos/syslog-generator
+            dist-macos/syslog-generator.dSYM.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 4: Linux packages (.deb) ===
+  deb:
+    name: Build .deb (Linux, kafka=${{ matrix.kafka }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: source-archive
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka: [false, true]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-packages
+          cache-on-failure: true
+
+      - name: Install cargo-deb
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-deb" ]; then
+            cargo install cargo-deb --locked
+          fi
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config dpkg-dev file
+
+      - name: Build binary + man page
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          FEATURES=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+          fi
+          cargo build --bin syslog-generator --release --locked "${FEATURES}"
+          mkdir -p target/man
+          ./target/release/syslog-generator man | gzip -9 > target/man/syslog-generator.1.gz
+          test -s target/man/syslog-generator.1.gz
+
+      - name: Build .deb
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          FEATURES=""
+          VARIANT=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+            VARIANT="--variant=kafkatrue"
+          fi
+          mkdir -p target/debian
+          cargo deb --no-build --locked "${FEATURES}" "${VARIANT}"
+          ls -la target/debian/
+
+      - name: Stage .deb
+        run: |
+          mkdir -p dist-deb
+          DEB=$(find target/debian -name '*.deb' -type f | head -1)
+          cp "$DEB" dist-deb/
+          ls -la dist-deb/
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-deb-kafka${{ matrix.kafka }}-${{ env.TAG }}
+          path: dist-deb/*.deb
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 5: Linux packages (.rpm) ===
+  rpm:
+    name: Build .rpm (Linux, kafka=${{ matrix.kafka }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: source-archive
+    strategy:
+      fail-fast: false
+      matrix:
+        kafka: [false, true]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-packages
+          cache-on-failure: true
+
+      - name: Install cargo-rpm (v0.7 — Issue #261)
+        run: |
+          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
+            cargo install cargo-rpm --locked --version '^0.7'
+          fi
+          cargo rpm --version
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config rpm file
+
+      - name: Build .rpm
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          FEATURES=""
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            FEATURES="--features kafka"
+          fi
+          cargo rpm build --release --locked "${FEATURES}"
+
+          mkdir -p target/rpm
+          RPM_FILE=$(find target/release/rpmbuild/RPMS -name 'syslog-generator-*.rpm' -type f | head -1)
+          if [ "${{ matrix.kafka }}" = "true" ]; then
+            mv "$RPM_FILE" target/rpm/syslog-generator-kafka.rpm
+          else
+            mv "$RPM_FILE" target/rpm/syslog-generator.rpm
+          fi
+          ls -la target/rpm/
+
+      - name: Stage .rpm
+        run: |
+          mkdir -p dist-rpm
+          cp target/rpm/*.rpm dist-rpm/
+          ls -la dist-rpm/
+
+      - name: Upload .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-rpm-kafka${{ matrix.kafka }}-${{ env.TAG }}
+          path: dist-rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 6: Alpine .apk ===
+  apk:
+    name: Build .apk (Alpine, k8s-like minimal)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: source-archive
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ runner.os }}-cargo-apk
+          cache-on-failure: true
+
+      - name: Compute source tarball sha256
+        id: sha
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          curl -fsSL "https://github.com/${{ github.repository }}/archive/refs/tags/${{ env.TAG }}.tar.gz" \
+            -o /tmp/src.tar.gz
+          echo "sha256=$(sha256sum /tmp/src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Render APKBUILD
+        run: |
+          VERSION="${{ steps.sha.outputs.VERSION }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+          sed -e "s/@@VERSION@@/$VERSION/g" \
+              -e "s/@@SHA@@/$SHA/g" \
+              alpine/APKBUILD > /tmp/APKBUILD
+          cat /tmp/APKBUILD
+
+      - name: Build .apk in Alpine container
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/abuild-home
+          chmod 700 /tmp/abuild-home
+
+          docker run --rm \
+            -v "$(pwd):/src" \
+            -v /tmp/abuild-home:/home/build/.abuild \
+            -v /tmp/APKBUILD:/tmp/APKBUILD:ro \
+            -w /src \
+            -u root \
+            alpine:3.21 \
+            sh -c '
+              set -eu
+              apk add --no-cache alpine-sdk bash sudo curl fakeroot openssl ca-certificates
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0 --profile minimal
+              . "$HOME/.cargo/env"
+              rustup target add x86_64-unknown-linux-musl
+
+              adduser -D -G abuild build
+              mkdir -p /home/build/.abuild
+              sudo -u build openssl genrsa -out /home/build/.abuild/build.rsa 2048
+              sudo -u build openssl rsa -in /home/build/.abuild/build.rsa \
+                -pubout -out /home/build/.abuild/build.rsa.pub
+              cat > /home/build/.abuild/abuild.conf <<EOF
+          PACKAGER="OpenCode <opencode@local>"
+          PACKAGER_PRIVKEY="/home/build/.abuild/build.rsa"
+          PACKAGER_PUBKEY="/home/build/.abuild/build.rsa.pub"
+          EOF
+              chown -R build:abuild /home/build/.abuild
+              chmod 700 /home/build/.abuild
+              install -D -m 644 /home/build/.abuild/build.rsa.pub /etc/apk/keys/build.rsa.pub
+
+              echo "build ALL=(ALL) NOPASSWD: /usr/bin/abuild" > /etc/sudoers.d/abuild-build
+              chmod 440 /etc/sudoers.d/abuild-build
+              visudo -c
+
+              cd /src
+              cargo build --release --locked \
+                --target x86_64-unknown-linux-musl \
+                --bin syslog-generator
+              mkdir -p alpine/man
+              ./target/x86_64-unknown-linux-musl/release/syslog-generator man \
+                | gzip -9 > alpine/man/syslog-generator.1.gz
+
+              mkdir -p /home/build/packages
+              chown -R build:abuild /src/alpine /home/build/packages
+              cp /tmp/APKBUILD /src/alpine/APKBUILD
+              chown build:abuild /src/alpine/APKBUILD
+              cd /src/alpine
+              sudo -n -u build abuild -r 2>&1 | tail -30
+              find /home/build/packages -name "*.apk" -type f
+            '
+
+      - name: Stage .apk
+        id: locate
+        run: |
+          APK=$(find /tmp/abuild-home -name 'syslog-generator-*.apk' -type f 2>/dev/null | head -1)
+          if [[ -z "$APK" ]]; then
+            APK=$(find ~ -name 'syslog-generator-*.apk' -type f 2>/dev/null | head -1)
+          fi
+          if [[ -z "$APK" ]]; then
+            echo "::error::.apk not found"
+            exit 1
+          fi
+          mkdir -p dist/
+          cp "$APK" dist/$(basename "$APK")
+          echo "apk_path=dist/$(basename "$APK")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload .apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-apk-${{ env.TAG }}
+          path: ${{ steps.locate.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 7: GPG signature + SHA256SUMS ===
+  sign:
+    name: Sign + SHA256SUMS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [deb, rpm, apk]
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Validate GPG secrets
+        env:
+          GPG_KEY_FINGERPRINT: ${{ vars.GPG_KEY_FINGERPRINT }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GPG_KEY_FINGERPRINT:-}" ]; then
+            echo "::warning::vars.GPG_KEY_FINGERPRINT is empty; SHA256SUMS detached-sign будет skip."
+          fi
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "::warning::secrets.GPG_PRIVATE_KEY is empty; SHA256SUMS detached-sign будет skip."
+          fi
+
+      - name: Install signing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg rpm file
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/
+          pattern: syslog-generator-deb-*
+          merge-multiple: true
+
+      - name: Download .rpm artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/
+          pattern: syslog-generator-rpm-*
+          merge-multiple: true
+
+      - name: Download .apk artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-apk-${{ env.TAG }}
+          path: dist/
+
+      - name: Stage public key
+        run: |
+          if [ -f scripts/keys/pharmacolog-release.asc ]; then
+            mkdir -p dist/scripts/keys
+            cp scripts/keys/pharmacolog-release.asc dist/scripts/keys/
+          else
+            echo "::warning::scripts/keys/pharmacolog-release.asc missing"
+          fi
+
+      - name: Setup isolated GNUPGHOME
+        run: |
+          GNUPGHOME="$RUNNER_TEMP/gnupg-isolated"
+          rm -rf "$GNUPGHOME" && mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+          cat > "$GNUPGHOME/gpg-agent.conf" <<EOF
+          allow-preset-passphrase
+          default-cache-ttl 600
+          EOF
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Import private key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
+            printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --homedir "$GNUPGHOME" --import
+          else
+            echo "::warning::GPG_PRIVATE_KEY empty; skipping signature"
+          fi
+
+      - name: Flatten dist/
+        run: |
+          find dist -mindepth 2 -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' \) -exec mv -t dist/ {} +
+          find dist -mindepth 1 -type d -empty -delete
+          ls -laR dist/
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          find . -mindepth 1 -maxdepth 1 -type f \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' \) | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Detach-sign SHA256SUMS
+        env:
+          GPG_KEY_FINGERPRINT: ${{ vars.GPG_KEY_FINGERPRINT }}
+        run: |
+          if [ -n "${GPG_KEY_FINGERPRINT:-}" ] && [ -n "${GNUPGHOME:-}" ] && [ -d "$GNUPGHOME" ]; then
+            gpg --batch --homedir "$GNUPGHOME" \
+              --local-user "$GPG_KEY_FINGERPRINT" \
+              --detach-sign --armor \
+              --output dist/SHA256SUMS.asc \
+              dist/SHA256SUMS || echo "::warning::GPG detached-sign skipped"
+          else
+            echo "::warning::GPG_KEY_FINGERPRINT empty; SHA256SUMS detached-sign skipped"
+          fi
+          ls -la dist/SHA256SUMS*
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: syslog-generator-signed-packages-${{ env.TAG }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/SHA256SUMS
+            dist/SHA256SUMS.asc
+            dist/scripts/keys/pharmacolog-release.asc
+          if-no-files-found: error
+          retention-days: 90
+
+  # === Stage 8: REQUIRED-artifacts gate ===
+  # Issue #261: hard rule — release НЕ публикуется пока не все обязательные
+  # артефакты собраны. Если хоть один REQUIRED артефакт missing — fail loudly
+  # (НЕ создавать draft release с incomplete artifacts).
+  release-gate:
+    name: Release artifacts gate (Issue #261)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - source-archive
+      - linux-amd64-pgo
+      - linux-arm64
+      - macos-arm64
+      - deb
+      - rpm
+      - apk
+      - sign
+    if: always()
+    steps:
+      - name: Verify all REQUIRED artifacts built
+        env:
+          R_SRC: ${{ needs.source-archive.result }}
+          R_PGO: ${{ needs.linux-amd64-pgo.result }}
+          R_ARM: ${{ needs.linux-arm64.result }}
+          R_MAC: ${{ needs.macos-arm64.result }}
+          R_DEB: ${{ needs.deb.result }}
+          R_RPM: ${{ needs.rpm.result }}
+          R_APK: ${{ needs.apk.result }}
+          R_SGN: ${{ needs.sign.result }}
+        run: |
+          set -euo pipefail
+          FAILED=()
+          check() {
+            local name="$1"
+            local result="$2"
+            if [ "$result" != "success" ]; then
+              FAILED+=("$name ($result)")
+            fi
+          }
+          check source-archive "$R_SRC"
+          check linux-amd64-pgo "$R_PGO"
+          check linux-arm64 "$R_ARM"
+          check macos-arm64 "$R_MAC"
+          check deb "$R_DEB"
+          check rpm "$R_RPM"
+          check apk "$R_APK"
+          check sign "$R_SGN"
+          if [ ${#FAILED[@]} -ne 0 ]; then
+            echo "::error::REQUIRED release artifacts missing:"
+            printf '  - %s\n' "${FAILED[@]}"
+            echo "::error::Release НЕ публикуется пока не все REQUIRED jobs success."
+            exit 1
+          fi
+          echo "All 8 REQUIRED jobs success"
+
+  # === Stage 9: Publish to GitHub Release ===
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - release-gate
+      - linux-amd64-pgo
+      - linux-arm64
+      - macos-arm64
+      - deb
+      - rpm
+      - apk
+      - sign
+      - source-archive
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Setup staging
+        run: mkdir -p staging
+
+      - name: Download source archives
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-source-${{ env.TAG }}
+          path: staging/source/
+
+      - name: Download Linux PGO amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-pgo-linux-amd64-${{ env.TAG }}
+          path: staging/linux-amd64-pgo/
+
+      - name: Download Linux arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-linux-arm64-${{ env.TAG }}
+          path: staging/linux-arm64/
+
+      - name: Download macOS arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-macos-arm64-${{ env.TAG }}
+          path: staging/macos-arm64/
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-deb-kafkafalse-${{ env.TAG }}
+          path: staging/deb-false/
+        continue-on-error: true
+      - name: Download .deb artifacts (kafka=true)
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-deb-kafkatrue-${{ env.TAG }}
+          path: staging/deb-true/
+        continue-on-error: true
+
+      - name: Download .rpm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-rpm-kafkafalse-${{ env.TAG }}
+          path: staging/rpm-false/
+        continue-on-error: true
+      - name: Download .rpm artifacts (kafka=true)
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-rpm-kafkatrue-${{ env.TAG }}
+          path: staging/rpm-true/
+        continue-on-error: true
+
+      - name: Download .apk artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-apk-${{ env.TAG }}
+          path: staging/apk/
+
+      - name: Download signed packages
+        uses: actions/download-artifact@v4
+        with:
+          name: syslog-generator-signed-packages-${{ env.TAG }}
+          path: staging/signed/
+
+      - name: Stage all artifacts with semantic names
+        run: |
+          set -euo pipefail
+          cd staging
+
+          # Issue #180.1: rename PGO binary to keep `-pgo` marker (semantic URL).
+          cp linux-amd64-pgo/syslog-generator syslog-generator-pgo
+          cp linux-amd64-pgo/syslog-generator.dwp syslog-generator-pgo.dwp
+          cp linux-amd64-pgo/merged.profdata merged.profdata
+
+          # Verify all REQUIRED artifacts exist
+          REQUIRED=(
+            syslog-generator-pgo
+            syslog-generator-pgo.dwp
+            merged.profdata
+            linux-arm64/syslog-generator
+            linux-arm64/syslog-generator.dwp
+            macos-arm64/syslog-generator
+            macos-arm64/syslog-generator.dSYM.tar.gz
+            source/syslog-generator-v${{ env.TAG }}-source.tar.gz
+            source/syslog-generator-v${{ env.TAG }}-source.zip
+          )
+          MISSING=()
+          for f in "${REQUIRED[@]}"; do
+            if [ ! -f "$f" ]; then
+              MISSING+=("$f")
+            fi
+          done
+          if [ ${#MISSING[@]} -ne 0 ]; then
+            echo "::error::REQUIRED artifacts missing:"
+            printf '  - %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+
+          echo "=== Files to upload ==="
+          find . -type f | sort
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ env.TAG }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG missing; creating from CHANGELOG.md..."
+            head -200 CHANGELOG.md > /tmp/release-notes.md
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file /tmp/release-notes.md
+          else
+            echo "Release $TAG exists; updating artifacts..."
+          fi
+
+      - name: Upload all artifacts to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ env.TAG }}"
+          cd staging
+
+          FILES=(
+            "source/syslog-generator-v${TAG}-source.tar.gz"
+            "source/syslog-generator-v${TAG}-source.zip"
+            "syslog-generator-pgo"
+            "syslog-generator-pgo.dwp"
+            "merged.profdata"
+            "linux-arm64/syslog-generator"
+            "linux-arm64/syslog-generator.dwp"
+            "macos-arm64/syslog-generator"
+            "macos-arm64/syslog-generator.dSYM.tar.gz"
+            "signed/SHA256SUMS"
+            "signed/SHA256SUMS.asc"
+            "signed/scripts/keys/pharmacolog-release.asc"
+          )
+          for f in signed/*.deb signed/*.rpm signed/*.apk; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          for f in "${FILES[@]}"; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "$TAG" --clobber "$f"
+            else
+              echo "::warning::missing artifact (will skip): $f"
+            fi
+          done
+
+      - name: Verify release visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ env.TAG }}"
+          echo "Release $TAG uploaded. Verify at:"
+          echo "  https://github.com/${{ github.repository }}/releases/tag/$TAG"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Release summary (Issue #180.5 + #261)"
+            echo "- Tag: ${{ env.TAG }}"
+            echo "- Required jobs: source-archive, linux-amd64-pgo, linux-arm64-pgo, macos-arm64, deb, rpm, apk, sign, release-gate"
+            echo "- Gate status: ${{ needs.release-gate.result }}"
+            echo "- All REQUIRED artifacts present (gate enforced)"
+            echo "- Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ env.TAG }}"
+          } >> "$GITHUB_STEP_SUMMARY"

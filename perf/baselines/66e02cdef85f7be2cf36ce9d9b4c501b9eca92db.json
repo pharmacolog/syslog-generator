@@ -1,38 +1,17 @@
 {
-  "sha": "66e02cdef85f7be2cf36ce9d9b4c501b9eca92db",
-  "mode": "quick",
-  "timestamp": "2026-08-05T06:52:48Z",
-  "status": "ok",
-  "estimate_count": 29,
+  "timestamp": "2026-08-05T06:23:42Z",
+  "baseline_sha": "66e02cdef85f7be2cf36ce9d9b4c501b9eca92db",
+  "n_runs": 3,
   "estimates": [
-    {"bench": "hot_path", "group": "hot_path", "label": "hot_path/rfc5424_with_faker", "time_ns_median": 1750.5728454589844, "time_ns_lower": 1742.7380981445312, "time_ns_upper": 1758.4075927734375},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc3164_static", "time_ns_median": 44695395.75, "time_ns_lower": 43695083.5, "time_ns_upper": 45695708.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_static", "time_ns_median": 40150895.5, "time_ns_lower": 39809125.0, "time_ns_upper": 40492666.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/warmup_static", "time_ns_median": 11298968.75, "time_ns_lower": 11280270.75, "time_ns_upper": 11317666.75},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/rfc5424_faker", "time_ns_median": 44605625.0, "time_ns_lower": 44508479.0, "time_ns_upper": 44702771.0},
-    {"bench": "runtime", "group": "runtime", "label": "runtime/json_lines_static", "time_ns_median": 41047614.25, "time_ns_lower": 39936041.0, "time_ns_upper": 42159187.5},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_faker", "time_ns_median": 2034.3360900878906, "time_ns_lower": 2032.2418212890625, "time_ns_upper": 2036.4303588867188},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc3164_static", "time_ns_median": 1482.0146484375, "time_ns_lower": 1480.3148803710938, "time_ns_upper": 1483.7144165039062},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/protobuf_static", "time_ns_median": 690.1013107299805, "time_ns_lower": 683.7724151611328, "time_ns_upper": 696.4302062988281},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_static", "time_ns_median": 1180.8417663574219, "time_ns_lower": 1180.4059448242188, "time_ns_upper": 1181.277587890625},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/cef_static", "time_ns_median": 1054.214469909668, "time_ns_lower": 1053.8965759277344, "time_ns_upper": 1054.5323638916016},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/rfc5424_faker", "time_ns_median": 1585.0022583007812, "time_ns_lower": 1578.3920288085938, "time_ns_upper": 1591.6124877929688},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/raw_static", "time_ns_median": 1054.9319534301758, "time_ns_lower": 1050.4709777832031, "time_ns_upper": 1059.3929290771484},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/json_lines_static", "time_ns_median": 1596.4152069091797, "time_ns_lower": 1590.349853515625, "time_ns_upper": 1602.4805603027344},
-    {"bench": "format_matrix", "group": "format_matrix", "label": "format_matrix/leef_static", "time_ns_median": 1048.2905712127686, "time_ns_lower": 1038.323085784912, "time_ns_upper": 1058.258056640625},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/16", "time_ns_median": 4559243.15625, "time_ns_lower": 4546968.09375, "time_ns_upper": 4571518.21875},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/1", "time_ns_median": 8740888.125, "time_ns_lower": 8512849.0, "time_ns_upper": 8968927.25},
-    {"bench": "transport_matrix", "group": "transport_matrix_tcp", "label": "transport_matrix_tcp/4", "time_ns_median": 4528296.90625, "time_ns_lower": 4463911.4375, "time_ns_upper": 4592682.375},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/1", "time_ns_median": 10075812.625, "time_ns_lower": 9952604.25, "time_ns_upper": 10199021.0},
-    {"bench": "transport_matrix", "group": "transport_matrix_udp", "label": "transport_matrix_udp/4", "time_ns_median": 6120845.03125, "time_ns_lower": 6031947.875, "time_ns_upper": 6209742.1875},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_4", "time_ns_median": 20062963.5625, "time_ns_lower": 19966604.125, "time_ns_upper": 20159323.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_1", "time_ns_median": 21553932.25, "time_ns_lower": 21501135.5, "time_ns_upper": 21606729.0},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_16", "time_ns_median": 137659835.921875, "time_ns_lower": 129252424.46875, "time_ns_upper": 146067247.375},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_1", "time_ns_median": 18885468.625, "time_ns_lower": 18785270.5, "time_ns_upper": 18985666.75},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_16", "time_ns_median": 25724593.75, "time_ns_lower": 23599525.390625, "time_ns_upper": 27849662.109375},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_4", "time_ns_median": 19086145.75, "time_ns_lower": 18644250.0, "time_ns_upper": 19528041.5},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/broadcast_4", "time_ns_median": 29802065.09375, "time_ns_lower": 29180276.0625, "time_ns_upper": 30423854.125},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/rr_1", "time_ns_median": 18450416.75, "time_ns_lower": 18035125.0, "time_ns_upper": 18865708.5},
-    {"bench": "dispatch_matrix", "group": "dispatch_matrix", "label": "dispatch_matrix/weighted_16", "time_ns_median": 33571080.75, "time_ns_lower": 33187406.25, "time_ns_upper": 33954755.25}
-  ]
+    {
+      "bench": "hot_path",
+      "group": "hot_path",
+      "label": "hot_path/rfc5424_with_faker",
+      "time_ns_median": 2411,
+      "time_ns_lower": 0,
+      "time_ns_upper": 0,
+      "n_samples": 3
+    }
+  ],
+  "notes": "Auto-generated by .github/workflows/perf-baseline-autogen.yml (median of 3 runs). See docs/perf-governance.md \u00a7Auto-generation."
 }

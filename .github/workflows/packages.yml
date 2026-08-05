@@ -177,11 +177,15 @@ jobs:
           restore-keys: |
             cargo-tool-${{ runner.os }}-cargo-rpm-
 
-      - name: Install cargo-rpm
+      - name: Install cargo-rpm (v0.7 — Issue #261)
+        # Issue #261: cargo-rpm v0.8.0 убрал `--release` flag → `unrecognized option --release`.
+        # Pin v0.7.x (последний major с обратной совместимостью).
+        # TODO Issue #262: migrate to cargo-rpm v0.8 API.
         run: |
           if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
-            cargo install cargo-rpm --locked
+            cargo install cargo-rpm --locked --version '^0.7'
           fi
+          cargo rpm --version
 
       - name: Install build deps (libssl, rpm)
         run: |

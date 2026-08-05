@@ -353,11 +353,13 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: stable
         run: |
-          FEATURES=""
+          # NB: FEATURES не используется в массиве args чтобы не передавать пустую
+          # строку в cargo (что даёт "unexpected argument ''" error).
           if [ "${{ matrix.kafka }}" = "true" ]; then
-            FEATURES="--features kafka"
+            cargo build --bin syslog-generator --release --locked --features kafka
+          else
+            cargo build --bin syslog-generator --release --locked
           fi
-          cargo build --bin syslog-generator --release --locked "${FEATURES}"
           mkdir -p target/man
           ./target/release/syslog-generator man | gzip -9 > target/man/syslog-generator.1.gz
           test -s target/man/syslog-generator.1.gz
@@ -366,14 +368,13 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: stable
         run: |
-          FEATURES=""
-          VARIANT=""
           if [ "${{ matrix.kafka }}" = "true" ]; then
-            FEATURES="--features kafka"
-            VARIANT="--variant=kafkatrue"
+            mkdir -p target/debian
+            cargo deb --no-build --locked --features kafka --variant=kafkatrue
+          else
+            mkdir -p target/debian
+            cargo deb --no-build --locked
           fi
-          mkdir -p target/debian
-          cargo deb --no-build --locked "${FEATURES}" "${VARIANT}"
           ls -la target/debian/
 
       - name: Stage .deb
@@ -433,11 +434,11 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: stable
         run: |
-          FEATURES=""
           if [ "${{ matrix.kafka }}" = "true" ]; then
-            FEATURES="--features kafka"
+            cargo rpm build --release --locked --features kafka
+          else
+            cargo rpm build --release --locked
           fi
-          cargo rpm build --release --locked "${FEATURES}"
 
           mkdir -p target/rpm
           RPM_FILE=$(find target/release/rpmbuild/RPMS -name 'syslog-generator-*.rpm' -type f | head -1)
@@ -519,6 +520,10 @@ jobs:
 
               adduser -D -G abuild build
               mkdir -p /home/build/.abuild
+              # Issue #261: order matters — chown/chmod BEFORE genrsa (genrsa fails
+              # с Permission denied если .abuild принадлежит root с 0700 perms).
+              chown build:abuild /home/build/.abuild
+              chmod 750 /home/build/.abuild
               sudo -u build openssl genrsa -out /home/build/.abuild/build.rsa 2048
               sudo -u build openssl rsa -in /home/build/.abuild/build.rsa \
                 -pubout -out /home/build/.abuild/build.rsa.pub
@@ -527,8 +532,6 @@ jobs:
           PACKAGER_PRIVKEY="/home/build/.abuild/build.rsa"
           PACKAGER_PUBKEY="/home/build/.abuild/build.rsa.pub"
           EOF
-              chown -R build:abuild /home/build/.abuild
-              chmod 700 /home/build/.abuild
               install -D -m 644 /home/build/.abuild/build.rsa.pub /etc/apk/keys/build.rsa.pub
 
               echo "build ALL=(ALL) NOPASSWD: /usr/bin/abuild" > /etc/sudoers.d/abuild-build

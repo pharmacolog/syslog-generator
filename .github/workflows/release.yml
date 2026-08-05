@@ -804,7 +804,7 @@ jobs:
       - source-archive
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     permissions:
       contents: write
     steps:

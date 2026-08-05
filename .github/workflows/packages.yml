@@ -185,7 +185,7 @@ jobs:
           if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
             cargo install cargo-rpm --locked --version '^0.7'
           fi
-          cargo rpm --version
+          cargo rpm version
 
       - name: Install build deps (libssl, rpm)
         run: |

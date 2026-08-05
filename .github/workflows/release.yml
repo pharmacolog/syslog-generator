@@ -803,7 +803,6 @@ jobs:
       - sign
       - source-archive
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    environment: release
     permissions:
       contents: write
     steps:

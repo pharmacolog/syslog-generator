@@ -1,8 +1,6 @@
 
 # Changelog
 
-<<<<<<< HEAD
-=======
 ## v11.0.0 - 2026-08-04 (v11.8 gap-closing release)
 
 **Major release: Issue #85 quick-wins + v11.8 gap-closing items (A2.3 hot-path, A3 queue, A4 concurrent shards, A5 UDP batching, A6 blocking perf-regression gate, C3 proptest+insta snapshots).**
@@ -197,7 +195,6 @@ PASS evidence в PR body.
 - **Bootstrap baseline**: для первого merge этого workflow в main требовался manual baseline для `19a38ecf` (current main HEAD перед merge). Manual generation через `scripts/perf-regression-collect.sh hot_path` (1898 ns для rfc5424_with_faker). Все последующие baselines — automatic.
 - **Hot_path only**: workflow покрывает только `hot_path` bench. После Issue #211 (allocations bench) можно расширить.
 
->>>>>>> origin/main
 ## v10.7.22 - 2026-08-04 (Dependabot batch: GitHub Actions + Cargo production-deps)
 
 **Patch-release: batch update из 5 открытых Dependabot PR (#166, #168, #169, #172, #175), объединённых в единый PR #212 (per AGENTS.md §4 process).**

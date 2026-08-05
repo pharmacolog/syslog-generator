@@ -1,16 +1,17 @@
 {
-  "timestamp": "2026-08-04T11:07:35Z",
-  "baseline_sha": "9c824fa20f1eaac1e694a5d7cbb959cf66cb93fd",
+  "timestamp": "2026-08-05T00:30:22Z",
+  "baseline_sha": "e8704f5efd5a692275b2d2fe4f02943d0dc4d443",
   "n_runs": 3,
   "estimates": [
     {
       "bench": "hot_path",
       "group": "hot_path",
       "label": "hot_path/rfc5424_with_faker",
-      "time_ns_median": 1710,
+      "time_ns_median": 1699,
       "time_ns_lower": 0,
       "time_ns_upper": 0,
       "n_samples": 3
     }
-  ]
+  ],
+  "notes": "Manual bootstrap for e8704f5."
 }

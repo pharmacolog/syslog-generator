@@ -188,7 +188,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config rpm file
 
-      - name: Build .rpm (cargo-rpm)
+      - name: Build binary (cargo build --release --locked)
+        # Issue #233: cargo-rpm 0.8.0 subcommand `build` принимает ТОЛЬКО
+        # --verbose / --no-cargo-build / --target / --output (НЕ --release,
+        # НЕ --locked, НЕ --features). Поэтому разделяем build на два step:
+        # 1) cargo build с нужными features — здесь.
+        # 2) cargo rpm build --no-cargo-build — packages существующий binary.
         env:
           RUSTUP_TOOLCHAIN: stable
         run: |
@@ -197,10 +202,20 @@ jobs:
           if [ "${{ matrix.kafka }}" = "true" ]; then
             FEATURES="--features kafka"
           fi
+          cargo build --bin syslog-generator --release --locked $FEATURES
+
+      - name: Build .rpm (cargo-rpm)
+        # Issue #233: cargo-rpm 0.8.0 defaults to release profile
+        # (см. builder::DEFAULT_PROFILE = "release"). --no-cargo-build
+        # говорит cargo-rpm "binary уже собран, просто упакуй в .rpm".
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -euo pipefail
+          cargo rpm build --no-cargo-build
           # cargo-rpm outputs to target/release/rpmbuild/RPMS/x86_64/<pkg>-<ver>-<rel>.<arch>.rpm
-          cargo rpm build --release --locked $FEATURES
           # Stage для upload (раздельно для kafka on/off — чтобы не было коллизий
-          # внутри одного artifact, т.к. cargo-rpm не имеет --variant).
+          # внутри одного artifact, т.к. cargo-rpm не имеет --variant для .rpm).
           mkdir -p target/rpm
           RPM_FILE=$(find target/release/rpmbuild/RPMS -name 'syslog-generator-*.rpm' -type f | head -1)
           if [ "${{ matrix.kafka }}" = "true" ]; then
@@ -246,7 +261,12 @@ jobs:
       - name: Install abuild host dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-sig fakeroot sudo
+          # Issue #233: dpkg-sig НЕ нужен на host для .apk build
+          # (abuild запускается внутри Alpine container с fakeroot/sudo).
+          # dpkg-sig устанавливается в `sign` job для подписи .deb.
+          # fakeroot и sudo — pre-installed на ubuntu-latest, но explicit
+          # для reproducibility.
+          sudo apt-get install -y fakeroot sudo
           # abuildsudo в alpine-based container; здесь — файл-заглушка.
           # /etc/sudoers.d/abuild-build создаётся в Alpine контейнере.
 
@@ -420,6 +440,16 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
+          # Issue #233: dpkg-sig в Ubuntu 24.04 живёт в `universe` repo,
+          # который может быть отключен на GitHub Actions azure-mirror
+          # (azure.archive.ubuntu.com не всегда включает universe).
+          # Явно добавляем universe source если пакет не найден.
+          if ! apt-cache show dpkg-sig 2>/dev/null | grep -q '^Package:'; then
+            echo "::notice::dpkg-sig not in default apt sources, enabling universe"
+            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu $(lsb_release -cs) universe" \
+              | sudo tee /etc/apt/sources.list.d/universe.list >/dev/null
+            sudo apt-get update
+          fi
           sudo apt-get install -y gnupg dpkg-sig rpm file
 
       - name: Download .deb artifacts
@@ -709,29 +739,30 @@ jobs:
 
       - name: Download PGO binary artifact (Issue #180.1)
         # release-pgo.yml trigger'ится на push в main, может не успеть к release tag.
-        # Используем `if-no-files-found: warn` — если PGO artifact недоступен,
-        # release job продолжит без PGO.
-        uses: actions/download-artifact@v4
+        # Issue #233: actions/download-artifact НЕ поддерживает `if-no-files-found`
+        # (отсутствует в action.yml для v3..v8). Используем `continue-on-error: true`
+        # — если PGO artifact недоступен, release job продолжит без PGO.
+        uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: syslog-generator-pgo-${{ github.ref_name }}
           path: dist/pgo/
-          if-no-files-found: warn
 
       - name: Download SBOM artifact (Issue #180.2)
         # sbom.yml trigger fix (tag trigger) → sbom-cyclonedx-${{ github.sha }}.
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: sbom-cyclonedx-${{ github.sha }}
           path: dist/sbom/
-          if-no-files-found: warn
 
       - name: Download Docker image archive (Issue #180.3)
         # docker.yml:docker-multiarch архивирует после push в registry.
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: syslog-generator-docker-archive-${{ github.ref_name }}
           path: dist/docker/
-          if-no-files-found: warn
 
       - name: Create release если отсутствует
         env:

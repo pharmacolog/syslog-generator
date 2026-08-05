@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-<<<<<<< HEAD
-# Issue #164: tests for perf-estimate-parse.py and perf-regression-collect.sh
-=======
 # Issue #164, #214: tests for perf-estimate-parse.py, compute-median.py, perf-regression-collect.sh
->>>>>>> origin/main
 #
 # Coverage:
 # - Positive: нормальный Criterion estimates.json → parsed JSON line
 # - Negative: пустой estimates.json → graceful exit 0
 # - Edge: malformed JSON → не crash (exit != 0)
-<<<<<<< HEAD
-=======
 # - Median: compute-median.py корректно агрегирует N runs
->>>>>>> origin/main
 #
 # Usage:
 #   bash scripts/tests/test_perf_scripts.sh
@@ -93,8 +86,6 @@ run_test "perf-estimate-parse.py syntax check" \
     "python3 -m py_compile ${REPO_ROOT}/scripts/perf-estimate-parse.py" \
     0
 
-<<<<<<< HEAD
-=======
 # Issue #214: compute-median.py tests
 # Test 6: compute-median.py — syntax check
 run_test "compute-median.py syntax check" \
@@ -189,7 +180,6 @@ else
     FAIL=$((FAIL + 1))
 fi
 
->>>>>>> origin/main
 log ""
 log "===================="
 log "PASS: ${PASS}"

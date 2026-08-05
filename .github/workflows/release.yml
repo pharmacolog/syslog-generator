@@ -812,6 +812,10 @@ jobs:
           echo "DEBUG: github.ref=${{ github.ref }}"
           echo "DEBUG: inputs.tag=${{ inputs.tag }}"
 
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
       - name: Setup staging
         run: mkdir -p staging
 

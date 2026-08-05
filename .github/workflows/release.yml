@@ -806,6 +806,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Debug if condition
+        run: |
+          echo "DEBUG: github.event_name=${{ github.event_name }}"
+          echo "DEBUG: github.ref=${{ github.ref }}"
+          echo "DEBUG: inputs.tag=${{ inputs.tag }}"
+
       - name: Setup staging
         run: mkdir -p staging
 

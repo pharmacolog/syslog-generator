@@ -217,7 +217,7 @@ jobs:
       - name: Install Rust stable + arm64 target
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-unknown-linux-musl
+          targets: aarch64-unknown-linux-gnu
           components: rustfmt, clippy
 
       - name: Install arm64 cross-tools
@@ -231,28 +231,25 @@ jobs:
           shared-key: ${{ runner.os }}-cargo-arm64
           cache-on-failure: true
 
-      - name: Build release (cross-compile arm64 musl)
+      - name: Build release (cross-compile arm64 gnu, not musl)
         env:
           RUSTUP_TOOLCHAIN: stable
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
-          # Issue #261: rustls 0.23+ использует aws-lc-sys crypto backend,
-          # который требует __memcpy_chk (glibc extension) — недоступен в musl.
-          # Workaround: disable FORTIFY_SOURCE в linker (musl игнорирует,
-          # glibc использует memcpy без check).
-          RUSTFLAGS: "-C link-arg=-Wl,--no-fortify-source"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: |
+          # Issue #261: cross-compile на aarch64-unknown-linux-gnu (не musl)
+          # чтобы избежать musl+glibc __memcpy_chk linker error (aws-lc-sys).
           cargo build --release --locked \
-            --target aarch64-unknown-linux-musl \
+            --target aarch64-unknown-linux-gnu \
             --bin syslog-generator
 
-          test -f target/aarch64-unknown-linux-musl/release/syslog-generator
-          test -f target/aarch64-unknown-linux-musl/release/syslog-generator.dwp
+          test -f target/aarch64-unknown-linux-gnu/release/syslog-generator
+          test -f target/aarch64-unknown-linux-gnu/release/syslog-generator.dwp
 
       - name: Stage arm64 artifacts
         run: |
           mkdir -p dist-arm64
-          cp target/aarch64-unknown-linux-musl/release/syslog-generator dist-arm64/
-          cp target/aarch64-unknown-linux-musl/release/syslog-generator.dwp dist-arm64/
+          cp target/aarch64-unknown-linux-gnu/release/syslog-generator dist-arm64/
+          cp target/aarch64-unknown-linux-gnu/release/syslog-generator.dwp dist-arm64/
           ls -la dist-arm64/
           file dist-arm64/syslog-generator
 
@@ -443,16 +440,11 @@ jobs:
           restore-keys: |
             cargo-tool-${{ runner.os }}-cargo-rpm-
 
-      - name: Install cargo-rpm (v0.7 — Issue #261, force-install)
-        # Issue #261: cargo-rpm v0.8.0 убрал `--release` flag → "unrecognized option --release".
-        # Pin v0.7.x (последний major с обратной совместимостью).
-        # Force-install даже если cache restore'ит v0.8.0 — иначе parse error
-        # на missing description field.
-        # TODO Issue #262: migrate to cargo-rpm v0.8 API.
+- name: Install cargo-rpm (Issue #261, default = v0.8.0)
+        # cargo-rpm 0.8.0 — последняя версия на crates.io. Default build mode
+        # = release profile (без --release flag, который убран в 0.8.0).
         run: |
-          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
-            cargo install cargo-rpm --locked --version '^0.7'
-          fi
+          cargo install cargo-rpm --locked --force
           cargo rpm version
 
       - name: Install build deps
@@ -464,10 +456,15 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: stable
         run: |
+          # Issue #261: cargo-rpm 0.8.0 — default mode = release profile.
+          # Используем cargo build отдельно для --features kafka,
+          # затем cargo rpm build --no-build для переиспользования pre-built binary.
           if [ "${{ matrix.kafka }}" = "true" ]; then
-            cargo rpm build --release --locked --features kafka
+            cargo build --release --locked --bin syslog-generator --features kafka
+            cargo rpm build --no-build --features kafka
           else
-            cargo rpm build --release --locked
+            cargo build --release --locked --bin syslog-generator
+            cargo rpm build --no-build
           fi
 
           mkdir -p target/rpm

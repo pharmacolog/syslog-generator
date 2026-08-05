@@ -2,6 +2,13 @@
 [package]
 name = "syslog-generator"
 version = "11.0.0"
+# Issue #233: cargo-rpm 0.8.0 требует [package].description (mandatory,
+# parse error otherwise). Также используется cargo-deb как fallback
+# для [package.metadata.deb].description.
+description = "Industrial syslog load generator written in Rust with variadic templates and multi-target delivery"
+# Issue #233: cargo-rpm 0.8.0 требует [package].license. CargoLicense enum
+# поддерживает "license" (SPDX) или "license-file" (path).
+license = "Apache-2.0"
 edition = "2021"
 # v10.0.0: явный MSRV = 1.95.0 (минимальная версия rustc, на которой проект
 # собирается и тестируется локально; CLAUDE_HANDOFF.md ссылается на 1.97, но
@@ -19,6 +26,21 @@ panic = "abort"
 strip = "symbols"
 debug = 2
 split-debuginfo = "packed"
+
+# Issue #233: profile.rpm для cargo-rpm. Без него cargo-rpm defaults to dev
+# profile (медленный бинарь, debug symbols, ~10x size vs release).
+# Inherits release profile (LTO + opt-level=3).
+[profile.rpm]
+inherits = "release"
+
+# Issue #233: cargo-rpm 0.8.0 build flags. Используется только если
+# `cargo rpm build` вызывается без `--no-cargo-build` (т.е. cargo-rpm сам
+# делает cargo build). В нашем workflow мы делаем cargo build отдельно
+# (для поддержки --features kafka), а затем вызываем
+# `cargo rpm build --no-cargo-build`, поэтому эти flags здесь для safety
+# (если кто-то запустит `cargo rpm build` локально без --no-cargo-build).
+[package.metadata.rpm.cargo]
+buildflags = ["--locked"]
 
 # PR-A0 (v10.8.0): release-like profile для benches.
 # Criterion benches ранее компилировались в debug-режиме (no opt, debug assertions),
@@ -237,3 +259,23 @@ required-features = ["test-helpers"]
 [[test]]
 name = "n7_runtime_errors"
 required-features = ["test-helpers"]
+
+# Issue #233 (PR packages fix): cargo-deb metadata.
+# cargo-deb auto-generates .deb from [package] section по умолчанию, но для
+# Kafka variant (kafkatrue) нужен override `name`, чтобы .deb файлы
+# не коллизировали между default и kafka builds в artifact upload.
+# description и depends наследуются от default (auto-generated from [package]).
+[package.metadata.deb.variants.kafkatrue]
+name = "syslog-generator-kafka"
+
+# Issue #233: cargo-rpm metadata. `description` обязательное поле для
+# cargo-rpm 0.8.0 (без него fatal parse error). Остальные поля
+# (name, version, license, summary) auto-populate из [package].
+[package.metadata.rpm]
+description = "Industrial syslog load generator written in Rust with variadic templates and multi-target delivery"
+
+# Issue #233: cargo-rpm требует `targets` секцию (mapping binary → install path).
+# Устанавливаем бинарь в /usr/bin/syslog-generator (стандарт FHS для Linux distro RPM).
+# Mode 0755 (default для targets), owner/group root (defaults).
+[package.metadata.rpm.targets]
+syslog-generator = { path = "/usr/bin/syslog-generator" }

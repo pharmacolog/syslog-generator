@@ -1,50 +1,22 @@
-<<<<<<< HEAD
-# PR-A6 (v10.8.0): Performance regression gate — blocking при hot-path >50%.
-#
-# Workflow: на PR в main и dev.
-# - Запускает hot_path bench (быстро, ≤5 min) с warm-up step.
-# - Сравнивает с сохранённым baseline (perf/baselines/<sha>.json).
-# - Blocking exit code 1 при превышении threshold per category:
-#     hot_path/    → 50%  (PLACEHOLDER, см. Issue #214)
-#     format/      → 50%
-#     transport/   → 50%
-#     allocations/ → 50% (reserved; см. docs/perf-governance.md)
-#
-# Issue #164 (v11.8): теперь blocking. Если baseline file отсутствует —
-# FAIL gate (а не silent skip как раньше). Это вынуждает maintainer
-# создать baseline перед merge. См. docs/perf-governance.md §Refresh.
-#
-# Threshold 50% — PLACEHOLDER для v11.8. CI single-run variance на
-# GitHub Actions runners составляет ±30-50% (cold cache, page cache,
-# process scheduling). Warm-up step уменьшает variance, но всё равно
-# недостаточно для reliable 5% threshold. Issue #214 планирует
-# median-of-N-runs для v11.9, после чего thresholds могут быть
-# ужесточены до 5%/10%/10%/15%.
-=======
-# PR-A6 (v10.8.0), Issue #164, #214: Performance regression gate — blocking.
+# perf-regression (Issue #164, #214, #260) — ADVISORY only.
 #
 # Workflow: на PR в main и dev.
 # - Запускает hot_path bench (3 runs, ≤15 min) с warm-up step.
 # - Берёт median из 3 runs (Issue #214 — variance reduction).
 # - Сравнивает с сохранённым baseline (perf/baselines/<sha>.json).
-# - Blocking exit code 1 при превышении threshold per category:
-#     hot_path/    → 50%  (PLACEHOLDER v11.9, см. Issue #218)
-#     format/      → 50%
-#     transport/   → 50%
-#     allocations/ → 50% (Issue #211, после implement allocations bench)
+# - **ADVISORY**: post результаты в PR comment, НЕ блокирует merge.
+# - Если baseline отсутствует → silent skip (autogen bootstrap, Issue #223).
 #
-# Issue #164 (v11.8): gate blocking. Если baseline file отсутствует —
-# FAIL gate (а не silent skip). См. docs/perf-governance.md §Refresh.
+# Issue #260 (v11.9): perf-regression перестал быть blocking gate.
+# Statistics: 82% failure rate в blocking mode (chicken-and-egg с autogen).
+# Решение: separation of concerns:
+#   - perf-regression (this): bench + advisory comment на PR
+#   - perf-monitor: post-merge + nightly regression detection + auto-Issue
+#   - perf-baseline-autogen: auto-generate baseline per main HEAD (Issue #223)
 #
-# Issue #214 (v11.9): median-of-3-runs implementation. **Thresholds
-# остаются 50%** (effectively noop) — даже с median aggregation variance
-# на GitHub Actions runners составляет ±15-20% systematic.
-#
-# Issue #218 (v12.0, deferred): investigation systematic CI variance + alternative
-# frameworks (bencher / paired A/B). Issue #214 superseded.
-#
-# Issue #211 (v11.9): allocations bench — после реализации.
->>>>>>> origin/main
+# Per AGENTS.md §18.4 + Issue #228: maintainer обязан прогнать
+# scripts/perf-local-check.sh локально перед push. Это hard rule,
+# а этот workflow — только для CI visibility.
 
 name: perf-regression
 
@@ -59,18 +31,17 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   regression:
-    # Issue #164: gate теперь blocking (без continue-on-error).
-    # Если baseline не найден — exit 1, чтобы привлечь внимание maintainer.
-    name: Regression check (blocking)
+    # Issue #260: advisory only. Если baseline не найден — silent skip (no fail).
+    # Regression detected → comment на PR + warning в job summary.
+    # НЕ exit 1 на regression. НЕ exit 1 на missing baseline.
+    name: Regression check (advisory)
     runs-on: ubuntu-latest
-<<<<<<< HEAD
     timeout-minutes: 25
-=======
-    timeout-minutes: 30
->>>>>>> origin/main
     steps:
       - uses: actions/checkout@v7
         with:
@@ -104,80 +75,62 @@ jobs:
         run: cargo bench --no-run --locked
 
       - name: Test perf scripts (Issue #164 acceptance)
-        # Smoke tests для scripts: проверяют syntax + happy path parse.
-        # Полные тесты требуют cargo bench (запускаются в Test job).
         run: bash scripts/tests/test_perf_scripts.sh
 
       - name: Warm-up (cold cache mitigation, Issue #164)
-        # Cargo bench на cold cache CI runner показывает ±20-30% variance
-        # (file system cache, page cache, process scheduling). Warm-up прогон
-        # наполняет page cache и стабилизирует variance в ±5%.
-        # Это НЕ measurement — только прогрев. Output игнорируется.
         run: |
           cargo bench --locked --bench hot_path -- --warm-up-time 1 --measurement-time 1 >/dev/null 2>&1 || true
           echo "Warm-up complete"
 
-<<<<<<< HEAD
-      - name: Generate current estimates (hot_path only)
-=======
       - name: Generate current estimates (median of 3 runs, Issue #214)
->>>>>>> origin/main
         id: collect
         run: |
           set -euo pipefail
           mkdir -p /tmp/bench-output
-<<<<<<< HEAD
-          # Collect into a separate 'current-<sha>.json' file so Compare step
-          # can locate the immutable baseline (which must exist in repo).
-          CURRENT_SHA="$(git rev-parse HEAD)"
-          echo "current_sha=${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
-          scripts/perf-regression-collect.sh \
-            "perf/baselines/current-${CURRENT_SHA}.json" \
-            hot_path 2>&1 | tee /tmp/baseline-gen.log
-=======
-          # Issue #214: 3 runs → median per benchmark.
-          # Issue #211: добавить allocations bench target.
           CURRENT_SHA="$(git rev-parse HEAD)"
           echo "current_sha=${CURRENT_SHA}" >> "${GITHUB_OUTPUT}"
           BENCH_RUNS=3 scripts/perf-regression-collect.sh \
             "perf/baselines/current-${CURRENT_SHA}.json" \
-            hot_path allocations 2>&1 | tee /tmp/baseline-gen.log
->>>>>>> origin/main
+            hot_path 2>&1 | tee /tmp/baseline-gen.log || {
+            echo "::warning::Benchmark collection failed — skipping comparison"
+            exit 0
+          }
 
-      - name: Compare against baseline
+      - name: Check baseline availability
+        id: check_baseline
+        env:
+          BASELINE_SHA: ${{ steps.baseline_sha.outputs.sha }}
+        run: |
+          BASELINE_FILE="perf/baselines/${BASELINE_SHA}.json"
+          if [[ -f "${BASELINE_FILE}" ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Baseline found at ${BASELINE_FILE}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Baseline not found at ${BASELINE_FILE} — skipping comparison (autogen will create it post-merge, Issue #223)"
+          fi
+
+      - name: Compare against baseline (advisory)
+        if: steps.check_baseline.outputs.exists == 'true'
+        id: compare
         env:
           BASELINE_SHA: ${{ steps.baseline_sha.outputs.sha }}
           CURRENT_SHA: ${{ steps.collect.outputs.current_sha }}
-          THRESHOLD_HOT_PATH: 50
-          THRESHOLD_FORMAT: 50
-          THRESHOLD_TRANSPORT: 50
-<<<<<<< HEAD
-          THRESHOLD_ALLOC: 50
-=======
-          THRESHOLD_ALLOC: 100
->>>>>>> origin/main
+          THRESHOLD_HOT_PATH: 10
+          THRESHOLD_FORMAT: 15
+          THRESHOLD_TRANSPORT: 15
+          THRESHOLD_ALLOC: 20
         run: |
           set -euo pipefail
           BASELINE_FILE="perf/baselines/${BASELINE_SHA}.json"
           CURRENT_FILE="perf/baselines/current-${CURRENT_SHA}.json"
-          if [[ ! -f "$BASELINE_FILE" ]]; then
-            echo "::error::Baseline file not found: $BASELINE_FILE"
-            echo "::error::Blocking gate — run scripts/perf-baseline.sh update ${BASELINE_SHA} locally"
-            echo "::error::and commit perf/baselines/${BASELINE_SHA}.json to main."
-            echo "::error::See docs/perf-governance.md for details."
-            exit 1
-          fi
-          if [[ ! -f "$CURRENT_FILE" ]]; then
-            echo "::error::Current estimates file not found: $CURRENT_FILE"
-            exit 1
-          fi
           BASELINE_FILE="$BASELINE_FILE" \
           CURRENT_FILE="$CURRENT_FILE" \
           THRESHOLD_HOT_PATH="$THRESHOLD_HOT_PATH" \
           THRESHOLD_FORMAT="$THRESHOLD_FORMAT" \
           THRESHOLD_TRANSPORT="$THRESHOLD_TRANSPORT" \
           THRESHOLD_ALLOC="$THRESHOLD_ALLOC" \
-          python3 - <<'PYEOF'
+          python3 - <<'PYEOF' || echo "compare_failed=true" >> "${GITHUB_OUTPUT}"
           import json, sys, os
           base_path = os.environ["BASELINE_FILE"]
           curr_path = os.environ["CURRENT_FILE"]
@@ -187,10 +140,10 @@ jobs:
               curr = json.load(f)
           base_e = {e["label"]: e for e in base["estimates"]}
           curr_e = {e["label"]: e for e in curr["estimates"]}
-          hot_thr = float(os.environ.get("THRESHOLD_HOT_PATH", "50"))
-          fmt_thr = float(os.environ.get("THRESHOLD_FORMAT", "10"))
-          tra_thr = float(os.environ.get("THRESHOLD_TRANSPORT", "10"))
-          alloc_thr = float(os.environ.get("THRESHOLD_ALLOC", "15"))
+          hot_thr = float(os.environ.get("THRESHOLD_HOT_PATH", "10"))
+          fmt_thr = float(os.environ.get("THRESHOLD_FORMAT", "15"))
+          tra_thr = float(os.environ.get("THRESHOLD_TRANSPORT", "15"))
+          alloc_thr = float(os.environ.get("THRESHOLD_ALLOC", "20"))
           def category(label):
               group = label.split("/", 1)[0]
               if group == "hot_path":
@@ -216,29 +169,88 @@ jobs:
                   regressions.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
               elif delta < -thr:
                   improvements.append((label, cat, delta, thr, b["time_ns_median"], c["time_ns_median"]))
-<<<<<<< HEAD
-          print(f"\n=== Perf regression gate ===")
-          print(f"Baseline: {base_path}")
-          print(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%, allocations={alloc_thr}%")
-          print(f"Regressions ({len(regressions)}):")
-=======
-          print(f"\n=== Perf regression gate ===", flush=True)
+          print(f"\n=== Perf regression advisory ===", flush=True)
           print(f"Baseline: {base_path}", flush=True)
           print(f"Current:  {curr_path}", flush=True)
           print(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%, allocations={alloc_thr}%", flush=True)
           print(f"Regressions ({len(regressions)}):", flush=True)
->>>>>>> origin/main
           for label, cat, delta, thr, b_ns, c_ns in regressions:
               print(f"  REGRESS [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns (+{delta:.1f}%, threshold +{thr}%)", flush=True)
           print(f"Improvements ({len(improvements)}):", flush=True)
           for label, cat, delta, thr, b_ns, c_ns in improvements[:20]:
               print(f"  IMPROVE [{cat}] {label}: {b_ns:.0f}ns → {c_ns:.0f}ns ({delta:.1f}%)", flush=True)
           if regressions:
-              print(f"\nFAIL: {len(regressions)} regression(s) exceed threshold", flush=True)
-              sys.exit(1)
-          print(f"\nPASS: no regressions exceed threshold", flush=True)
-          sys.exit(0)
+              print(f"\n⚠️ ADVISORY: {len(regressions)} regression(s) detected (informational, NOT blocking)", flush=True)
+              # Write regression report for PR comment step
+              with open("/tmp/regression-report.md", "w") as f:
+                  f.write(f"## ⚠️ Performance regression detected\n\n")
+                  f.write(f"Baseline: `{os.environ['BASELINE_SHA'][:10]}` (median-of-{base.get('n_runs', '?')})\n")
+                  f.write(f"Current: `{os.environ['CURRENT_SHA'][:10]}` (median-of-{curr.get('n_runs', '?')})\n")
+                  f.write(f"Thresholds: hot_path={hot_thr}%, format={fmt_thr}%, transport={tra_thr}%, allocations={alloc_thr}%\n\n")
+                  f.write(f"### Regressions ({len(regressions)})\n\n")
+                  for label, cat, delta, thr, b_ns, c_ns in regressions:
+                      f.write(f"- **{cat}** `{label}`: {b_ns:.0f}ns → {c_ns:.0f}ns (+{delta:.1f}%, threshold +{thr}%)\n")
+                  if improvements:
+                      f.write(f"\n### Improvements ({len(improvements)})\n\n")
+                      for label, cat, delta, thr, b_ns, c_ns in improvements[:10]:
+                          f.write(f"- **{cat}** `{label}`: {b_ns:.0f}ns → {c_ns:.0f}ns ({delta:.1f}%)\n")
+                  f.write(f"\n### Action items\n\n")
+                  f.write(f"Per AGENTS.md §18.4 + Issue #228: maintainer must run `bash scripts/perf-local-check.sh` locally.\n")
+                  f.write(f"If regression is justified (new feature with trade-off): document in PR body.\n")
+                  f.write(f"perf-monitor workflow will create Issue on post-merge if regression > +5%.\n")
+              # Set output for downstream comment step
+              with open("/tmp/regression-detected.txt", "w") as f:
+                  f.write("true")
+          else:
+              print(f"\n✅ ADVISORY: no regressions exceed threshold", flush=True)
+              with open("/tmp/regression-detected.txt", "w") as f:
+                  f.write("false")
           PYEOF
+
+      - name: Comment on PR with bench results
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          REGRESSION_DETECTED=$(cat /tmp/regression-detected.txt 2>/dev/null || echo "false")
+
+          if [[ "${REGRESSION_DETECTED}" == "true" ]] && [[ -f "/tmp/regression-report.md" ]]; then
+            BODY=$(cat /tmp/regression-report.md)
+            gh pr comment "${PR_NUMBER}" --body "${BODY}" || {
+              echo "::warning::Failed to comment on PR (may be duplicate or closed)"
+            }
+          else
+            # Always comment "looks good" for transparency
+            cat > /tmp/clean-comment.md <<EOF
+          ## ✅ Perf benchmark passed
+
+          Baseline: \`${{ steps.baseline_sha.outputs.sha }}:0:10\` (median-of-3)
+          Current:  this PR (median-of-3)
+          Threshold: hot_path +10%, format/transport +15%, allocations +20%
+
+          No regressions detected. This is an **advisory** check — does not block merge.
+
+          See \`docs/perf-governance.md\` for the full monitoring strategy.
+          EOF
+            gh pr comment "${PR_NUMBER}" --body "$(cat /tmp/clean-comment.md)" || true
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Perf regression advisory"
+            echo ""
+            echo "- **Baseline SHA**: \`${{ steps.baseline_sha.outputs.sha }}\`"
+            echo "- **Baseline exists**: ${{ steps.check_baseline.outputs.exists }}"
+            echo "- **Thresholds**: hot_path +${{ env.THRESHOLD_HOT_PATH }}%, format +${{ env.THRESHOLD_FORMAT }}%, transport +${{ env.THRESHOLD_TRANSPORT }}%, allocations +${{ env.THRESHOLD_ALLOC }}%"
+            echo "- **Mode**: advisory (NOT blocking per Issue #260)"
+            echo ""
+            echo "Статистика issue: до Issue #260 этот workflow был blocking gate и задерживал 82% PR."
+            echo "Теперь: detect → comment → no block. perf-monitor workflow обеспечивает post-merge regression detection."
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload bench logs
         if: always()

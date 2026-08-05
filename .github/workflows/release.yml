@@ -453,7 +453,6 @@ jobs:
           if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
             cargo install cargo-rpm --locked --version '^0.7'
           fi
->>>>>>> origin/main
           cargo rpm version
 
       - name: Install build deps

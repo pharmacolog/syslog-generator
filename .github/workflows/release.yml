@@ -440,16 +440,11 @@ jobs:
           restore-keys: |
             cargo-tool-${{ runner.os }}-cargo-rpm-
 
-      - name: Install cargo-rpm (v0.7 — Issue #261, force-install)
-        # Issue #261: cargo-rpm v0.8.0 убрал `--release` flag → "unrecognized option --release".
-        # Pin v0.7.x (последний major с обратной совместимостью).
-        # Force-install даже если cache restore'ит v0.8.0 — иначе parse error
-        # на missing description field.
-        # TODO Issue #262: migrate to cargo-rpm v0.8 API.
+      - name: Install cargo-rpm (Issue #261 — поддержка --no-cargo-build v0.8 API)
+        # Force-install (не cache-check) — может быть pre-installed v0.7.0
+        # через cache который не имеет --no-cargo-build флага.
         run: |
-          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
-            cargo install cargo-rpm --locked --version '^0.7'
-          fi
+          cargo install cargo-rpm --locked --force
           cargo rpm version
 
       - name: Install build deps
@@ -463,18 +458,18 @@ jobs:
         run: |
           # Issue #261: cargo-rpm 0.8.0 — default mode = release profile (без --release flag).
           # Используем cargo build отдельно для --features kafka,
-          # затем cargo rpm build --no-build для переиспользования pre-built binary.
-          if [ "${{ matrix.kafka }}" = "true" ]; then
+          # затем cargo rpm build --no-cargo-build для переиспользования pre-built binary.
+          if [ "${{ matrix.kafka }}" = "true" ]]; then
             cargo build --release --locked --bin syslog-generator --features kafka
-            cargo rpm build --no-build --features kafka
+            cargo rpm build --no-cargo-build --features kafka
           else
             cargo build --release --locked --bin syslog-generator
-            cargo rpm build --no-build
+            cargo rpm build --no-cargo-build
           fi
 
           mkdir -p target/rpm
           RPM_FILE=$(find target/release/rpmbuild/RPMS -name 'syslog-generator-*.rpm' -type f | head -1)
-          if [ "${{ matrix.kafka }}" = "true" ]; then
+          if [ "${{ matrix.kafka }}" = "true" ]]; then
             mv "$RPM_FILE" target/rpm/syslog-generator-kafka.rpm
           else
             mv "$RPM_FILE" target/rpm/syslog-generator.rpm

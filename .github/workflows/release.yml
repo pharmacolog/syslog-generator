@@ -440,7 +440,7 @@ jobs:
           restore-keys: |
             cargo-tool-${{ runner.os }}-cargo-rpm-
 
-- name: Install cargo-rpm (Issue #261, default = v0.8.0)
+      - name: Install cargo-rpm (Issue #261, default = v0.8.0)
         # cargo-rpm 0.8.0 — последняя версия на crates.io. Default build mode
         # = release profile (без --release flag, который убран в 0.8.0).
         run: |

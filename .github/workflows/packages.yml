@@ -177,14 +177,13 @@ jobs:
           restore-keys: |
             cargo-tool-${{ runner.os }}-cargo-rpm-
 
-      - name: Install cargo-rpm (Issue #261 — поддержка --no-build v0.8 API)
-        # packages.yml использует `cargo rpm build --no-build` для переиспользования
-        # pre-built binary из cargo build step выше. Этот flag доступен в v0.7+,
-        # default = latest = v0.8.0.
+      - name: Install cargo-rpm (Issue #261 — поддержка --no-cargo-build v0.8 API)
+        # packages.yml использует `cargo rpm build --no-cargo-build` для переиспользования
+        # pre-built binary из cargo build step выше. Этот flag доступен в v0.8.0+.
+        # Force-install (не cache-check) — может быть pre-installed v0.7.0
+        # через cache который не имеет --no-cargo-build флага.
         run: |
-          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
-            cargo install cargo-rpm --locked
-          fi
+          cargo install cargo-rpm --locked --force
           cargo rpm version
 
       - name: Install build deps (libssl, rpm)

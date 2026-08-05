@@ -223,10 +223,79 @@ Maintainer обязан:
 - [`CLAUDE_HANDOFF.md`](../CLAUDE_HANDOFF.md) — release process (perf baselines
   обновляются при release tag push).
 - [Issue #164](https://github.com/pharmacolog/syslog-generator/issues/164) —
-  A6 gate blocking (v11.8).
+  A6 gate blocking (v11.8). **DEPRECATED** в Issue #260 — теперь advisory.
 - [Issue #211](https://github.com/pharmacolog/syslog-generator/issues/211) —
   allocations bench (v11.9).
 - [Issue #214](https://github.com/pharmacolog/syslog-generator/issues/214) —
   median-of-N-runs для variance reduction (v11.9).
 - [Issue #223](https://github.com/pharmacolog/syslog-generator/issues/223) —
   auto-baseline workflow (PR-A6.1, v11.8).
+- [Issue #260](https://github.com/pharmacolog/syslog-generator/issues/260) —
+  advisory perf-check + perf-monitor workflow (v11.9).
+
+## Perf monitoring strategy (v11.9, Issue #260)
+
+### Проблема: blocking gate не работает
+
+Статистика до Issue #260 (last 50 runs `perf-regression` workflow):
+- ✅ Success: 8
+- ❌ Failure: **41 (82% failure rate)**
+
+Главная причина — **chicken-and-egg между blocking gate и autogen workflow**:
+- Blocking gate требует baseline для origin/main HEAD
+- Baseline создаётся через perf-baseline-autogen на push to main
+- PR открывается до push → baseline нет → gate FAIL
+- 82% PR получают "Baseline not found" — блокирующий gate теряет смысл
+
+### Решение: separation of concerns
+
+| Workflow | Trigger | Цель | Blocks merge? |
+|---|---|---|---|
+| **perf-regression.yml** (изменён) | PR | Быстрый bench + comment с результатами | **NO** (advisory) |
+| **perf-monitor.yml** (новый) | push to main + nightly | Regression detection + auto-Issue | **NO** (post-merge) |
+| **perf-baseline-autogen.yml** (existing) | push to main | Auto-generate baseline для нового main HEAD | NO |
+| **scripts/perf-local-check.sh** (existing) | maintainer pre-push | Local hard check (Issue #228) | Manual |
+
+### perf-regression (advisory)
+
+- Trigger: `pull_request` в main/dev + `workflow_dispatch`
+- Run hot_path bench (median-of-3) + warm-up
+- Если baseline существует → compare + comment на PR с результатами
+- Если baseline отсутствует → silent skip (autogen bootstrap)
+- **НЕ блокирует merge** — comment informational
+- Threshold: hot_path +10%, format/transport +15%, allocations +20%
+- Если regression detected → comment с деталями, но PR mergeable
+
+### perf-monitor (new, Issue #260)
+
+- Trigger: `push` в main + nightly cron `0 2 * * *` + `workflow_dispatch`
+- Run hot_path bench (median-of-5 для ±3% variance)
+- Compare с `perf/baselines/<main-sha>.json`
+- Если baseline отсутствует → silent skip
+- Если regression > +5% → **auto-create Issue** с labels [regression, performance]
+- Issue body: previous/new SHA, deltas per category, action items
+- **НЕ коммитит baseline** (advisory only)
+
+### Почему это работает
+
+1. **PR pipeline не задерживается** — gate никогда не FAIL'ит на baseline
+2. **Regression detection не теряется** — perf-monitor catches post-merge
+3. **Maintainer видит issues** — auto-created Issue в tracker, не в CI noise
+4. **Local hard rule остаётся** — `scripts/perf-local-check.sh` перед push (Issue #228)
+
+### Hard policy (сохраняется)
+
+> Если новый код приводит к регрессии по производительности — это повод чинить код, а не снижать требования.
+
+Auto-Issue из perf-monitor — **alarm**, не blocker. Maintainer:
+- Видит Issue с деталями
+- Запускает `scripts/perf-local-check.sh` для подтверждения
+- Либо чинит код, либо override с обоснованием в linked PR
+
+## Migration path
+
+1. ✅ perf-regression.yml изменён (advisory) — **в этой сессии**
+2. ✅ perf-monitor.yml добавлен (post-merge monitor) — **в этой сессии**
+3. ✅ docs/perf-governance.md обновлён с новой policy — **в этой сессии**
+4. ✅ Issue #164 (gate blocking) deprecated в пользу Issue #260
+5. ❌ perf-regression.yml остаётся как fallback для manual `workflow_dispatch` (debug)

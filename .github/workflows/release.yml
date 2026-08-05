@@ -450,7 +450,10 @@ jobs:
         # на missing description field.
         # TODO Issue #262: migrate to cargo-rpm v0.8 API.
         run: |
-          cargo install cargo-rpm --locked --version '^0.7' --force
+          if [ ! -x "$HOME/.cargo/bin/cargo-rpm" ]; then
+            cargo install cargo-rpm --locked --version '^0.7'
+          fi
+>>>>>>> origin/main
           cargo rpm version
 
       - name: Install build deps

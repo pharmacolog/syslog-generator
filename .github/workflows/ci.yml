@@ -603,13 +603,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-public-api
-          key: cargo-tool-${{ runner.os }}-cargo-public-api-v1
+          key: cargo-tool-${{ runner.os }}-cargo-public-api-0.52.0-v1
           restore-keys: |
-            cargo-tool-${{ runner.os }}-cargo-public-api-
+            cargo-tool-${{ runner.os }}-cargo-public-api-0.52.0-
       - name: Install cargo-public-api
+        # Pinned version: cargo-public-api ≥0.53 рендерит `core::convert::Infallible`
+        # как `never` (новый rustdoc-json), что ломает diff с api-snapshot.txt.
+        # Snapshot сгенерирован 0.52.0 — версия пиннута для determinism.
         run: |
-          if [ ! -x "$HOME/.cargo/bin/cargo-public-api" ]; then
-            cargo install cargo-public-api --locked
+          if [ ! -x "$HOME/.cargo/bin/cargo-public-api" ] || \
+             ! "$HOME/.cargo/bin/cargo-public-api" --version | grep -q "0.52.0"; then
+            cargo install cargo-public-api --locked --version 0.52.0
           fi
       - name: Run public-api diff (STRICT GATE)
         # PR-15 (CI Failure Mitigation): жёсткий gate.

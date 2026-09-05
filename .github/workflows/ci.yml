@@ -593,7 +593,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install nightly toolchain (required for rustdoc-json)
-        uses: dtolnay/rust-toolchain@nightly
+        # Pinned nightly: rustdoc-json в nightly после 2026-07-16 рендерит
+        # `core::convert::Infallible` как `never` (never_type stabilization),
+        # что ломает diff с api-snapshot.txt. Snapshot сгенерирован на
+        # nightly-2026-07-16 — пин для determinism (вместе с cargo-public-api 0.52.0).
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-07-16
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@v2
         with:

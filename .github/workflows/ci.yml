@@ -600,10 +600,15 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-07-16
-      - name: Alias pinned nightly as 'nightly' (cargo-public-api hardcodes +nightly)
+      - name: Re-register pinned nightly AS 'nightly' channel
+        # cargo-public-api hardcoded вызывает `cargo +nightly rustdoc` —
+        # dated nightly не подходит. rustup запрещает `toolchain link nightly`
+        # (reserved name), поэтому переименовываем директорию toolchain
+        # (rustup распознаёт любую директорию ~/.rustup/toolchains/<name>-<triple>).
         run: |
-          TC_DIR="$(basename "$(dirname "$(rustc +nightly-2026-07-16 --print sysroot)")")"
-          rustup toolchain link nightly "$HOME/.rustup/toolchains/${TC_DIR}"
+          TRIPLE="$(rustc +nightly-2026-07-16 -vV | awk '/^host:/ {print $2}')"
+          mv "$HOME/.rustup/toolchains/nightly-2026-07-16-${TRIPLE}" \
+             "$HOME/.rustup/toolchains/nightly-${TRIPLE}"
           rustup run nightly rustc --version
       - name: Cache cargo registry & build artifacts
         uses: Swatinem/rust-cache@v2

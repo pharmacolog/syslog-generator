@@ -15,13 +15,13 @@
 # Артефакты:
 #   - syslog-generator (linux-amd64, PGO, .dwp, merged.profdata)       REQUIRED
 #   - syslog-generator (linux-arm64)                                REQUIRED
-#   - syslog-generator (macos-arm64, .dSYM.tar.gz)                  REQUIRED
+#   - syslog-generator (macos-arm64, .dSYM.tar.gz — OPTIONAL, runner-dependent)
 #   - syslog-generator_{ver}_amd64.deb                              REQUIRED
 #   - syslog-generator_{ver}_amd64.rpm                              REQUIRED
-#   - syslog-generator_{ver}.apk                                    REQUIRED
-#   - syslog-generator-v{ver}-source.tar.gz                         REQUIRED
-#   - syslog-generator-v{ver}-source.zip                            REQUIRED
-#   - SHA256SUMS + SHA256SUMS.asc                                   REQUIRED
+#   - syslog-generator_{ver}.apk                                    REQUIRED (но non-blocking, known-flaky)
+#   - syslog-generator-{ver}-source.tar.gz                          REQUIRED
+#   - syslog-generator-{ver}-source.zip                             REQUIRED
+#   - SHA256SUMS (полный манифест всех assets) + SHA256SUMS.asc (если GPG key настроен, Issue #155)
 #
 # Защита от re-race: каждый upload step использует `--clobber` для идемпотентности.
 
@@ -300,20 +300,24 @@ jobs:
 
       - name: Package .dSYM as tarball (Issue #190, если есть)
         run: |
+          mkdir -p dsym-out
           if [ -d target/release/syslog-generator.dSYM ]; then
-            tar -C target/release -czf syslog-generator.dSYM.tar.gz syslog-generator.dSYM
-            ls -la syslog-generator.dSYM.tar.gz
+            tar -C target/release -czf dsym-out/syslog-generator.dSYM.tar.gz syslog-generator.dSYM
+            ls -la dsym-out/syslog-generator.dSYM.tar.gz
           else
-            # Создаём пустой placeholder чтобы upload step не fail.
-            touch syslog-generator.dSYM.tar.gz
-            echo "::warning::.dSYM bundle отсутствует; создан placeholder tarball"
+            # Placeholder НЕ создаём: 147-байтовый мусорный tarball в релизе —
+            # плохая практика. dSYM опционален (non-blocking по Issue #261).
+            echo "::warning::.dSYM bundle отсутствует; пропускаем (non-blocking)"
           fi
 
       - name: Stage macOS artifacts
         run: |
           mkdir -p dist-macos
           cp target/release/syslog-generator dist-macos/
-          cp syslog-generator.dSYM.tar.gz dist-macos/
+          # dSYM копируем только если реально собран (не placeholder).
+          if [ -f dsym-out/syslog-generator.dSYM.tar.gz ]; then
+            cp dsym-out/syslog-generator.dSYM.tar.gz dist-macos/
+          fi
           ls -la dist-macos/
 
       - name: Upload macOS artifacts
@@ -323,7 +327,7 @@ jobs:
           path: |
             dist-macos/syslog-generator
             dist-macos/syslog-generator.dSYM.tar.gz
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 90
 
   # === Stage 4: Linux packages (.deb) ===
@@ -898,7 +902,12 @@ jobs:
           cp linux-arm64/syslog-generator syslog-generator-linux-arm64
           cp linux-arm64/syslog-generator.dwp syslog-generator-linux-arm64.dwp
           cp macos-arm64/syslog-generator syslog-generator-macos-arm64
-          cp macos-arm64/syslog-generator.dSYM.tar.gz syslog-generator-macos-arm64.dSYM.tar.gz
+          # dSYM опционален (может отсутствовать — runner-dependent, Issue #261).
+          if [ -f macos-arm64/syslog-generator.dSYM.tar.gz ]; then
+            cp macos-arm64/syslog-generator.dSYM.tar.gz syslog-generator-macos-arm64.dSYM.tar.gz
+          else
+            echo "::warning::macOS .dSYM отсутствует в артефактах; пропускаем (non-blocking)"
+          fi
 
           # Verify all REQUIRED artifacts exist
           REQUIRED=(
@@ -908,7 +917,6 @@ jobs:
             syslog-generator-linux-arm64
             syslog-generator-linux-arm64.dwp
             syslog-generator-macos-arm64
-            syslog-generator-macos-arm64.dSYM.tar.gz
           )
           for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
             REQUIRED+=("$f")
@@ -927,6 +935,36 @@ jobs:
 
           echo "=== Files to upload ==="
           find . -type f | sort
+
+      - name: Assemble final dist + generate full SHA256SUMS
+        # Плоская сборка всех assets → SHA256SUMS покрывает ВСЕ distributable
+        # файлы (binaries + source + packages + profdata), а не только пакеты
+        # как partial sums из sign job. GPG detached sign полного манифеста —
+        # когда появится production key (Issue #155 / #270).
+        run: |
+          set -euo pipefail
+          cd staging
+          mkdir -p ../final
+          for f in syslog-generator-pgo syslog-generator-pgo.dwp merged.profdata \
+                   syslog-generator-linux-arm64 syslog-generator-linux-arm64.dwp \
+                   syslog-generator-macos-arm64 syslog-generator-macos-arm64.dSYM.tar.gz; do
+            [ -f "$f" ] && cp "$f" ../final/
+          done
+          for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
+            [ -f "$f" ] && cp "$f" ../final/
+          done
+          for f in signed/*.deb signed/*.rpm signed/*.apk; do
+            [ -f "$f" ] && cp "$f" ../final/
+          done
+          [ -f signed/scripts/keys/pharmacolog-release.asc ] && \
+            cp signed/scripts/keys/pharmacolog-release.asc ../final/
+          [ -f signed/SHA256SUMS.asc ] && cp signed/SHA256SUMS.asc ../final/ || true
+          cd ../final
+          ls -la
+          # Манифест по всем файлам, кроме самого SHA256SUMS* (no self-reference)
+          find . -mindepth 1 -maxdepth 1 -type f ! -name 'SHA256SUMS*' \
+            | sed 's|^\./||' | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Create release if missing
         env:
@@ -949,32 +987,12 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ env.TAG }}"
-          cd staging
+          cd final
 
-          FILES=(
-            "syslog-generator-pgo"
-            "syslog-generator-pgo.dwp"
-            "merged.profdata"
-            "syslog-generator-linux-arm64"
-            "syslog-generator-linux-arm64.dwp"
-            "syslog-generator-macos-arm64"
-            "syslog-generator-macos-arm64.dSYM.tar.gz"
-            "signed/SHA256SUMS"
-            "signed/SHA256SUMS.asc"
-            "signed/scripts/keys/pharmacolog-release.asc"
-          )
-          for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
-            [ -f "$f" ] && FILES+=("$f")
-          done
-          for f in signed/*.deb signed/*.rpm signed/*.apk; do
-            [ -f "$f" ] && FILES+=("$f")
-          done
-          for f in "${FILES[@]}"; do
+          for f in *; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"
               gh release upload "$TAG" --clobber "$f"
-            else
-              echo "::warning::missing artifact (will skip): $f"
             fi
           done
 

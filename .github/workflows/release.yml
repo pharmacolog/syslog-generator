@@ -286,38 +286,33 @@ jobs:
       - name: Build release binary (split-debuginfo=packed, Issue #190)
         env:
           RUSTUP_TOOLCHAIN: stable
-          # Force split-debuginfo=packed на macOS для .dSYM эмиссии.
           CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: packed
         run: |
-          cargo build --release --locked
+          # lto=fat удаляет промежуточные .o до вызова dsymutil → dSYM пустой
+          # (34 subprograms вместо ~204k, проверено локально на macOS arm64).
+          # lto=thin сохраняет объекты → split-debuginfo=packed работает,
+          # dSYM полный, UUID совпадает с бинарём. Trade-off: ~1-3% perf на
+          # macOS (не production target — приемлемо за работающую отладку).
+          cargo build --release --locked \
+            --config 'profile.release.strip="none"' \
+            --config 'profile.release.lto="thin"'
           test -x target/release/syslog-generator
-          # .dSYM может не emitted на некоторых runner'ах (Issue #261 — это
-          # не блокер, binary всё равно работает без него). Логируем warning
-          # если .dSYM missing, но НЕ fail'им build.
-          if [ ! -d target/release/syslog-generator.dSYM ]; then
-            echo "::warning::.dSYM bundle not emitted (split-debuginfo=packed не сработал для этого runner)"
-          fi
+          test -d target/release/syslog-generator.dSYM
+          # strip ПОСЛЕ создания dSYM (UUID не меняется, символизация работает).
+          strip -Sx target/release/syslog-generator
 
-      - name: Package .dSYM as tarball (Issue #190, если есть)
+      - name: Package .dSYM as tarball (Issue #190)
         run: |
           mkdir -p dsym-out
-          if [ -d target/release/syslog-generator.dSYM ]; then
-            tar -C target/release -czf dsym-out/syslog-generator.dSYM.tar.gz syslog-generator.dSYM
-            ls -la dsym-out/syslog-generator.dSYM.tar.gz
-          else
-            # Placeholder НЕ создаём: 147-байтовый мусорный tarball в релизе —
-            # плохая практика. dSYM опционален (non-blocking по Issue #261).
-            echo "::warning::.dSYM bundle отсутствует; пропускаем (non-blocking)"
-          fi
+          # -h: dereference symlink (dSYM — symlink на deps/*.dSYM).
+          tar -h -C target/release -czf dsym-out/syslog-generator.dSYM.tar.gz syslog-generator.dSYM
+          ls -la dsym-out/syslog-generator.dSYM.tar.gz
 
       - name: Stage macOS artifacts
         run: |
           mkdir -p dist-macos
           cp target/release/syslog-generator dist-macos/
-          # dSYM копируем только если реально собран (не placeholder).
-          if [ -f dsym-out/syslog-generator.dSYM.tar.gz ]; then
-            cp dsym-out/syslog-generator.dSYM.tar.gz dist-macos/
-          fi
+          cp dsym-out/syslog-generator.dSYM.tar.gz dist-macos/
           ls -la dist-macos/
 
       - name: Upload macOS artifacts
@@ -902,12 +897,8 @@ jobs:
           cp linux-arm64/syslog-generator syslog-generator-linux-arm64
           cp linux-arm64/syslog-generator.dwp syslog-generator-linux-arm64.dwp
           cp macos-arm64/syslog-generator syslog-generator-macos-arm64
-          # dSYM опционален (может отсутствовать — runner-dependent, Issue #261).
-          if [ -f macos-arm64/syslog-generator.dSYM.tar.gz ]; then
-            cp macos-arm64/syslog-generator.dSYM.tar.gz syslog-generator-macos-arm64.dSYM.tar.gz
-          else
-            echo "::warning::macOS .dSYM отсутствует в артефактах; пропускаем (non-blocking)"
-          fi
+          # dSYM REQUIRED снова (thin LTO гарантирует создание, Issue #190).
+          cp macos-arm64/syslog-generator.dSYM.tar.gz syslog-generator-macos-arm64.dSYM.tar.gz
 
           # Verify all REQUIRED artifacts exist
           REQUIRED=(
@@ -917,6 +908,7 @@ jobs:
             syslog-generator-linux-arm64
             syslog-generator-linux-arm64.dwp
             syslog-generator-macos-arm64
+            syslog-generator-macos-arm64.dSYM.tar.gz
           )
           for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
             REQUIRED+=("$f")

@@ -627,7 +627,13 @@ jobs:
         # (только при первом запуске в новом repo / после force-push).
         # В нормальном случае — diff должен быть пустым, иначе FAIL.
         run: |
-          cargo public-api --features test-helpers 2>/dev/null > /tmp/current-api.txt
+          # stderr сохраняем в файл (не /dev/null) — иначе мгновенный fail
+          # инструмента неотличим от diff mismatch (debuggability).
+          if ! cargo public-api --features test-helpers > /tmp/current-api.txt 2>/tmp/public-api-stderr.txt; then
+            echo "::error::cargo public-api failed to run:"
+            cat /tmp/public-api-stderr.txt
+            exit 1
+          fi
           if [ ! -f api-snapshot.txt ]; then
             echo "::warning::api-snapshot.txt not found, initializing baseline"
             cp /tmp/current-api.txt api-snapshot.txt

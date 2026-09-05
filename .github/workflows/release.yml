@@ -79,9 +79,9 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           git archive --format=tgz --prefix="syslog-generator-${VERSION}/" \
-            -o "dist/syslog-generator-v${TAG}-source.tar.gz" "${TAG}"
+            -o "dist/syslog-generator-${VERSION}-source.tar.gz" "${TAG}"
           git archive --format=zip --prefix="syslog-generator-${VERSION}/" \
-            -o "dist/syslog-generator-v${TAG}-source.zip" "${TAG}"
+            -o "dist/syslog-generator-${VERSION}-source.zip" "${TAG}"
           ls -la dist/
           sha256sum dist/*
 
@@ -90,8 +90,8 @@ jobs:
         with:
           name: syslog-generator-source-${{ env.TAG }}
           path: |
-            dist/syslog-generator-v${{ env.TAG }}-source.tar.gz
-            dist/syslog-generator-v${{ env.TAG }}-source.zip
+            dist/syslog-generator-*-source.tar.gz
+            dist/syslog-generator-*-source.zip
           if-no-files-found: error
           retention-days: 90
 
@@ -892,18 +892,27 @@ jobs:
           cp linux-amd64-pgo/syslog-generator.dwp syslog-generator-pgo.dwp
           cp linux-amd64-pgo/merged.profdata merged.profdata
 
+          # Semantic platform-specific names (fix asset name collision:
+          # linux-arm64/syslog-generator и macos-arm64/syslog-generator оба
+          # upload'ились как "syslog-generator" и --clobber перезаписывал).
+          cp linux-arm64/syslog-generator syslog-generator-linux-arm64
+          cp linux-arm64/syslog-generator.dwp syslog-generator-linux-arm64.dwp
+          cp macos-arm64/syslog-generator syslog-generator-macos-arm64
+          cp macos-arm64/syslog-generator.dSYM.tar.gz syslog-generator-macos-arm64.dSYM.tar.gz
+
           # Verify all REQUIRED artifacts exist
           REQUIRED=(
             syslog-generator-pgo
             syslog-generator-pgo.dwp
             merged.profdata
-            linux-arm64/syslog-generator
-            linux-arm64/syslog-generator.dwp
-            macos-arm64/syslog-generator
-            macos-arm64/syslog-generator.dSYM.tar.gz
-            source/syslog-generator-v${{ env.TAG }}-source.tar.gz
-            source/syslog-generator-v${{ env.TAG }}-source.zip
+            syslog-generator-linux-arm64
+            syslog-generator-linux-arm64.dwp
+            syslog-generator-macos-arm64
+            syslog-generator-macos-arm64.dSYM.tar.gz
           )
+          for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
+            REQUIRED+=("$f")
+          done
           MISSING=()
           for f in "${REQUIRED[@]}"; do
             if [ ! -f "$f" ]; then
@@ -943,19 +952,20 @@ jobs:
           cd staging
 
           FILES=(
-            "source/syslog-generator-v${TAG}-source.tar.gz"
-            "source/syslog-generator-v${TAG}-source.zip"
             "syslog-generator-pgo"
             "syslog-generator-pgo.dwp"
             "merged.profdata"
-            "linux-arm64/syslog-generator"
-            "linux-arm64/syslog-generator.dwp"
-            "macos-arm64/syslog-generator"
-            "macos-arm64/syslog-generator.dSYM.tar.gz"
+            "syslog-generator-linux-arm64"
+            "syslog-generator-linux-arm64.dwp"
+            "syslog-generator-macos-arm64"
+            "syslog-generator-macos-arm64.dSYM.tar.gz"
             "signed/SHA256SUMS"
             "signed/SHA256SUMS.asc"
             "signed/scripts/keys/pharmacolog-release.asc"
           )
+          for f in source/syslog-generator-*-source.tar.gz source/syslog-generator-*-source.zip; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
           for f in signed/*.deb signed/*.rpm signed/*.apk; do
             [ -f "$f" ] && FILES+=("$f")
           done

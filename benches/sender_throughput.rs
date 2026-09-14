@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+use syslog_generator::{
+    create_metrics, run_profile, Phase, Profile, RuntimeConfig, ShutdownConfig, TargetConfig,
+};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::runtime::Runtime;
@@ -20,6 +22,7 @@ fn make_profile(target: TargetConfig, mps: u64, name: &str, total_messages: u64)
             ..Default::default()
         }],
         metrics_addr: None,
+        runtime: RuntimeConfig::default(),
     }
 }
 

@@ -4,7 +4,8 @@ use std::path::Path;
 use std::process::ExitCode;
 use syslog_generator::{
     apply_overrides, create_metrics, format_errors, load_profile_from_path, run_profile,
-    validate_against_embedded_schema, validate_profile, Args, Command, Profile,
+    validate_against_embedded_schema, validate_profile, Args, Command, ExplainFormat, ExplainPlan,
+    Profile,
 };
 use tracing::{info, warn};
 
@@ -146,6 +147,19 @@ async fn run() -> Result<ExitCode> {
     // 5. --print-config: вывести итоговый профиль и выйти.
     if args.print_config {
         println!("{}", serde_json::to_string_pretty(&profile)?);
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    // 5b. Issue #241: --explain-plan — вывести structured tree pipeline.
+    if let Some(format_str) = &args.explain_plan {
+        let format = ExplainFormat::parse(format_str).ok_or_else(|| {
+            anyhow::anyhow!("unknown --explain-plan format {format_str:?}; expected: text, json")
+        })?;
+        let plan = ExplainPlan::from_profile(&profile);
+        match format {
+            ExplainFormat::Text => println!("{}", plan.render_text()),
+            ExplainFormat::Json => println!("{}", plan.render_json()?),
+        }
         return Ok(ExitCode::SUCCESS);
     }
 

@@ -18,7 +18,8 @@ pub mod core;
 // Re-exports для API, экспортируемого из `pub use` в `lib.rs`.
 pub use config::{
     load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, CefConfig,
-    LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    GeneratorMode, LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, RuntimeConfig,
+    ShutdownConfig, SyslogConfig, TargetConfig,
 };
 pub use core::{
     create_dispatcher, default_values, default_values_into, generate_message,

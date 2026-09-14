@@ -314,6 +314,17 @@
     "Distribution": {
       "type": "string",
       "enum": ["round-robin", "broadcast", "weighted"]
+    },
+    "RuntimeConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generator_mode": { "type": ["string", "null"], "enum": ["deterministic", "fast", null] },
+        "generator_threads": { "type": ["integer", "null"], "minimum": 1, "maximum": 4096 },
+        "queue_capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 1048576 },
+        "batch_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 1048576 },
+        "pacer_tick_interval_ms": { "type": ["integer", "null"], "minimum": 1, "maximum": 60000 }
+      }
     }
   },
   "additionalProperties": false,
@@ -325,6 +336,7 @@
     "metrics_addr": { "type": ["string", "null"] },
     "broadcast_policy": { "type": ["string", "null"], "enum": ["strict", "independent", "best-effort", null] },
     "queue_capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 1048576 },
-    "on_target_failure": { "type": ["string", "null"], "enum": ["fail-phase", "continue", "disable-target", null] }
+    "on_target_failure": { "type": ["string", "null"], "enum": ["fail-phase", "continue", "disable-target", null] },
+    "runtime": { "$ref": "#/$defs/RuntimeConfig" }
   }
 }

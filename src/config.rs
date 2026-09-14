@@ -5,7 +5,10 @@
 //! re-export для backward-compat: `syslog_generator::Profile` и др. продолжают
 //! работать.
 
+pub use crate::generator::config::{
+    CefConfig, GeneratorMode, LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, RuntimeConfig,
+    ShutdownConfig, SyslogConfig, TargetConfig,
+};
 pub use crate::generator::{
-    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str, CefConfig,
-    LeefConfig, Phase, Profile, ProtobufSchemaFieldMap, ShutdownConfig, SyslogConfig, TargetConfig,
+    load_profile_from_json_str, load_profile_from_path, load_profile_from_yaml_str,
 };

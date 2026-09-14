@@ -1,0 +1,257 @@
+# perf-monitor (Issue #260, v11.9) — post-merge regression detection.
+#
+# Workflow: на push в main + nightly schedule.
+# - Запускает hot_path bench (median-of-5 для noise reduction).
+# - Сравнивает с baseline (perf/baselines/<main-sha>.json).
+# - При regression > +5%: создаёт Issue с diagnostic, comment на последнем PR.
+# - НЕ блокирует merge. НЕ обновляет baseline.
+#
+# Отделение от perf-regression (advisory PR check):
+#   - perf-regression: fast advisory на PR (≤15 min), comment + threshold detection
+#   - perf-monitor: thorough check post-merge (≤30 min), auto-Issue при regression
+#   - perf-baseline-autogen: генерирует baseline для каждого нового main HEAD
+#
+# Hard policy (per AGENTS.md §policy):
+# > Регрессия — повод чинить код, а не снижать требования.
+#
+# При regression auto-Issue создаётся с labels [regression, performance],
+# assignee = последний PR author. Maintainer решает: fix, justify, или override.
+
+name: perf-monitor
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly at 02:00 UTC (Issue #260 — между EU/US workdays)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      threshold_hot_path:
+        description: 'hot_path threshold % (default: 5)'
+        required: false
+        default: '5'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  monitor:
+    name: Performance monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: perf-monitor-ubuntu
+
+      - name: Resolve SHAs
+        id: shas
+        run: |
+          set -euo pipefail
+          NEW_SHA="$(git rev-parse HEAD)"
+          if PREV_SHA="$(git rev-parse HEAD~1 2>/dev/null)"; then
+            echo "prev=${PREV_SHA}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::notice::No previous commit (first-ever push)"
+            echo "prev=" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "new=${NEW_SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check baseline availability
+        id: check_baseline
+        env:
+          NEW_SHA: ${{ steps.shas.outputs.new }}
+        run: |
+          BASELINE_FILE="perf/baselines/${NEW_SHA}.json"
+          if [[ -f "${BASELINE_FILE}" ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Baseline exists at ${BASELINE_FILE}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Baseline not found at ${BASELINE_FILE}. perf-baseline-autogen.yml should create it post-merge. Skipping monitor."
+          fi
+
+      - name: Compile benches
+        if: steps.check_baseline.outputs.exists == 'true'
+        run: cargo bench --no-run --locked
+
+      - name: Warm-up
+        if: steps.check_baseline.outputs.exists == 'true'
+        run: |
+          cargo bench --locked --bench hot_path -- --warm-up-time 1 --measurement-time 1 >/dev/null 2>&1 || true
+          echo "Warm-up complete"
+
+      - name: Generate current estimates (median of 5, Issue #260)
+        if: steps.check_baseline.outputs.exists == 'true'
+        id: collect
+        env:
+          NEW_SHA: ${{ steps.shas.outputs.new }}
+        run: |
+          set -euo pipefail
+          OUT="perf/baselines/current-${NEW_SHA}.json"
+          mkdir -p "$(dirname "${OUT}")"
+          # Median-of-5 (more samples → lower variance ~±3% per Issue #218).
+          BENCH_RUNS=5 scripts/perf-regression-collect.sh "${OUT}" hot_path 2>&1 | tee /tmp/monitor-gen.log || {
+            echo "::warning::Bench failed — skipping"
+            exit 0
+          }
+
+      - name: Compare against baseline
+        if: steps.check_baseline.outputs.exists == 'true'
+        id: compare
+        env:
+          NEW_SHA: ${{ steps.shas.outputs.new }}
+          PREV_SHA: ${{ steps.shas.outputs.prev }}
+          THRESHOLD: ${{ github.event.inputs.threshold_hot_path || '5' }}
+        run: |
+          set -euo pipefail
+          NEW_FILE="perf/baselines/current-${NEW_SHA}.json"
+          PREV_FILE="perf/baselines/${PREV_SHA}.json"
+
+          if [[ ! -f "${NEW_FILE}" ]]; then
+            echo "::warning::Current estimates not found — skipping"
+            exit 0
+          fi
+
+          if [[ -z "${PREV_SHA}" ]] || [[ ! -f "${PREV_FILE}" ]]; then
+            echo "::notice::No previous baseline (PREV_SHA=${PREV_SHA:-<none>}). Skipping comparison."
+            exit 0
+          fi
+
+          NEW_FILE="${NEW_FILE}" \
+          PREV_FILE="${PREV_FILE}" \
+          THRESHOLD="${THRESHOLD}" \
+          python3 - <<'PYEOF' || echo "compare_failed=true" >> "${GITHUB_OUTPUT}"
+          import json, sys, os
+          new_path = os.environ["NEW_FILE"]
+          prev_path = os.environ["PREV_FILE"]
+          threshold = float(os.environ["THRESHOLD"])
+          with open(new_path) as f:
+              new = json.load(f)
+          with open(prev_path) as f:
+              prev = json.load(f)
+          prev_e = {e["label"]: e for e in prev["estimates"]}
+          new_e = {e["label"]: e for e in new["estimates"]}
+          regressions = []
+          improvements = []
+          for label, p in prev_e.items():
+              if label not in new_e:
+                  continue
+              n = new_e[label]
+              if p["time_ns_median"] == 0:
+                  continue
+              delta = (n["time_ns_median"] - p["time_ns_median"]) / p["time_ns_median"] * 100.0
+              if delta > threshold:
+                  regressions.append((label, delta, p["time_ns_median"], n["time_ns_median"]))
+              elif delta < -threshold:
+                  improvements.append((label, delta, p["time_ns_median"], n["time_ns_median"]))
+          print(f"\n=== Perf monitor (post-merge) ===", flush=True)
+          print(f"Previous: {prev_path}", flush=True)
+          print(f"  baseline_sha: {prev['baseline_sha'][:8]} | n_runs: {prev.get('n_runs', '?')}", flush=True)
+          print(f"New:      {new_path}", flush=True)
+          print(f"  baseline_sha: {new['baseline_sha'][:8]} | n_runs: {new.get('n_runs', '?')}", flush=True)
+          print(f"Threshold: +{threshold:.0f}% (regression limit)", flush=True)
+          print(f"\nRegressions ({len(regressions)}):", flush=True)
+          for label, delta, p_ns, n_ns in regressions:
+              print(f"  REGRESS {label}: {p_ns:.0f}ns → {n_ns:.0f}ns (+{delta:.1f}%)", flush=True)
+          print(f"Improvements ({len(improvements)}):", flush=True)
+          for label, delta, p_ns, n_ns in improvements:
+              print(f"  IMPROVE {label}: {p_ns:.0f}ns → {n_ns:.0f}ns ({delta:.1f}%)", flush=True)
+          if regressions:
+              print(f"\n⚠️ {len(regressions)} regression(s) detected. Creating Issue...", flush=True)
+              # Write report for Issue creation step
+              lines = [
+                  "## ⚠️ Performance regression detected",
+                  "",
+                  f"- **Previous commit**: `{prev['baseline_sha'][:10]}` (median-of-{prev.get('n_runs', '?')})",
+                  f"- **New commit**: `{new['baseline_sha'][:10]}` (median-of-{new.get('n_runs', '?')})",
+                  f"- **Threshold**: +{threshold:.0f}% (hot_path)",
+                  f"- **Source**: {'nightly schedule' if os.environ.get('GH_SCHED') == 'true' else 'push to main'}",
+                  f"- **Run**: https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+                  "",
+                  "### Regressions",
+                  "",
+              ]
+              for label, delta, p_ns, n_ns in regressions:
+                  lines.append(f"- `{label}`: {p_ns:.0f}ns → {n_ns:.0f}ns (+{delta:.1f}%)")
+              lines.extend([
+                  "",
+                  "### Action items",
+                  "",
+                  "Per AGENTS.md §policy: регрессия — повод ЧИНИТЬ КОД, не снижать требования.",
+                  "",
+                  "1. **Local check**: `bash scripts/perf-local-check.sh perf/baselines/" + prev['baseline_sha'] + ".json`",
+                  "2. **Profile**: `cargo flamegraph` or `perf record`",
+                  "3. **Fix or justify** в linked PR / commit",
+                  "",
+                  "Если регрессия justified (new feature with trade-off): document in commit message.",
+              ])
+              with open("/tmp/monitor-report.md", "w") as f:
+                  f.write("\n".join(lines))
+              with open("/tmp/regression-detected.txt", "w") as f:
+                  f.write("true")
+          else:
+              print(f"\n✅ No regressions detected.", flush=True)
+              with open("/tmp/regression-detected.txt", "w") as f:
+                  f.write("false")
+          PYEOF
+
+      - name: Create Issue on regression
+        if: steps.check_baseline.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_SHA: ${{ steps.shas.outputs.new }}
+          PREV_SHA: ${{ steps.shas.outputs.prev }}
+        run: |
+          set -euo pipefail
+          if [[ "$(cat /tmp/regression-detected.txt 2>/dev/null || echo false)" != "true" ]]; then
+            echo "::notice::No regression — skipping Issue creation"
+            exit 0
+          fi
+
+          # Check if issue already exists (idempotency)
+          EXISTING=$(gh issue list --state open --label regression --label performance --search "perf regression ${NEW_SHA:0:8} in:title" --json number --jq '.[].number' 2>/dev/null || echo "")
+          if [[ -n "${EXISTING}" ]]; then
+            echo "::notice::Issue already exists: #${EXISTING} — skipping duplicate"
+            exit 0
+          fi
+
+          TITLE="perf(regression): hot_path regression detected after ${NEW_SHA:0:8} (auto)"
+
+          gh issue create \
+            --title "${TITLE}" \
+            --label regression \
+            --label performance \
+            --body "$(cat /tmp/monitor-report.md)" || {
+            echo "::warning::Failed to create Issue"
+          }
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Perf monitor summary"
+            echo ""
+            echo "- **Mode**: post-merge monitor (NOT blocking per Issue #260)"
+            echo "- **Current SHA**: \`${{ steps.shas.outputs.new }}\`"
+            echo "- **Previous SHA**: \`${{ steps.shas.outputs.prev || '<none>' }}\`"
+            echo "- **Baseline exists**: ${{ steps.check_baseline.outputs.exists }}"
+            echo ""
+            echo "Этот workflow обеспечивает regression detection post-merge + nightly."
+            echo "perf-regression.yml обеспечивает PR-level advisory."
+            echo "perf-baseline-autogen.yml создаёт baseline для каждого main HEAD."
+          } >> "${GITHUB_STEP_SUMMARY}"

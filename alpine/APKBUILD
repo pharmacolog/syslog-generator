@@ -1,7 +1,7 @@
 # Maintainer: pharmacolog <https://github.com/pharmacolog/syslog-generator/issues>
 # Reference: Issue #159 [C1.9], Issue #107 PR #154 (sibling)
 pkgname=syslog-generator
-pkgver=10.7.19
+pkgver=@@VERSION@@
 pkgrel=0
 pkgdesc="Industrial syslog load generator written in Rust with variadic templates and multi-target delivery"
 url="https://github.com/pharmacolog/syslog-generator"
@@ -10,7 +10,7 @@ arch="x86_64"
 depends="ca-certificates"
 makedepends="cargo rust openssl-dev pkgconfig cmake perl linux-headers git build-base"
 source="$pkgname-$pkgver.tar.gz::https://github.com/pharmacolog/syslog-generator/archive/refs/tags/v$pkgver.tar.gz"
-sha256sums="SKIP"  # placeholder; abuild -r заполняет sha256 при первом запуске
+sha256sums="@@SHA@@"
 
 build() {
     cd "$builddir"

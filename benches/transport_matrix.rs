@@ -17,7 +17,9 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+use syslog_generator::{
+    create_metrics, run_profile, Phase, Profile, RuntimeConfig, ShutdownConfig, TargetConfig,
+};
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::runtime::Runtime;
@@ -41,6 +43,7 @@ fn make_profile(target: TargetConfig) -> Profile {
             ..Default::default()
         }],
         metrics_addr: None,
+        runtime: RuntimeConfig::default(),
     }
 }
 

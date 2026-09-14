@@ -54,9 +54,6 @@ fuzz/Cargo.lock
 # proptest хранит найденные shrinking-cases в `proptest-regressions/`,
 # это локальный debug-cache, не предназначен для коммита.
 proptest-regressions/
-<<<<<<< HEAD
-=======
 
->>>>>>> origin/main
 # Python cache
 scripts/__pycache__/

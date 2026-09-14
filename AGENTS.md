@@ -393,7 +393,7 @@ bash scripts/pre-pr-check.sh [--skip-build] [--skip-kafka]
 4. Tests (`cargo test --release --lib`)
 5. Build (`cargo build --release --locked`)
 6. Doc (`RUSTDOCFLAGS=-D warnings cargo doc --no-deps`)
-7. Public API (`cargo public-api --features test-helpers` diff against `api-snapshot.txt`)
+7. Public API (`cargo public-api --features test-helpers` diff against `api-snapshot.txt`) — **pinned tooling** (PR #326): `cargo-public-api 0.52.0` + `nightly-2026-07-16`. rustdoc-json в более новых nightly рендерит `Infallible` как `never` → ложный diff fail. Распиновка → Issue #327.
 8. N7 invariant (`scripts/check-n7-invariant.sh` — no `.unwrap()/.expect()` в non-test runtime)
 9. Cargo-deny (`cargo deny check`)
 10. Advisory ignore expiry (`scripts/check-advisory-expiry.sh` — structured reason + future expiry)

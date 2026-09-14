@@ -15,7 +15,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use std::path::PathBuf;
-use syslog_generator::{create_metrics, run_profile, Phase, Profile, ShutdownConfig, TargetConfig};
+use syslog_generator::{
+    create_metrics, run_profile, Phase, Profile, RuntimeConfig, ShutdownConfig, TargetConfig,
+};
 use tokio::runtime::Runtime;
 
 const MESSAGES_PER_ITER: u64 = 10_000;
@@ -61,6 +63,7 @@ fn make_profile(paths: Vec<PathBuf>, distribution: &str, weights: Vec<usize>) ->
             ..Default::default()
         }],
         metrics_addr: None,
+        runtime: RuntimeConfig::default(),
     }
 }
 

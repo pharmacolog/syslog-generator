@@ -168,6 +168,348 @@ pub fn syslog_generator::anomaly::AnomalyPlanner<'a>::vzip(self) -> V
 pub fn syslog_generator::anomaly::rate_multiplier(&syslog_generator::anomaly::AnomalyKind, f64) -> f64
 pub fn syslog_generator::anomaly::should_drop_packet(&syslog_generator::anomaly::AnomalyKind, core::option::Option<u64>, usize) -> bool
 pub mod syslog_generator::cli
+pub mod syslog_generator::cli::explain_plan
+pub enum syslog_generator::cli::explain_plan::ExplainFormat
+pub syslog_generator::cli::explain_plan::ExplainFormat::Json
+pub syslog_generator::cli::explain_plan::ExplainFormat::Text
+impl syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::clone(&self) -> syslog_generator::cli::explain_plan::ExplainFormat
+impl core::cmp::Eq for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::cmp::PartialEq for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::eq(&self, &syslog_generator::cli::explain_plan::ExplainFormat) -> bool
+impl core::default::Default for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::default() -> syslog_generator::cli::explain_plan::ExplainFormat
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::StructuralPartialEq for syslog_generator::cli::explain_plan::ExplainFormat
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Send for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Sync for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::ExplainFormat
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::cli::explain_plan::ExplainFormat where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::cli::explain_plan::ExplainFormat where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::ExplainFormat where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::ExplainFormat where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::ExplainFormat where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Owned = T
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::ExplainFormat where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::ExplainFormat where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::ExplainFormat::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: core::marker::Copy
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::cli::explain_plan::ExplainFormat where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::ExplainFormat
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::ExplainFormat
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::ExplainFormat where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::vzip(self) -> V
+pub struct syslog_generator::cli::explain_plan::ExplainPlan
+pub syslog_generator::cli::explain_plan::ExplainPlan::broadcast_policy: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::explain_plan::ExplainPlan::distribution: alloc::string::String
+pub syslog_generator::cli::explain_plan::ExplainPlan::metrics: syslog_generator::cli::explain_plan::MetricsExplanation
+pub syslog_generator::cli::explain_plan::ExplainPlan::on_target_failure: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::explain_plan::ExplainPlan::phases: alloc::vec::Vec<syslog_generator::cli::explain_plan::PhaseExplanation>
+pub syslog_generator::cli::explain_plan::ExplainPlan::runtime: syslog_generator::cli::explain_plan::RuntimeExplanation
+pub syslog_generator::cli::explain_plan::ExplainPlan::targets: alloc::vec::Vec<syslog_generator::cli::explain_plan::TargetExplanation>
+impl syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::from_profile(&syslog_generator::generator::config::Profile) -> Self
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::render_json(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::render_text(&self) -> alloc::string::String
+impl core::clone::Clone for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::clone(&self) -> syslog_generator::cli::explain_plan::ExplainPlan
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Send for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Sync for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::ExplainPlan
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::ExplainPlan where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::ExplainPlan where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::ExplainPlan where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Owned = T
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::ExplainPlan where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::ExplainPlan where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::ExplainPlan::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::ExplainPlan
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::ExplainPlan
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::ExplainPlan where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::vzip(self) -> V
+pub struct syslog_generator::cli::explain_plan::MetricsExplanation
+pub syslog_generator::cli::explain_plan::MetricsExplanation::enabled: bool
+pub syslog_generator::cli::explain_plan::MetricsExplanation::endpoint: core::option::Option<alloc::string::String>
+impl core::clone::Clone for syslog_generator::cli::explain_plan::MetricsExplanation
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::clone(&self) -> syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::MetricsExplanation
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::MetricsExplanation
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::marker::Send for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::marker::Sync for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::MetricsExplanation
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::MetricsExplanation
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::MetricsExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::MetricsExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::MetricsExplanation where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::MetricsExplanation where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::MetricsExplanation::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::MetricsExplanation where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::MetricsExplanation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::MetricsExplanation where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::MetricsExplanation::Owned = T
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::MetricsExplanation where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::MetricsExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::MetricsExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::MetricsExplanation where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::MetricsExplanation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::MetricsExplanation
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::MetricsExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::MetricsExplanation
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::MetricsExplanation
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::MetricsExplanation where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::MetricsExplanation where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::MetricsExplanation::vzip(self) -> V
+pub struct syslog_generator::cli::explain_plan::PhaseExplanation
+pub syslog_generator::cli::explain_plan::PhaseExplanation::anomalies: usize
+pub syslog_generator::cli::explain_plan::PhaseExplanation::duration_secs: u64
+pub syslog_generator::cli::explain_plan::PhaseExplanation::format: alloc::string::String
+pub syslog_generator::cli::explain_plan::PhaseExplanation::name: alloc::string::String
+pub syslog_generator::cli::explain_plan::PhaseExplanation::rate_mps: u64
+pub syslog_generator::cli::explain_plan::PhaseExplanation::seed: core::option::Option<u64>
+pub syslog_generator::cli::explain_plan::PhaseExplanation::syslog_facility: u8
+pub syslog_generator::cli::explain_plan::PhaseExplanation::syslog_severity: u8
+pub syslog_generator::cli::explain_plan::PhaseExplanation::templates: usize
+pub syslog_generator::cli::explain_plan::PhaseExplanation::total_messages: core::option::Option<u64>
+impl core::clone::Clone for syslog_generator::cli::explain_plan::PhaseExplanation
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::clone(&self) -> syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::PhaseExplanation
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::PhaseExplanation
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::marker::Send for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::marker::Sync for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::PhaseExplanation
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::PhaseExplanation
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::PhaseExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::PhaseExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::PhaseExplanation where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::PhaseExplanation where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::PhaseExplanation::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::PhaseExplanation where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::PhaseExplanation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::PhaseExplanation where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::PhaseExplanation::Owned = T
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::PhaseExplanation where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::PhaseExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::PhaseExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::PhaseExplanation where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::PhaseExplanation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::PhaseExplanation
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::PhaseExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::PhaseExplanation
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::PhaseExplanation
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::PhaseExplanation where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::PhaseExplanation where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::PhaseExplanation::vzip(self) -> V
+pub struct syslog_generator::cli::explain_plan::RuntimeExplanation
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::batch_size_effective: usize
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::batch_size_set: core::option::Option<usize>
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::generator_mode: alloc::string::String
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::generator_threads_effective: usize
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::generator_threads_set: core::option::Option<usize>
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::pacer_tick_interval_ms_effective: u64
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::pacer_tick_interval_ms_set: core::option::Option<u64>
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::queue_capacity_effective: usize
+pub syslog_generator::cli::explain_plan::RuntimeExplanation::queue_capacity_set: core::option::Option<usize>
+impl core::clone::Clone for syslog_generator::cli::explain_plan::RuntimeExplanation
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::clone(&self) -> syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::RuntimeExplanation
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::RuntimeExplanation
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::marker::Send for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::marker::Sync for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::RuntimeExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::RuntimeExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::RuntimeExplanation where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::RuntimeExplanation where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::RuntimeExplanation::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::RuntimeExplanation where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::RuntimeExplanation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::RuntimeExplanation where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::RuntimeExplanation::Owned = T
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::RuntimeExplanation where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::RuntimeExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::RuntimeExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::RuntimeExplanation where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::RuntimeExplanation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::RuntimeExplanation
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::RuntimeExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::RuntimeExplanation
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::RuntimeExplanation where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::RuntimeExplanation where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::RuntimeExplanation::vzip(self) -> V
+pub struct syslog_generator::cli::explain_plan::TargetExplanation
+pub syslog_generator::cli::explain_plan::TargetExplanation::address: alloc::string::String
+pub syslog_generator::cli::explain_plan::TargetExplanation::connections: usize
+pub syslog_generator::cli::explain_plan::TargetExplanation::framing: alloc::string::String
+pub syslog_generator::cli::explain_plan::TargetExplanation::reconnect_initial_backoff_ms: core::option::Option<u64>
+pub syslog_generator::cli::explain_plan::TargetExplanation::reconnect_max_attempts: core::option::Option<u32>
+pub syslog_generator::cli::explain_plan::TargetExplanation::reconnect_max_backoff_ms: core::option::Option<u64>
+pub syslog_generator::cli::explain_plan::TargetExplanation::so_sndbuf: core::option::Option<usize>
+pub syslog_generator::cli::explain_plan::TargetExplanation::tcp_nodelay: bool
+pub syslog_generator::cli::explain_plan::TargetExplanation::tls_domain: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::explain_plan::TargetExplanation::tls_enabled: bool
+pub syslog_generator::cli::explain_plan::TargetExplanation::tls_insecure: bool
+pub syslog_generator::cli::explain_plan::TargetExplanation::transport: alloc::string::String
+pub syslog_generator::cli::explain_plan::TargetExplanation::weight: usize
+impl core::clone::Clone for syslog_generator::cli::explain_plan::TargetExplanation
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::clone(&self) -> syslog_generator::cli::explain_plan::TargetExplanation
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::TargetExplanation
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::TargetExplanation
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::marker::Send for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::marker::Sync for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::TargetExplanation
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::TargetExplanation
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::TargetExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::TargetExplanation where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::TargetExplanation where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::TargetExplanation where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::TargetExplanation::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::TargetExplanation where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::TargetExplanation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::TargetExplanation where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::TargetExplanation::Owned = T
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::TargetExplanation where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::TargetExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::TargetExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::TargetExplanation where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::TargetExplanation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::TargetExplanation
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::TargetExplanation where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::TargetExplanation
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::TargetExplanation
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::TargetExplanation where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::TargetExplanation where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::TargetExplanation::vzip(self) -> V
 pub mod syslog_generator::cli::preset
 pub struct syslog_generator::cli::preset::Preset
 pub syslog_generator::cli::preset::Preset::name: alloc::string::String
@@ -326,15 +668,20 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::TargetParseError where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::cli::TargetParseError::vzip(self) -> V
 pub struct syslog_generator::cli::Args
+pub syslog_generator::cli::Args::batch_size: core::option::Option<usize>
 pub syslog_generator::cli::Args::command: core::option::Option<syslog_generator::cli::Command>
 pub syslog_generator::cli::Args::connections: core::option::Option<usize>
 pub syslog_generator::cli::Args::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::dry_run: bool
 pub syslog_generator::cli::Args::duration: core::option::Option<u64>
+pub syslog_generator::cli::Args::explain_plan: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::format: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::framing: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::generator_mode: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::generator_threads: core::option::Option<usize>
 pub syslog_generator::cli::Args::message: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::cli::Args::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::cli::Args::pacer_tick_interval: core::option::Option<u64>
 pub syslog_generator::cli::Args::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Args::print_config: bool
 pub syslog_generator::cli::Args::profile: core::option::Option<alloc::string::String>
@@ -411,6 +758,7 @@ pub syslog_generator::cli::Overrides::messages: alloc::vec::Vec<alloc::string::S
 pub syslog_generator::cli::Overrides::metrics_addr: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Overrides::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::cli::Overrides::rate: core::option::Option<u64>
+pub syslog_generator::cli::Overrides::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::cli::Overrides::seed: core::option::Option<u64>
 pub syslog_generator::cli::Overrides::set_overrides: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
 pub syslog_generator::cli::Overrides::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
@@ -463,10 +811,131 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::Overrides
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::Overrides where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::Overrides where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::cli::Overrides::vzip(self) -> V
+pub struct syslog_generator::cli::RuntimeOverridesSet
+pub syslog_generator::cli::RuntimeOverridesSet::batch_size: bool
+pub syslog_generator::cli::RuntimeOverridesSet::generator_mode: bool
+pub syslog_generator::cli::RuntimeOverridesSet::generator_threads: bool
+pub syslog_generator::cli::RuntimeOverridesSet::pacer_tick_interval: bool
+pub syslog_generator::cli::RuntimeOverridesSet::queue_capacity: bool
+impl core::clone::Clone for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::clone(&self) -> syslog_generator::cli::RuntimeOverridesSet
+impl core::default::Default for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::default() -> syslog_generator::cli::RuntimeOverridesSet
+impl core::fmt::Debug for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Freeze for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Send for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Sync for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Unpin for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::UnsafeUnpin for syslog_generator::cli::RuntimeOverridesSet
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::RuntimeOverridesSet
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::RuntimeOverridesSet
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::RuntimeOverridesSet where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::RuntimeOverridesSet where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::From<T>
+pub fn syslog_generator::cli::RuntimeOverridesSet::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::Into<T>
+pub type syslog_generator::cli::RuntimeOverridesSet::Error = core::convert::Infallible
+pub fn syslog_generator::cli::RuntimeOverridesSet::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::RuntimeOverridesSet::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::RuntimeOverridesSet::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::RuntimeOverridesSet where T: core::clone::Clone
+pub type syslog_generator::cli::RuntimeOverridesSet::Owned = T
+pub fn syslog_generator::cli::RuntimeOverridesSet::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::RuntimeOverridesSet::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::RuntimeOverridesSet where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::RuntimeOverridesSet where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::RuntimeOverridesSet::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::cli::RuntimeOverridesSet where T: core::marker::Copy
+pub fn syslog_generator::cli::RuntimeOverridesSet::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::RuntimeOverridesSet::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::RuntimeOverridesSet
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::RuntimeOverridesSet
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::RuntimeOverridesSet where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::RuntimeOverridesSet::vzip(self) -> V
 pub fn syslog_generator::cli::apply_overrides(&mut syslog_generator::generator::config::Profile, &syslog_generator::cli::Overrides)
 pub fn syslog_generator::cli::parse_target(&str) -> core::result::Result<syslog_generator::generator::config::TargetConfig, syslog_generator::cli::TargetParseError>
 pub fn syslog_generator::cli::parse_target_with_transport(&str, core::option::Option<&str>) -> core::result::Result<syslog_generator::generator::config::TargetConfig, syslog_generator::cli::TargetParseError>
 pub mod syslog_generator::config
+pub enum syslog_generator::config::GeneratorMode
+pub syslog_generator::config::GeneratorMode::Deterministic
+pub syslog_generator::config::GeneratorMode::Fast
+impl syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::as_str(self) -> &'static str
+pub fn syslog_generator::generator::config::GeneratorMode::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::clone(&self) -> syslog_generator::generator::config::GeneratorMode
+impl core::cmp::Eq for syslog_generator::generator::config::GeneratorMode
+impl core::cmp::PartialEq for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::eq(&self, &syslog_generator::generator::config::GeneratorMode) -> bool
+impl core::default::Default for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::default() -> syslog_generator::generator::config::GeneratorMode
+impl core::fmt::Debug for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::generator::config::GeneratorMode
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::GeneratorMode
+impl serde_core::ser::Serialize for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Send for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Sync for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Unpin for syslog_generator::generator::config::GeneratorMode
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::GeneratorMode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::GeneratorMode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::GeneratorMode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub type syslog_generator::generator::config::GeneratorMode::Owned = T
+pub fn syslog_generator::generator::config::GeneratorMode::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::GeneratorMode::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::GeneratorMode where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::GeneratorMode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::generator::config::GeneratorMode where T: core::marker::Copy
+pub fn syslog_generator::generator::config::GeneratorMode::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::GeneratorMode where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::GeneratorMode::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::GeneratorMode
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::GeneratorMode
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::GeneratorMode where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::GeneratorMode::vzip(self) -> V
 pub struct syslog_generator::config::CefConfig
 pub syslog_generator::config::CefConfig::device_product: alloc::string::String
 pub syslog_generator::config::CefConfig::device_vendor: alloc::string::String
@@ -660,6 +1129,7 @@ pub syslog_generator::config::Profile::metrics_addr: core::option::Option<alloc:
 pub syslog_generator::config::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::config::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
 pub syslog_generator::config::Profile::queue_capacity: core::option::Option<usize>
+pub syslog_generator::config::Profile::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::config::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::config::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -764,6 +1234,78 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::ProtobufSchemaFieldMap where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::ProtobufSchemaFieldMap where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::ProtobufSchemaFieldMap::vzip(self) -> V
+pub struct syslog_generator::config::RuntimeConfig
+pub syslog_generator::config::RuntimeConfig::batch_size: core::option::Option<usize>
+pub syslog_generator::config::RuntimeConfig::generator_mode: syslog_generator::generator::config::GeneratorMode
+pub syslog_generator::config::RuntimeConfig::generator_threads: core::option::Option<usize>
+pub syslog_generator::config::RuntimeConfig::pacer_tick_interval_ms: core::option::Option<u64>
+pub syslog_generator::config::RuntimeConfig::queue_capacity: core::option::Option<usize>
+impl syslog_generator::generator::config::RuntimeConfig
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_BATCH_SIZE: usize
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_PACER_TICK_INTERVAL_MS: u64
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_QUEUE_CAPACITY: usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_batch_size(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_generator_threads(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_pacer_tick_interval_ms(&self) -> u64
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_queue_capacity(&self) -> usize
+impl core::clone::Clone for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::clone(&self) -> syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::Eq for syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::PartialEq for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::eq(&self, &syslog_generator::generator::config::RuntimeConfig) -> bool
+impl core::default::Default for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::RuntimeConfig
+impl serde_core::ser::Serialize for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Send for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Sync for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Unpin for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::RuntimeConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::RuntimeConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub type syslog_generator::generator::config::RuntimeConfig::Owned = T
+pub fn syslog_generator::generator::config::RuntimeConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::RuntimeConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::RuntimeConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::RuntimeConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::RuntimeConfig where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::RuntimeConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::RuntimeConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::RuntimeConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::RuntimeConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::vzip(self) -> V
 pub struct syslog_generator::config::ShutdownConfig
 pub syslog_generator::config::ShutdownConfig::drain_timeout_secs: u64
 pub syslog_generator::config::ShutdownConfig::mode: alloc::string::String
@@ -956,7 +1498,7 @@ pub fn syslog_generator::core::default_values(&syslog_generator::generator::core
 pub fn syslog_generator::core::generate_message(&syslog_generator::generator::config::Phase, usize) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, usize, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::error
 pub enum syslog_generator::error::ConfigError
@@ -1439,6 +1981,73 @@ pub fn syslog_generator::format::escape_sd_value(&str) -> alloc::string::String
 pub fn syslog_generator::format::prival(u8, u8) -> u16
 pub mod syslog_generator::generator
 pub mod syslog_generator::generator::config
+pub enum syslog_generator::generator::config::GeneratorMode
+pub syslog_generator::generator::config::GeneratorMode::Deterministic
+pub syslog_generator::generator::config::GeneratorMode::Fast
+impl syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::as_str(self) -> &'static str
+pub fn syslog_generator::generator::config::GeneratorMode::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::clone(&self) -> syslog_generator::generator::config::GeneratorMode
+impl core::cmp::Eq for syslog_generator::generator::config::GeneratorMode
+impl core::cmp::PartialEq for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::eq(&self, &syslog_generator::generator::config::GeneratorMode) -> bool
+impl core::default::Default for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::default() -> syslog_generator::generator::config::GeneratorMode
+impl core::fmt::Debug for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::generator::config::GeneratorMode
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::GeneratorMode
+impl serde_core::ser::Serialize for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Send for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Sync for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Unpin for syslog_generator::generator::config::GeneratorMode
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::GeneratorMode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::GeneratorMode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::GeneratorMode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub type syslog_generator::generator::config::GeneratorMode::Owned = T
+pub fn syslog_generator::generator::config::GeneratorMode::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::GeneratorMode::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::GeneratorMode where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::GeneratorMode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::generator::config::GeneratorMode where T: core::marker::Copy
+pub fn syslog_generator::generator::config::GeneratorMode::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::GeneratorMode where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::GeneratorMode::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::GeneratorMode
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::GeneratorMode
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::GeneratorMode where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::GeneratorMode::vzip(self) -> V
 pub struct syslog_generator::generator::config::CefConfig
 pub syslog_generator::generator::config::CefConfig::device_product: alloc::string::String
 pub syslog_generator::generator::config::CefConfig::device_vendor: alloc::string::String
@@ -1632,6 +2241,7 @@ pub syslog_generator::generator::config::Profile::metrics_addr: core::option::Op
 pub syslog_generator::generator::config::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::config::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
 pub syslog_generator::generator::config::Profile::queue_capacity: core::option::Option<usize>
+pub syslog_generator::generator::config::Profile::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::generator::config::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::generator::config::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -1736,6 +2346,78 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::ProtobufSchemaFieldMap where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::ProtobufSchemaFieldMap where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::ProtobufSchemaFieldMap::vzip(self) -> V
+pub struct syslog_generator::generator::config::RuntimeConfig
+pub syslog_generator::generator::config::RuntimeConfig::batch_size: core::option::Option<usize>
+pub syslog_generator::generator::config::RuntimeConfig::generator_mode: syslog_generator::generator::config::GeneratorMode
+pub syslog_generator::generator::config::RuntimeConfig::generator_threads: core::option::Option<usize>
+pub syslog_generator::generator::config::RuntimeConfig::pacer_tick_interval_ms: core::option::Option<u64>
+pub syslog_generator::generator::config::RuntimeConfig::queue_capacity: core::option::Option<usize>
+impl syslog_generator::generator::config::RuntimeConfig
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_BATCH_SIZE: usize
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_PACER_TICK_INTERVAL_MS: u64
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_QUEUE_CAPACITY: usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_batch_size(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_generator_threads(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_pacer_tick_interval_ms(&self) -> u64
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_queue_capacity(&self) -> usize
+impl core::clone::Clone for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::clone(&self) -> syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::Eq for syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::PartialEq for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::eq(&self, &syslog_generator::generator::config::RuntimeConfig) -> bool
+impl core::default::Default for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::RuntimeConfig
+impl serde_core::ser::Serialize for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Send for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Sync for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Unpin for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::RuntimeConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::RuntimeConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub type syslog_generator::generator::config::RuntimeConfig::Owned = T
+pub fn syslog_generator::generator::config::RuntimeConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::RuntimeConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::RuntimeConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::RuntimeConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::RuntimeConfig where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::RuntimeConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::RuntimeConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::RuntimeConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::RuntimeConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::vzip(self) -> V
 pub struct syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::generator::config::ShutdownConfig::drain_timeout_secs: u64
 pub syslog_generator::generator::config::ShutdownConfig::mode: alloc::string::String
@@ -2016,54 +2698,6 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::cor
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::PhaseContext where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::PhaseContext where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::core::PhaseContext::vzip(self) -> V
-pub struct syslog_generator::generator::core::RunPhaseMultiOptions
-pub syslog_generator::generator::core::RunPhaseMultiOptions::concurrent_shards: bool
-pub syslog_generator::generator::core::RunPhaseMultiOptions::generator_threads: usize
-impl core::clone::Clone for syslog_generator::generator::core::RunPhaseMultiOptions
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::clone(&self) -> syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::default::Default for syslog_generator::generator::core::RunPhaseMultiOptions
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::default() -> Self
-impl core::fmt::Debug for syslog_generator::generator::core::RunPhaseMultiOptions
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::marker::Send for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::marker::Sync for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::marker::Unpin for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::marker::UnsafeUnpin for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::core::RunPhaseMultiOptions
-impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::core::RunPhaseMultiOptions
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::core::RunPhaseMultiOptions where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::core::RunPhaseMultiOptions where ST: ?core::marker::Sized, DT: ?core::marker::Sized
-impl<T, U> core::convert::Into<U> for syslog_generator::generator::core::RunPhaseMultiOptions where U: core::convert::From<T>
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::into(self) -> U
-impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::core::RunPhaseMultiOptions where U: core::convert::Into<T>
-pub type syslog_generator::generator::core::RunPhaseMultiOptions::Error = core::convert::Infallible
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
-impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::core::RunPhaseMultiOptions where U: core::convert::TryFrom<T>
-pub type syslog_generator::generator::core::RunPhaseMultiOptions::Error = <U as core::convert::TryFrom<T>>::Error
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
-impl<T> alloc::borrow::ToOwned for syslog_generator::generator::core::RunPhaseMultiOptions where T: core::clone::Clone
-pub type syslog_generator::generator::core::RunPhaseMultiOptions::Owned = T
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::clone_into(&self, &mut T)
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::to_owned(&self) -> T
-impl<T> core::any::Any for syslog_generator::generator::core::RunPhaseMultiOptions where T: 'static + ?core::marker::Sized
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::type_id(&self) -> core::any::TypeId
-impl<T> core::borrow::Borrow<T> for syslog_generator::generator::core::RunPhaseMultiOptions where T: ?core::marker::Sized
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::borrow(&self) -> &T
-impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::core::RunPhaseMultiOptions where T: ?core::marker::Sized
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::borrow_mut(&mut self) -> &mut T
-impl<T> core::clone::CloneToUninit for syslog_generator::generator::core::RunPhaseMultiOptions where T: core::clone::Clone
-pub unsafe fn syslog_generator::generator::core::RunPhaseMultiOptions::clone_to_uninit(&self, *mut u8)
-impl<T> core::convert::From<T> for syslog_generator::generator::core::RunPhaseMultiOptions
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::from(T) -> T
-impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::core::RunPhaseMultiOptions where T: ?core::marker::Sized
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
-impl<T> tracing::instrument::Instrument for syslog_generator::generator::core::RunPhaseMultiOptions
-impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::core::RunPhaseMultiOptions
-impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::core::RunPhaseMultiOptions where T: ?core::marker::Sized
-impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::core::RunPhaseMultiOptions where V: ppv_lite86::types::MultiLane<T>
-pub fn syslog_generator::generator::core::RunPhaseMultiOptions::vzip(self) -> V
 pub struct syslog_generator::generator::core::SyslogHeaderParts
 pub syslog_generator::generator::core::SyslogHeaderParts::app_name: alloc::sync::Arc<str>
 pub syslog_generator::generator::core::SyslogHeaderParts::hostname: alloc::sync::Arc<str>
@@ -2124,9 +2758,75 @@ pub fn syslog_generator::generator::core::generate_message_with_format_cached(&s
 pub fn syslog_generator::generator::core::generate_message_with_plan(&syslog_generator::generator::core::PhaseContext, &syslog_generator::generator::config::Phase, &syslog_generator::format::FormatKind, usize, &mut syslog_generator::plan::value::ValueArena, &mut alloc::string::String) -> anyhow::Result<alloc::vec::Vec<u8>>
 pub fn syslog_generator::generator::core::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::core::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
-pub async fn syslog_generator::generator::core::run_phase_multi_with_opts(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken, &syslog_generator::generator::core::RunPhaseMultiOptions) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::core::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, usize, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::core::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
+pub enum syslog_generator::generator::GeneratorMode
+pub syslog_generator::generator::GeneratorMode::Deterministic
+pub syslog_generator::generator::GeneratorMode::Fast
+impl syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::as_str(self) -> &'static str
+pub fn syslog_generator::generator::config::GeneratorMode::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::clone(&self) -> syslog_generator::generator::config::GeneratorMode
+impl core::cmp::Eq for syslog_generator::generator::config::GeneratorMode
+impl core::cmp::PartialEq for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::eq(&self, &syslog_generator::generator::config::GeneratorMode) -> bool
+impl core::default::Default for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::default() -> syslog_generator::generator::config::GeneratorMode
+impl core::fmt::Debug for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::generator::config::GeneratorMode
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::GeneratorMode
+impl serde_core::ser::Serialize for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Send for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Sync for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Unpin for syslog_generator::generator::config::GeneratorMode
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::GeneratorMode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::GeneratorMode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::GeneratorMode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub type syslog_generator::generator::config::GeneratorMode::Owned = T
+pub fn syslog_generator::generator::config::GeneratorMode::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::GeneratorMode::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::GeneratorMode where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::GeneratorMode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::generator::config::GeneratorMode where T: core::marker::Copy
+pub fn syslog_generator::generator::config::GeneratorMode::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::GeneratorMode where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::GeneratorMode::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::GeneratorMode
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::GeneratorMode
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::GeneratorMode where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::GeneratorMode::vzip(self) -> V
 pub struct syslog_generator::generator::CefConfig
 pub syslog_generator::generator::CefConfig::device_product: alloc::string::String
 pub syslog_generator::generator::CefConfig::device_vendor: alloc::string::String
@@ -2368,6 +3068,7 @@ pub syslog_generator::generator::Profile::metrics_addr: core::option::Option<all
 pub syslog_generator::generator::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::generator::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
 pub syslog_generator::generator::Profile::queue_capacity: core::option::Option<usize>
+pub syslog_generator::generator::Profile::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::generator::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::generator::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -2472,6 +3173,78 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::ProtobufSchemaFieldMap where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::ProtobufSchemaFieldMap where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::ProtobufSchemaFieldMap::vzip(self) -> V
+pub struct syslog_generator::generator::RuntimeConfig
+pub syslog_generator::generator::RuntimeConfig::batch_size: core::option::Option<usize>
+pub syslog_generator::generator::RuntimeConfig::generator_mode: syslog_generator::generator::config::GeneratorMode
+pub syslog_generator::generator::RuntimeConfig::generator_threads: core::option::Option<usize>
+pub syslog_generator::generator::RuntimeConfig::pacer_tick_interval_ms: core::option::Option<u64>
+pub syslog_generator::generator::RuntimeConfig::queue_capacity: core::option::Option<usize>
+impl syslog_generator::generator::config::RuntimeConfig
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_BATCH_SIZE: usize
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_PACER_TICK_INTERVAL_MS: u64
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_QUEUE_CAPACITY: usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_batch_size(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_generator_threads(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_pacer_tick_interval_ms(&self) -> u64
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_queue_capacity(&self) -> usize
+impl core::clone::Clone for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::clone(&self) -> syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::Eq for syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::PartialEq for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::eq(&self, &syslog_generator::generator::config::RuntimeConfig) -> bool
+impl core::default::Default for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::RuntimeConfig
+impl serde_core::ser::Serialize for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Send for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Sync for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Unpin for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::RuntimeConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::RuntimeConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub type syslog_generator::generator::config::RuntimeConfig::Owned = T
+pub fn syslog_generator::generator::config::RuntimeConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::RuntimeConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::RuntimeConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::RuntimeConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::RuntimeConfig where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::RuntimeConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::RuntimeConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::RuntimeConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::RuntimeConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::vzip(self) -> V
 pub struct syslog_generator::generator::ShutdownConfig
 pub syslog_generator::generator::ShutdownConfig::drain_timeout_secs: u64
 pub syslog_generator::generator::ShutdownConfig::mode: alloc::string::String
@@ -2666,7 +3439,7 @@ pub fn syslog_generator::generator::load_profile_from_path(&std::path::Path) -> 
 pub fn syslog_generator::generator::load_profile_from_yaml_str(&str) -> core::result::Result<syslog_generator::generator::config::Profile, syslog_generator::error::ConfigError>
 pub fn syslog_generator::generator::load_schema(&syslog_generator::generator::config::Phase) -> anyhow::Result<core::option::Option<syslog_generator::schema::Schema>>
 pub fn syslog_generator::generator::load_templates(&syslog_generator::generator::config::Phase) -> anyhow::Result<alloc::vec::Vec<alloc::string::String>>
-pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, usize, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub mod syslog_generator::load_shape
 pub enum syslog_generator::load_shape::LoadShape
@@ -5529,6 +6302,72 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::error::DrainEr
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::error::DrainError where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::error::DrainError where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::error::DrainError::vzip(self) -> V
+pub enum syslog_generator::ExplainFormat
+pub syslog_generator::ExplainFormat::Json
+pub syslog_generator::ExplainFormat::Text
+impl syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::clone(&self) -> syslog_generator::cli::explain_plan::ExplainFormat
+impl core::cmp::Eq for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::cmp::PartialEq for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::eq(&self, &syslog_generator::cli::explain_plan::ExplainFormat) -> bool
+impl core::default::Default for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::default() -> syslog_generator::cli::explain_plan::ExplainFormat
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::StructuralPartialEq for syslog_generator::cli::explain_plan::ExplainFormat
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Send for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Sync for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::ExplainFormat
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::ExplainFormat
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::cli::explain_plan::ExplainFormat where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::cli::explain_plan::ExplainFormat where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::ExplainFormat where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::ExplainFormat where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::ExplainFormat where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::ExplainFormat where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::ExplainFormat::Owned = T
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::ExplainFormat where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::ExplainFormat where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::ExplainFormat::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::ExplainFormat
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::cli::explain_plan::ExplainFormat where T: core::marker::Copy
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::cli::explain_plan::ExplainFormat where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::ExplainFormat
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::ExplainFormat
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::ExplainFormat where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::ExplainFormat where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::ExplainFormat::vzip(self) -> V
 pub enum syslog_generator::Framing
 pub syslog_generator::Framing::NonTransparent
 pub syslog_generator::Framing::OctetCounting
@@ -5588,6 +6427,73 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::Fra
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::Framing where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::Framing where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::Framing::vzip(self) -> V
+pub enum syslog_generator::GeneratorMode
+pub syslog_generator::GeneratorMode::Deterministic
+pub syslog_generator::GeneratorMode::Fast
+impl syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::as_str(self) -> &'static str
+pub fn syslog_generator::generator::config::GeneratorMode::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::clone(&self) -> syslog_generator::generator::config::GeneratorMode
+impl core::cmp::Eq for syslog_generator::generator::config::GeneratorMode
+impl core::cmp::PartialEq for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::eq(&self, &syslog_generator::generator::config::GeneratorMode) -> bool
+impl core::default::Default for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::default() -> syslog_generator::generator::config::GeneratorMode
+impl core::fmt::Debug for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::generator::config::GeneratorMode
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::GeneratorMode
+impl serde_core::ser::Serialize for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Send for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Sync for syslog_generator::generator::config::GeneratorMode
+impl core::marker::Unpin for syslog_generator::generator::config::GeneratorMode
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::GeneratorMode
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::GeneratorMode where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::GeneratorMode where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::GeneratorMode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::GeneratorMode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::GeneratorMode where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::GeneratorMode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::GeneratorMode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub type syslog_generator::generator::config::GeneratorMode::Owned = T
+pub fn syslog_generator::generator::config::GeneratorMode::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::GeneratorMode::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::GeneratorMode where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::GeneratorMode where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::GeneratorMode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::GeneratorMode
+pub fn syslog_generator::generator::config::GeneratorMode::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::generator::config::GeneratorMode where T: core::marker::Copy
+pub fn syslog_generator::generator::config::GeneratorMode::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::GeneratorMode where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::GeneratorMode::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::GeneratorMode::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::GeneratorMode
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::GeneratorMode
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::GeneratorMode where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::GeneratorMode where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::GeneratorMode::vzip(self) -> V
 pub enum syslog_generator::LoadShape
 pub syslog_generator::LoadShape::Burst
 pub syslog_generator::LoadShape::Burst::base_rate: f64
@@ -6206,15 +7112,20 @@ impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusi
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::anomaly::AnomalyPlanner<'a> where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::anomaly::AnomalyPlanner<'a>::vzip(self) -> V
 pub struct syslog_generator::Args
+pub syslog_generator::Args::batch_size: core::option::Option<usize>
 pub syslog_generator::Args::command: core::option::Option<syslog_generator::cli::Command>
 pub syslog_generator::Args::connections: core::option::Option<usize>
 pub syslog_generator::Args::distribution: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::dry_run: bool
 pub syslog_generator::Args::duration: core::option::Option<u64>
+pub syslog_generator::Args::explain_plan: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::format: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::framing: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::generator_mode: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::generator_threads: core::option::Option<usize>
 pub syslog_generator::Args::message: alloc::vec::Vec<alloc::string::String>
 pub syslog_generator::Args::metrics_addr: core::option::Option<alloc::string::String>
+pub syslog_generator::Args::pacer_tick_interval: core::option::Option<u64>
 pub syslog_generator::Args::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::Args::print_config: bool
 pub syslog_generator::Args::profile: core::option::Option<alloc::string::String>
@@ -6339,6 +7250,63 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::con
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::CefConfig where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::CefConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::generator::config::CefConfig::vzip(self) -> V
+pub struct syslog_generator::ExplainPlan
+pub syslog_generator::ExplainPlan::broadcast_policy: core::option::Option<alloc::string::String>
+pub syslog_generator::ExplainPlan::distribution: alloc::string::String
+pub syslog_generator::ExplainPlan::metrics: syslog_generator::cli::explain_plan::MetricsExplanation
+pub syslog_generator::ExplainPlan::on_target_failure: core::option::Option<alloc::string::String>
+pub syslog_generator::ExplainPlan::phases: alloc::vec::Vec<syslog_generator::cli::explain_plan::PhaseExplanation>
+pub syslog_generator::ExplainPlan::runtime: syslog_generator::cli::explain_plan::RuntimeExplanation
+pub syslog_generator::ExplainPlan::targets: alloc::vec::Vec<syslog_generator::cli::explain_plan::TargetExplanation>
+impl syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::from_profile(&syslog_generator::generator::config::Profile) -> Self
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::render_json(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::render_text(&self) -> alloc::string::String
+impl core::clone::Clone for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::clone(&self) -> syslog_generator::cli::explain_plan::ExplainPlan
+impl core::fmt::Debug for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Send for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Sync for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::Unpin for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::marker::UnsafeUnpin for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::explain_plan::ExplainPlan
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::explain_plan::ExplainPlan
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::explain_plan::ExplainPlan where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::explain_plan::ExplainPlan where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::From<T>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::Into<T>
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Error = core::convert::Infallible
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::explain_plan::ExplainPlan where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::explain_plan::ExplainPlan where T: core::clone::Clone
+pub type syslog_generator::cli::explain_plan::ExplainPlan::Owned = T
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::explain_plan::ExplainPlan where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::explain_plan::ExplainPlan where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::explain_plan::ExplainPlan::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::explain_plan::ExplainPlan
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::from(T) -> T
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::explain_plan::ExplainPlan
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::explain_plan::ExplainPlan
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::explain_plan::ExplainPlan where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::explain_plan::ExplainPlan where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::explain_plan::ExplainPlan::vzip(self) -> V
 pub struct syslog_generator::Header
 pub syslog_generator::Header::app_name: alloc::sync::Arc<str>
 pub syslog_generator::Header::bom: bool
@@ -6521,6 +7489,7 @@ pub syslog_generator::Overrides::messages: alloc::vec::Vec<alloc::string::String
 pub syslog_generator::Overrides::metrics_addr: core::option::Option<alloc::string::String>
 pub syslog_generator::Overrides::preset: core::option::Option<alloc::string::String>
 pub syslog_generator::Overrides::rate: core::option::Option<u64>
+pub syslog_generator::Overrides::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::Overrides::seed: core::option::Option<u64>
 pub syslog_generator::Overrides::set_overrides: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
 pub syslog_generator::Overrides::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
@@ -6700,6 +7669,7 @@ pub syslog_generator::Profile::metrics_addr: core::option::Option<alloc::string:
 pub syslog_generator::Profile::on_target_failure: core::option::Option<alloc::string::String>
 pub syslog_generator::Profile::phases: alloc::vec::Vec<syslog_generator::generator::config::Phase>
 pub syslog_generator::Profile::queue_capacity: core::option::Option<usize>
+pub syslog_generator::Profile::runtime: syslog_generator::generator::config::RuntimeConfig
 pub syslog_generator::Profile::shutdown: syslog_generator::generator::config::ShutdownConfig
 pub syslog_generator::Profile::targets: alloc::vec::Vec<syslog_generator::generator::config::TargetConfig>
 impl core::clone::Clone for syslog_generator::generator::config::Profile
@@ -6911,6 +7881,132 @@ impl<T> tracing::instrument::WithSubscriber for syslog_generator::transport::fil
 impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::transport::file::RotationConfig where T: ?core::marker::Sized
 impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::transport::file::RotationConfig where V: ppv_lite86::types::MultiLane<T>
 pub fn syslog_generator::transport::file::RotationConfig::vzip(self) -> V
+pub struct syslog_generator::RuntimeConfig
+pub syslog_generator::RuntimeConfig::batch_size: core::option::Option<usize>
+pub syslog_generator::RuntimeConfig::generator_mode: syslog_generator::generator::config::GeneratorMode
+pub syslog_generator::RuntimeConfig::generator_threads: core::option::Option<usize>
+pub syslog_generator::RuntimeConfig::pacer_tick_interval_ms: core::option::Option<u64>
+pub syslog_generator::RuntimeConfig::queue_capacity: core::option::Option<usize>
+impl syslog_generator::generator::config::RuntimeConfig
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_BATCH_SIZE: usize
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_PACER_TICK_INTERVAL_MS: u64
+pub const syslog_generator::generator::config::RuntimeConfig::DEFAULT_QUEUE_CAPACITY: usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_batch_size(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_generator_threads(&self) -> usize
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_pacer_tick_interval_ms(&self) -> u64
+pub fn syslog_generator::generator::config::RuntimeConfig::effective_queue_capacity(&self) -> usize
+impl core::clone::Clone for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::clone(&self) -> syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::Eq for syslog_generator::generator::config::RuntimeConfig
+impl core::cmp::PartialEq for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::eq(&self, &syslog_generator::generator::config::RuntimeConfig) -> bool
+impl core::default::Default for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::default() -> Self
+impl core::fmt::Debug for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for syslog_generator::generator::config::RuntimeConfig
+impl serde_core::ser::Serialize for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Send for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Sync for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::Unpin for syslog_generator::generator::config::RuntimeConfig
+impl core::marker::UnsafeUnpin for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::generator::config::RuntimeConfig
+impl<Q, K> equivalent::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<Q, K> hashbrown::Equivalent<K> for syslog_generator::generator::config::RuntimeConfig where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::equivalent(&self, &K) -> bool
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::generator::config::RuntimeConfig where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::From<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::Into<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = core::convert::Infallible
+pub fn syslog_generator::generator::config::RuntimeConfig::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::generator::config::RuntimeConfig where U: core::convert::TryFrom<T>
+pub type syslog_generator::generator::config::RuntimeConfig::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::generator::config::RuntimeConfig::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub type syslog_generator::generator::config::RuntimeConfig::Owned = T
+pub fn syslog_generator::generator::config::RuntimeConfig::clone_into(&self, &mut T)
+pub fn syslog_generator::generator::config::RuntimeConfig::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::generator::config::RuntimeConfig where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::generator::config::RuntimeConfig where T: core::clone::Clone
+pub unsafe fn syslog_generator::generator::config::RuntimeConfig::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::generator::config::RuntimeConfig
+pub fn syslog_generator::generator::config::RuntimeConfig::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for syslog_generator::generator::config::RuntimeConfig where T: for<'de> serde_core::de::Deserialize<'de>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+pub fn syslog_generator::generator::config::RuntimeConfig::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::generator::config::RuntimeConfig::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::generator::config::RuntimeConfig
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::generator::config::RuntimeConfig
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::generator::config::RuntimeConfig where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::generator::config::RuntimeConfig where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::generator::config::RuntimeConfig::vzip(self) -> V
+pub struct syslog_generator::RuntimeOverridesSet
+pub syslog_generator::RuntimeOverridesSet::batch_size: bool
+pub syslog_generator::RuntimeOverridesSet::generator_mode: bool
+pub syslog_generator::RuntimeOverridesSet::generator_threads: bool
+pub syslog_generator::RuntimeOverridesSet::pacer_tick_interval: bool
+pub syslog_generator::RuntimeOverridesSet::queue_capacity: bool
+impl core::clone::Clone for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::clone(&self) -> syslog_generator::cli::RuntimeOverridesSet
+impl core::default::Default for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::default() -> syslog_generator::cli::RuntimeOverridesSet
+impl core::fmt::Debug for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Freeze for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Send for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Sync for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::Unpin for syslog_generator::cli::RuntimeOverridesSet
+impl core::marker::UnsafeUnpin for syslog_generator::cli::RuntimeOverridesSet
+impl core::panic::unwind_safe::RefUnwindSafe for syslog_generator::cli::RuntimeOverridesSet
+impl core::panic::unwind_safe::UnwindSafe for syslog_generator::cli::RuntimeOverridesSet
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Initialized, zerocopy::pointer::invariant::Initialized> for syslog_generator::cli::RuntimeOverridesSet where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<ST, DT> zerocopy::pointer::invariant::CastableFrom<ST, zerocopy::pointer::invariant::Uninit, zerocopy::pointer::invariant::Uninit> for syslog_generator::cli::RuntimeOverridesSet where ST: ?core::marker::Sized, DT: ?core::marker::Sized
+impl<T, U> core::convert::Into<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::From<T>
+pub fn syslog_generator::cli::RuntimeOverridesSet::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::Into<T>
+pub type syslog_generator::cli::RuntimeOverridesSet::Error = core::convert::Infallible
+pub fn syslog_generator::cli::RuntimeOverridesSet::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for syslog_generator::cli::RuntimeOverridesSet where U: core::convert::TryFrom<T>
+pub type syslog_generator::cli::RuntimeOverridesSet::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn syslog_generator::cli::RuntimeOverridesSet::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for syslog_generator::cli::RuntimeOverridesSet where T: core::clone::Clone
+pub type syslog_generator::cli::RuntimeOverridesSet::Owned = T
+pub fn syslog_generator::cli::RuntimeOverridesSet::clone_into(&self, &mut T)
+pub fn syslog_generator::cli::RuntimeOverridesSet::to_owned(&self) -> T
+impl<T> core::any::Any for syslog_generator::cli::RuntimeOverridesSet where T: 'static + ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for syslog_generator::cli::RuntimeOverridesSet where T: core::clone::Clone
+pub unsafe fn syslog_generator::cli::RuntimeOverridesSet::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for syslog_generator::cli::RuntimeOverridesSet
+pub fn syslog_generator::cli::RuntimeOverridesSet::from(T) -> T
+impl<T> outref::AsOut<T> for syslog_generator::cli::RuntimeOverridesSet where T: core::marker::Copy
+pub fn syslog_generator::cli::RuntimeOverridesSet::as_out(&mut self) -> outref::Out<'_, T>
+impl<T> tower_http::follow_redirect::policy::PolicyExt for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+pub fn syslog_generator::cli::RuntimeOverridesSet::and<P, B, E>(self, P) -> tower_http::follow_redirect::policy::and::And<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+pub fn syslog_generator::cli::RuntimeOverridesSet::or<P, B, E>(self, P) -> tower_http::follow_redirect::policy::or::Or<T, P> where T: core::marker::Sized + tower_http::follow_redirect::policy::Policy<B, E>, P: tower_http::follow_redirect::policy::Policy<B, E>
+impl<T> tracing::instrument::Instrument for syslog_generator::cli::RuntimeOverridesSet
+impl<T> tracing::instrument::WithSubscriber for syslog_generator::cli::RuntimeOverridesSet
+impl<T> zerocopy::pointer::invariant::Read<zerocopy::pointer::invariant::Exclusive, zerocopy::pointer::invariant::BecauseExclusive> for syslog_generator::cli::RuntimeOverridesSet where T: ?core::marker::Sized
+impl<V, T> ppv_lite86::types::VZip<V> for syslog_generator::cli::RuntimeOverridesSet where V: ppv_lite86::types::MultiLane<T>
+pub fn syslog_generator::cli::RuntimeOverridesSet::vzip(self) -> V
 pub struct syslog_generator::Schema
 pub syslog_generator::Schema::fields: std::collections::hash::map::HashMap<alloc::string::String, syslog_generator::schema::SchemaField>
 pub syslog_generator::Schema::output: core::option::Option<alloc::string::String>
@@ -7306,7 +8402,7 @@ pub async fn syslog_generator::reconnect_with_backoff<F, Fut, T, E>(&syslog_gene
 pub fn syslog_generator::record_send(&syslog_generator::observability::metrics::Metrics, &str, &str, &str, u64, &tokio_util::sync::cancellation_token::CancellationToken)
 pub fn syslog_generator::render_template(&str, &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::string::String
 pub fn syslog_generator::route(&str, &str, &syslog_generator::observability::metrics::Metrics) -> alloc::string::String
-pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
+pub async fn syslog_generator::run_phase_multi(&syslog_generator::generator::config::Phase, &[syslog_generator::generator::config::TargetConfig], syslog_generator::transport::BroadcastPolicy, &str, &syslog_generator::generator::config::ShutdownConfig, usize, syslog_generator::observability::metrics::Metrics, &tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub async fn syslog_generator::run_profile(&syslog_generator::generator::config::Profile, syslog_generator::observability::metrics::Metrics) -> anyhow::Result<()>
 pub async fn syslog_generator::serve_metrics(&str, syslog_generator::observability::metrics::Metrics, tokio_util::sync::cancellation_token::CancellationToken) -> anyhow::Result<()>
 pub fn syslog_generator::should_drop_packet(&syslog_generator::anomaly::AnomalyKind, core::option::Option<u64>, usize) -> bool

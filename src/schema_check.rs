@@ -102,6 +102,7 @@ mod tests {
                 ..Default::default()
             }],
             metrics_addr: None,
+            runtime: crate::config::RuntimeConfig::default(),
         }
     }
 

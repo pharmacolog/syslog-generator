@@ -368,6 +368,122 @@ fn default_distribution() -> String {
     "round-robin".to_string()
 }
 
+/// A4 (Issue #236, Issue #86): Generator mode для runtime pipeline.
+///
+/// Определяет, как generator'ы производят sequence numbers и RNG state:
+/// - `Deterministic`: byte-for-byte одинаковый output (counter-based RNG,
+///   shard allocation). Подходит для replay и snapshot tests.
+/// - `Fast`: thread-local RNG state, sharded range allocation. Максимальная
+///   throughput за счёт потери byte-for-byte детерминизма.
+///
+/// CLI flag: `--generator-mode <deteterministic|fast>`.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneratorMode {
+    /// Counter-based RNG; byte-for-byte identical output across runs.
+    #[default]
+    Deterministic,
+    /// Thread-local RNG state; max throughput.
+    Fast,
+}
+
+impl GeneratorMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "deterministic" => Some(Self::Deterministic),
+            "fast" => Some(Self::Fast),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Deterministic => "deterministic",
+            Self::Fast => "fast",
+        }
+    }
+}
+
+/// A4 (Issue #236, Issue #86): Runtime configuration для generator pipeline.
+///
+/// Runtime-параметры, которые НЕ являются частью static profile (phase list,
+/// targets, templates). Их можно override'ить через CLI (`--generator-mode`,
+/// `--generator-threads`, `--batch-size`, `--pacer-tick-interval`) или через
+/// поле `runtime` в JSON/YAML профиле.
+///
+/// Используется в `run_phase_multi` для настройки размера mpsc-channel,
+/// числа generator-воркеров, и pacing granularity.
+///
+/// Backward-compat: `RuntimeConfig::default()` возвращает значения,
+/// полностью эквивалентные pre-A4 поведению (single-threaded, deterministic,
+/// queue_capacity=1024, batch_size=1, pacer_tick_interval_ms=1).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeConfig {
+    /// Generator mode (deterministic|fast). Default: Deterministic.
+    #[serde(default)]
+    pub generator_mode: GeneratorMode,
+    /// Number of generator worker threads. None → auto-detect (NCPU или 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator_threads: Option<usize>,
+    /// Per-target queue capacity (mpsc channel между generator и dispatcher).
+    /// None → 1024 (PR-A3 default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_capacity: Option<usize>,
+    /// Batched message size для pipeline mode. None → 1 (no batching).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_size: Option<usize>,
+    /// Pacer tick interval (миллисекунды). None → 1ms (sub-millisecond latency).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pacer_tick_interval_ms: Option<u64>,
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self {
+            generator_mode: GeneratorMode::Deterministic,
+            generator_threads: None,
+            queue_capacity: None,
+            batch_size: None,
+            pacer_tick_interval_ms: None,
+        }
+    }
+}
+
+impl RuntimeConfig {
+    /// Default queue capacity если не задан.
+    pub const DEFAULT_QUEUE_CAPACITY: usize = 1024;
+    /// Default batch size если не задан.
+    pub const DEFAULT_BATCH_SIZE: usize = 1;
+    /// Default pacer tick interval (ms) если не задан.
+    pub const DEFAULT_PACER_TICK_INTERVAL_MS: u64 = 1;
+
+    /// Effective queue capacity (resolved None → DEFAULT).
+    pub fn effective_queue_capacity(&self) -> usize {
+        self.queue_capacity.unwrap_or(Self::DEFAULT_QUEUE_CAPACITY)
+    }
+
+    /// Effective batch size (resolved None → DEFAULT).
+    pub fn effective_batch_size(&self) -> usize {
+        self.batch_size.unwrap_or(Self::DEFAULT_BATCH_SIZE).max(1)
+    }
+
+    /// Effective pacer tick interval (resolved None → DEFAULT).
+    pub fn effective_pacer_tick_interval_ms(&self) -> u64 {
+        self.pacer_tick_interval_ms
+            .unwrap_or(Self::DEFAULT_PACER_TICK_INTERVAL_MS)
+            .max(1)
+    }
+
+    /// Effective generator threads (resolved None → NCPU, max 1).
+    pub fn effective_generator_threads(&self) -> usize {
+        self.generator_threads.unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Profile {
     #[serde(default)]
@@ -387,12 +503,18 @@ pub struct Profile {
     #[serde(default)]
     pub broadcast_policy: Option<String>,
     /// PR-A3: per-target queue capacity (для broadcast). None → 1024.
+    /// Issue #238: actual implementation использует это значение в
+    /// `run_phase_multi` (раньше было hard-coded 1024).
     #[serde(default)]
     pub queue_capacity: Option<usize>,
     /// PR-A3: policy для target failure (fail-phase | continue | disable-target).
     /// None → fail-phase (backward-compat default).
     #[serde(default)]
     pub on_target_failure: Option<String>,
+    /// A4 (Issue #236): Runtime configuration. Default — все None / defaults.
+    /// Используется в `run_phase_multi` для generator pipeline knobs.
+    #[serde(default)]
+    pub runtime: RuntimeConfig,
 }
 impl Default for Profile {
     fn default() -> Self {
@@ -405,6 +527,7 @@ impl Default for Profile {
             shutdown: ShutdownConfig::default(),
             phases: Vec::new(),
             metrics_addr: None,
+            runtime: RuntimeConfig::default(),
         }
     }
 }
@@ -645,5 +768,133 @@ phases:
         let path = std::env::temp_dir().join("sg_cfg_test_definitely_missing_xyz.json");
         let e = load_profile_from_path(&path).unwrap_err();
         assert!(matches!(e, ConfigError::Io { .. }), "got: {e:?}");
+    }
+
+    // === A4 (Issue #236): RuntimeConfig + GeneratorMode tests ===
+
+    /// `GeneratorMode::parse` принимает известные значения, отвергает неизвестные.
+    #[test]
+    fn a4_generator_mode_parse_roundtrip() {
+        assert_eq!(
+            GeneratorMode::parse("deterministic"),
+            Some(GeneratorMode::Deterministic)
+        );
+        assert_eq!(GeneratorMode::parse("fast"), Some(GeneratorMode::Fast));
+        assert_eq!(GeneratorMode::parse("unknown"), None);
+        assert_eq!(GeneratorMode::parse(""), None);
+        assert_eq!(GeneratorMode::Deterministic.as_str(), "deterministic");
+        assert_eq!(GeneratorMode::Fast.as_str(), "fast");
+    }
+
+    /// `GeneratorMode::default()` — Deterministic (backward-compat).
+    #[test]
+    fn a4_generator_mode_default_is_deterministic() {
+        assert_eq!(GeneratorMode::default(), GeneratorMode::Deterministic);
+    }
+
+    /// `RuntimeConfig::default()` использует backward-compat defaults.
+    #[test]
+    fn a4_runtime_config_default_is_no_overrides() {
+        let rc = RuntimeConfig::default();
+        assert_eq!(rc.generator_mode, GeneratorMode::Deterministic);
+        assert_eq!(rc.generator_threads, None);
+        assert_eq!(rc.queue_capacity, None);
+        assert_eq!(rc.batch_size, None);
+        assert_eq!(rc.pacer_tick_interval_ms, None);
+    }
+
+    /// `RuntimeConfig::effective_*` резолвит None → defaults.
+    #[test]
+    fn a4_runtime_config_effective_defaults() {
+        let rc = RuntimeConfig::default();
+        assert_eq!(rc.effective_queue_capacity(), 1024);
+        assert_eq!(rc.effective_batch_size(), 1);
+        assert_eq!(rc.effective_pacer_tick_interval_ms(), 1);
+        // generator_threads: всегда >= 1 (NCPU или 1).
+        assert!(rc.effective_generator_threads() >= 1);
+    }
+
+    /// `RuntimeConfig::effective_*` честно использует заданные значения.
+    #[test]
+    fn a4_runtime_config_effective_overrides() {
+        let rc = RuntimeConfig {
+            generator_mode: GeneratorMode::Fast,
+            generator_threads: Some(4),
+            queue_capacity: Some(65536),
+            batch_size: Some(64),
+            pacer_tick_interval_ms: Some(10),
+        };
+        assert_eq!(rc.effective_queue_capacity(), 65536);
+        assert_eq!(rc.effective_batch_size(), 64);
+        assert_eq!(rc.effective_pacer_tick_interval_ms(), 10);
+        assert_eq!(rc.effective_generator_threads(), 4);
+    }
+
+    /// `RuntimeConfig::effective_batch_size` clamps `0` до 1 (no division by zero).
+    #[test]
+    fn a4_runtime_config_batch_size_clamp() {
+        let rc = RuntimeConfig {
+            batch_size: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(rc.effective_batch_size(), 1);
+    }
+
+    /// `RuntimeConfig::effective_pacer_tick_interval_ms` clamps `0` до 1.
+    #[test]
+    fn a4_runtime_config_pacer_tick_clamp() {
+        let rc = RuntimeConfig {
+            pacer_tick_interval_ms: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(rc.effective_pacer_tick_interval_ms(), 1);
+    }
+
+    /// `RuntimeConfig` сериализуется/десериализуется в YAML round-trip.
+    #[test]
+    fn a4_runtime_config_yaml_roundtrip() {
+        let yaml = r#"
+generator_mode: fast
+generator_threads: 8
+queue_capacity: 65536
+batch_size: 64
+pacer_tick_interval_ms: 5
+"#;
+        let rc: RuntimeConfig = serde_yaml_ng::from_str(yaml).expect("yaml parse");
+        assert_eq!(rc.generator_mode, GeneratorMode::Fast);
+        assert_eq!(rc.generator_threads, Some(8));
+        assert_eq!(rc.queue_capacity, Some(65536));
+        assert_eq!(rc.batch_size, Some(64));
+        assert_eq!(rc.pacer_tick_interval_ms, Some(5));
+    }
+
+    /// `Profile::runtime` дефолтится в `RuntimeConfig::default()`.
+    #[test]
+    fn a4_profile_default_runtime() {
+        let p = Profile::default();
+        assert_eq!(p.runtime, RuntimeConfig::default());
+        assert_eq!(p.runtime.generator_mode, GeneratorMode::Deterministic);
+    }
+
+    /// `Profile` принимает `runtime` блок в YAML.
+    #[test]
+    fn a4_profile_yaml_with_runtime() {
+        let yaml = r#"
+targets:
+  - address: 127.0.0.1:514
+    transport: tcp
+phases:
+  - name: p
+    templates: ["x"]
+runtime:
+  generator_mode: fast
+  generator_threads: 4
+  queue_capacity: 65536
+"#;
+        let p = load_profile_from_yaml_str(yaml).expect("yaml parse");
+        assert_eq!(p.runtime.generator_mode, GeneratorMode::Fast);
+        assert_eq!(p.runtime.generator_threads, Some(4));
+        assert_eq!(p.runtime.queue_capacity, Some(65536));
+        assert_eq!(p.runtime.batch_size, None);
     }
 }
